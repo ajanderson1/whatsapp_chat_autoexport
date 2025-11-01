@@ -1,0 +1,23 @@
+[project]
+name = "whatsapp-chat-autoexport"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "AJ Anderson",email = "ajanderson1@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "appium-python-client (>=5.2.4,<6.0.0)",
+    "ipykernel (>=7.1.0,<8.0.0)",
+    "colorama (>=0.4.6,<1.0.0)"
+]
+
+
+[project.scripts]
+whatsapp-export = "whatsapp_export:main"
+whatsapp-process = "whatsapp_process:main"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
