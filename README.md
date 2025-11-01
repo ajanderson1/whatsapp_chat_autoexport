@@ -6,7 +6,6 @@ An automated Python script that exports WhatsApp chats from your Android device 
 
 Automating this process is a hack, but it's the only practical means given the encryption methodology WhatsApp uses.  As such, it's an ugly screenscraping process, but ultimately a time saver for extensive WhatsApp use. 
 
-
 ```
 WhatsApp deliberately makes direct downloading or programmatic access to chat data extremely difficult, largely due to its end-to-end encryption (E2EE) model and internal data structure. Every message is encrypted on the sender’s device before transmission using a unique session key derived from the Signal Protocol, which combines Curve25519, AES-256, and HMAC-SHA256 algorithms. These keys are stored only on the communicating devices — not on WhatsApp’s servers — which means even WhatsApp itself cannot decrypt the contents. The message database on the phone (msgstore.db) is further encrypted locally using an AES key stored in the app’s sandbox, often bound to the device’s hardware keystore and user account, making extraction without root access nearly impossible. Backup exports (like to Google Drive or iCloud) are separately encrypted using yet another layer of keys linked to the user’s WhatsApp account credentials and device-specific identifiers. This multi-tiered cryptographic chain — server trust tokens, rotating session keys, local database encryption, and sandbox isolation — ensures that even if one layer is compromised, the chat content remains unreadable without the exact cryptographic keys held within the WhatsApp runtime environment on the legitimate user’s device. Consequently, automation or scraping tools can only access chats through simulated UI interactions, not direct data extraction.
 ```
@@ -59,7 +58,14 @@ Or using pip:
 pip install appium-python-client colorama
 ```
 
-## 🚀 Usage
+
+
+## 🚀 Quicks Start
+
+⚠️ **IMPORTANT**: This is a fragile screen scraping process which may be vulnerable to changes in the WhatsApp UI.  As such, it's recommended to monitor as it runs.  Additionally, follow these top tips to avoid unintended behaviours. 
+* Connect an Android device with WhatsApp installed and Google Drive app installed and configured.
+* Ensure that phone is unlocked and on the home screen. 
+* Do not interact with the phone while the script is running. 
 
 ### Basic Usage
 
