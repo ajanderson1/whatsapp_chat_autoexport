@@ -30,8 +30,8 @@ Examples:
   %(prog)s --test 20          # Test mode: Limit to 20 chats
   %(prog)s --with-media       # Export with media (default)
   %(prog)s --without-media    # Export without media
-  %(prog)s --sort-order original  # Show chats in original WhatsApp order
-  %(prog)s --sort-order alphabetical  # Show chats alphabetically (default)
+  %(prog)s --sort-order original  # Show chats in original WhatsApp order (default)
+  %(prog)s --sort-order alphabetical  # Show chats alphabetically
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
         """
@@ -78,8 +78,8 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
     parser.add_argument(
         '--sort-order',
         choices=['alphabetical', 'original'],
-        default='alphabetical',
-        help='Sort order for chat list: "alphabetical" (default) or "original" (order in WhatsApp)'
+        default='original',
+        help='Sort order for chat list: "original" (default, order in WhatsApp) or "alphabetical"'
     )
     
     return parser
@@ -109,6 +109,10 @@ except ImportError:
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.webdriver.common.by import By
 
 
 class Logger:
@@ -216,6 +220,79 @@ class WhatsAppDriver:
     def __init__(self, logger: Logger):
         self.logger = logger
         self.driver: Optional[webdriver.Remote] = None
+        self.default_wait_timeout = 10  # Default timeout for explicit waits
+    
+    def _wait_for_element(self, locator_type: str, locator_value: str, timeout: Optional[int] = None, 
+                         expected_condition: str = "presence") -> Optional[object]:
+        """
+        Wait for an element to be present or visible using explicit wait.
+        
+        Args:
+            locator_type: Type of locator ('id', 'xpath', 'class_name', etc.)
+            locator_value: Value of the locator
+            timeout: Timeout in seconds (defaults to self.default_wait_timeout)
+            expected_condition: 'presence' or 'visible' (default: 'presence')
+        
+        Returns:
+            WebElement if found, None if timeout
+        """
+        if not self.driver:
+            return None
+        
+        timeout = timeout or self.default_wait_timeout
+        wait = WebDriverWait(self.driver, timeout)
+        
+        # Create locator tuple
+        if locator_type == "id":
+            # For Appium Android, resource IDs need to be accessed via xpath with resource-id attribute
+            locator = (By.XPATH, f"//*[@resource-id='{locator_value}']")
+        elif locator_type == "xpath":
+            locator = (By.XPATH, locator_value)
+        elif locator_type == "class_name":
+            locator = (By.CLASS_NAME, locator_value)
+        elif locator_type == "accessibility_id":
+            # For accessibility_id, Appium uses content-desc attribute
+            locator = (By.XPATH, f"//*[@content-desc='{locator_value}']")
+        else:
+            self.logger.debug_msg(f"Unsupported locator type: {locator_type}")
+            return None
+        
+        try:
+            if expected_condition == "visible":
+                return wait.until(EC.visibility_of_element_located(locator))
+            else:  # presence
+                return wait.until(EC.presence_of_element_located(locator))
+        except TimeoutException:
+            self.logger.debug_msg(f"Timeout waiting for element: {locator_type}={locator_value}")
+            return None
+    
+    def _wait_for_activity(self, expected_activity: str, timeout: Optional[int] = None) -> bool:
+        """
+        Wait for a specific activity to become current.
+        
+        Args:
+            expected_activity: Activity name to wait for (can be substring)
+            timeout: Timeout in seconds (defaults to self.default_wait_timeout)
+        
+        Returns:
+            True if activity found, False if timeout
+        """
+        if not self.driver:
+            return False
+        
+        timeout = timeout or self.default_wait_timeout
+        end_time = time.time() + timeout
+        
+        while time.time() < end_time:
+            try:
+                current_activity = self.driver.current_activity
+                if expected_activity in current_activity:
+                    return True
+                sleep(0.2)  # Brief check interval
+            except Exception:
+                sleep(0.2)
+        
+        return False
     
     def check_device_connection(self) -> bool:
         """Check if Android device is connected."""
@@ -241,7 +318,7 @@ class WhatsAppDriver:
         """Connect to WhatsApp via Appium."""
         self.logger.info("Stopping WhatsApp (this does NOT delete any data)...")
         subprocess.run(["adb", "shell", "am", "force-stop", "com.whatsapp"], capture_output=True)
-        sleep(1)
+        sleep(0.5)  # Brief delay for app to stop (system command, not UI)
         self.logger.success("WhatsApp stopped")
         
         self.logger.info("Setting up WebDriver options...")
@@ -260,25 +337,50 @@ class WhatsAppDriver:
         try:
             self.driver = webdriver.Remote("http://127.0.0.1:4723", options=options)
             self.logger.success("Driver connected successfully!")
-            sleep(3)
             
-            # Verify WhatsApp is open
+            # Wait a moment for app to start, then check package
+            sleep(2)  # Give app time to launch
+            
+            # Check package name directly (more reliable than activity)
             current_package = self.driver.current_package
             self.logger.debug_msg(f"Current package after launch: {current_package}")
+            
             if current_package == "com.whatsapp":
                 self.logger.success("WhatsApp is open!")
                 return True
             else:
-                self.logger.warning(f"WhatsApp not detected. Current: {current_package}")
-                try:
-                    self.driver.activate_app("com.whatsapp")
-                    sleep(2)
+                self.logger.warning(f"WhatsApp package not detected. Current: {current_package}")
+                
+                # Try waiting for activity as fallback
+                if self._wait_for_activity("Main", timeout=5):
                     current_package = self.driver.current_package
-                    self.logger.debug_msg(f"After activation, package: {current_package}")
-                    return current_package == "com.whatsapp"
-                except Exception as e:
-                    self.logger.error(f"Could not activate WhatsApp: {e}")
-                    return False
+                    if current_package == "com.whatsapp":
+                        self.logger.success("WhatsApp is open!")
+                        return True
+            
+            # Try activating WhatsApp if not detected
+            try:
+                self.logger.info("Attempting to activate WhatsApp...")
+                self.driver.activate_app("com.whatsapp")
+                sleep(2)  # Brief wait after activation
+                current_package = self.driver.current_package
+                self.logger.debug_msg(f"After activation, package: {current_package}")
+                if current_package == "com.whatsapp":
+                    self.logger.success("WhatsApp activated successfully!")
+                    return True
+                else:
+                    self.logger.warning(f"Package still not correct after activation: {current_package}")
+            except Exception as e:
+                self.logger.error(f"Could not activate WhatsApp: {e}")
+            
+            # Final check - sometimes it takes a moment
+            sleep(1)
+            current_package = self.driver.current_package
+            if current_package == "com.whatsapp":
+                self.logger.success("WhatsApp detected on final check!")
+                return True
+            
+            return False
         except Exception as e:
             self.logger.error(f"Failed to connect: {e}")
             return False
@@ -302,15 +404,19 @@ class WhatsAppDriver:
             if ".Conversation" in current_activity or "Conversation" in current_activity:
                 self.logger.info("Currently in conversation view. Navigating to main chats list...")
                 self.driver.press_keycode(4)  # Back button
-                sleep(2)
                 
-                new_activity = self.driver.current_activity
-                self.logger.debug_msg(f"After back press, activity: {new_activity}")
-                
-                if ".Conversation" in new_activity or "Conversation" in new_activity:
-                    self.logger.debug_msg("Still in conversation, pressing back again...")
-                    self.driver.press_keycode(4)
-                    sleep(2)
+                # Wait for navigation away from conversation
+                if self._wait_for_activity("Home", timeout=5) or self._wait_for_activity("home", timeout=5):
+                    new_activity = self.driver.current_activity
+                    self.logger.debug_msg(f"After back press, activity: {new_activity}")
+                    
+                    # Check if still in conversation (might need another back press)
+                    if ".Conversation" in new_activity or "Conversation" in new_activity:
+                        self.logger.debug_msg("Still in conversation, pressing back again...")
+                        self.driver.press_keycode(4)
+                        sleep(0.5)  # Brief UI animation delay
+                else:
+                    sleep(0.5)  # Brief delay if wait didn't detect change
             else:
                 self.logger.success("Already on main chats screen!")
             
@@ -385,27 +491,36 @@ class WhatsAppDriver:
         else:
             self.logger.info("Collecting all chats by scrolling...")
         
-        # Use a list to preserve order, and a set to track what we've seen
-        all_chats = []  # Preserves order
-        seen_chats = set()  # For duplicate detection
+        # Use dict.fromkeys() to preserve order and handle duplicates efficiently
+        all_chats_dict = {}  # Preserves insertion order (Python 3.7+)
         previous_count = 0
         no_new_chats_count = 0
         scroll_attempts = 0
         max_scrolls = 50  # Safety limit
+        current_time = time.time()
         
-        # Scroll to top first
+        # Scroll to top first - optimized to detect when at top
+        self.logger.debug_msg("Scrolling to top...")
+        previous_top_chat = None
         for i in range(5):
             try:
                 self.driver.swipe(500, 800, 500, 1800, duration=300)  # Scroll up
-                sleep(0.2)
+                sleep(0.05)  # Reduced from 0.2 - minimal delay for UI update
+                
+                # Check if we're at the top (no movement means we're already there)
+                current_top_chat = self._get_top_chat_name()
+                if current_top_chat == previous_top_chat and previous_top_chat is not None:
+                    self.logger.debug_msg("Reached top early - stopping scroll")
+                    break
+                previous_top_chat = current_top_chat
             except:
                 break
-        sleep(1)
+        sleep(0.1)  # Reduced from 0.5 - brief settle time
         
         while scroll_attempts < max_scrolls:
             try:
                 chats = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
-                current_count = len(all_chats)
+                current_count = len(all_chats_dict)
                 
                 # Sort chats by Y position (top to bottom) to get visual order
                 chats_with_position = []
@@ -415,7 +530,8 @@ class WhatsAppDriver:
                             chat_name = chat.text.strip()
                             if chat_name:
                                 location = chat.location
-                                chats_with_position.append((location['y'], chat_name))
+                                y_pos = location['y']
+                                chats_with_position.append((y_pos, chat_name))
                     except:
                         continue
                 
@@ -424,19 +540,18 @@ class WhatsAppDriver:
                 
                 # Add chats in visual order (top to bottom), skipping duplicates
                 for y_pos, chat_name in chats_with_position:
-                    if chat_name not in seen_chats:
-                        all_chats.append(chat_name)
-                        seen_chats.add(chat_name)
+                    if chat_name not in all_chats_dict:
+                        all_chats_dict[chat_name] = y_pos  # Store position for reference
                         # Stop early if we've reached the limit
-                        if limit and len(all_chats) >= limit:
+                        if limit and len(all_chats_dict) >= limit:
                             break
                 
                 # Check if we've reached the limit
-                if limit and len(all_chats) >= limit:
+                if limit and len(all_chats_dict) >= limit:
                     self.logger.debug_msg(f"Reached limit of {limit} chats. Stopping collection.")
                     break
                 
-                new_count = len(all_chats)
+                new_count = len(all_chats_dict)
                 new_chats_this_round = new_count - current_count
                 
                 if new_chats_this_round > 0:
@@ -458,15 +573,24 @@ class WhatsAppDriver:
         
         # Scroll back to top after collection (ensures we start from known position)
         self.logger.debug_msg("Scrolling back to top after collection...")
+        previous_top_chat = None
         for i in range(5):
             try:
                 self.driver.swipe(500, 800, 500, 1800, duration=300)  # Scroll up
-                sleep(0.2)
+                sleep(0.05)  # Reduced from 0.2 - minimal delay for UI update
+                
+                # Check if we're at the top (no movement means we're already there)
+                current_top_chat = self._get_top_chat_name()
+                if current_top_chat == previous_top_chat and previous_top_chat is not None:
+                    self.logger.debug_msg("Reached top early - stopping scroll")
+                    break
+                previous_top_chat = current_top_chat
             except:
                 break
-        sleep(1)
+        sleep(0.1)  # Reduced from 0.5 - brief settle time
         
-        chat_list = all_chats  # Already a list, preserving order
+        # Convert dict keys to list (preserves insertion order)
+        chat_list = list(all_chats_dict.keys())
         if sort_alphabetical:
             chat_list = sorted(chat_list)
         if limit:
@@ -506,14 +630,15 @@ class WhatsAppDriver:
                 self.logger.debug_msg(f"Using coordinate click at ({center_x}, {center_y})")
                 self.driver.tap([(center_x, center_y)], duration=100)
             
-            sleep(3)  # Wait for navigation
-            
-            # Verify we're in a conversation
-            new_activity = self.driver.current_activity
-            self.logger.debug_msg(f"After click, activity: {new_activity}")
-            
-            if ".Conversation" not in new_activity and "Conversation" not in new_activity:
-                self.logger.warning(f"Expected conversation view, got: {new_activity}")
+            # Wait for navigation to conversation
+            if self._wait_for_activity("Conversation", timeout=5):
+                new_activity = self.driver.current_activity
+                self.logger.debug_msg(f"After click, activity: {new_activity}")
+                
+                if ".Conversation" not in new_activity and "Conversation" not in new_activity:
+                    self.logger.warning(f"Expected conversation view, got: {new_activity}")
+            else:
+                sleep(0.5)  # Brief fallback delay
             
             return True
         except Exception as e:
@@ -570,18 +695,16 @@ class WhatsAppDriver:
         Tries scrolling up first (since we're likely scrolled down), then down if needed.
         Detects when at top/bottom to prevent infinite scrolling.
         Returns the chat element or None.
-        
-        Note: max_scrolls=240 allows searching up to 120 times in each direction (240 total scrolls).
-        This allows searching through approximately 200 chats maximum.
-        If a chat moves position during search, it may be missed if it's beyond this limit.
         """
         self.logger.debug_msg(f"Searching for '{chat_name}' by scrolling...")
         
-        # Strategy: Scroll up first (we're likely scrolled down), then down
+        # Default scroll strategy: try up first, then down
         scroll_directions = [
-            ("up", lambda: self.driver.swipe(500, 800, 500, 1800, duration=300)),  # Scroll up
-            ("down", lambda: self.driver.swipe(500, 1500, 500, 500, duration=300))  # Scroll down
+            ("up", lambda: self.driver.swipe(500, 800, 500, 1800, duration=300)),
+            ("down", lambda: self.driver.swipe(500, 1500, 500, 500, duration=300))
         ]
+        
+        adaptive_max_scrolls = max_scrolls
         
         for direction_name, scroll_func in scroll_directions:
             self.logger.debug_msg(f"Scrolling {direction_name} to find chat...")
@@ -592,7 +715,7 @@ class WhatsAppDriver:
             max_no_change = 2  # Stop if we haven't moved after 2 scrolls
             
             # Scroll up/down to find the chat
-            for scroll_attempt in range(max_scrolls // 2):
+            for scroll_attempt in range(adaptive_max_scrolls // 2):
                 try:
                     # Check if chat is now visible
                     target_chat = self._find_chat_in_view(chat_name)
@@ -613,14 +736,15 @@ class WhatsAppDriver:
                     
                     # Scroll in this direction
                     scroll_func()
-                    sleep(0.3)  # Brief pause to let UI update
+                    sleep(0.2)  # Brief pause to let UI update after scroll
                     
                 except Exception as e:
                     self.logger.debug_msg(f"Error during scroll {direction_name}: {e}")
                     break
         
         # Final check after all scrolling
-        return self._find_chat_in_view(chat_name)
+        result = self._find_chat_in_view(chat_name)
+        return result
     
     def navigate_back_to_main(self):
         """Navigate back to main screen."""
@@ -631,8 +755,13 @@ class WhatsAppDriver:
                 if ".home" in current_activity.lower() or "HomeActivity" in current_activity:
                     break
                 self.driver.press_keycode(4)
-                sleep(1)
-            sleep(2)  # Allow UI to settle
+                
+                # Wait for navigation to home or timeout
+                if self._wait_for_activity("Home", timeout=2) or self._wait_for_activity("home", timeout=2):
+                    break
+                sleep(0.3)  # Brief delay between back presses
+            
+            sleep(0.5)  # Brief UI settle delay
         except Exception as e:
             self.logger.error(f"Error navigating back: {e}")
     
@@ -652,6 +781,8 @@ class ChatExporter:
     def __init__(self, driver: WhatsAppDriver, logger: Logger):
         self.driver = driver
         self.logger = logger
+        # Cache for element finding strategies: {screen_type: (locator_type, locator_value)}
+        self._element_strategy_cache: Dict[str, Tuple[str, str]] = {}
     
     def _is_share_dialog_visible(self) -> bool:
         """
@@ -737,20 +868,36 @@ class ChatExporter:
         # STEP 1: Open three-dot menu
         self.logger.step(1, "Opening menu...")
         try:
-            sleep(2)  # Allow UI to settle
+            sleep(0.5)  # Brief UI settle delay after entering chat
             
             menu_button = None
+            screen_type = "menu_button"
             
-            # Strategy 1: Try by resource ID
-            try:
-                menu_buttons = self.driver.driver.find_elements("id", "com.whatsapp:id/menuitem_overflow")
-                for btn in menu_buttons:
-                    if btn.is_displayed():
-                        menu_button = btn
+            # Check cache first
+            if screen_type in self._element_strategy_cache:
+                cached_locator_type, cached_locator_value = self._element_strategy_cache[screen_type]
+                self.logger.debug_msg(f"Trying cached strategy: {cached_locator_type}={cached_locator_value}")
+                try:
+                    menu_button = self.driver._wait_for_element(
+                        cached_locator_type, cached_locator_value, timeout=5, expected_condition="visible"
+                    )
+                    if menu_button:
+                        self.logger.debug_msg(f"Found menu button using cached strategy: {cached_locator_type}")
+                except Exception as e:
+                    self.logger.debug_msg(f"Cached strategy failed: {e}")
+            
+            # Strategy 1: Try by resource ID (wait for element)
+            if not menu_button:
+                try:
+                    menu_button = self.driver._wait_for_element(
+                        "id", "com.whatsapp:id/menuitem_overflow", timeout=5, expected_condition="visible"
+                    )
+                    if menu_button:
                         self.logger.debug_msg("Found menu button by resource ID")
-                        break
-            except Exception as e:
-                self.logger.debug_msg(f"Strategy 1 failed: {e}")
+                        # Cache successful strategy
+                        self._element_strategy_cache[screen_type] = ("id", "com.whatsapp:id/menuitem_overflow")
+                except Exception as e:
+                    self.logger.debug_msg(f"Strategy 1 failed: {e}")
             
             # Strategy 2: Try by content description
             if not menu_button:
@@ -760,6 +907,8 @@ class ChatExporter:
                         if btn.is_displayed():
                             menu_button = btn
                             self.logger.debug_msg("Found menu button by content description")
+                            # Cache successful strategy
+                            self._element_strategy_cache[screen_type] = ("xpath", "//*[@content-desc='More options']")
                             break
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 2 failed: {e}")
@@ -767,12 +916,13 @@ class ChatExporter:
             # Strategy 3: Try by accessibility ID
             if not menu_button:
                 try:
-                    menu_buttons = self.driver.driver.find_elements("accessibility id", "More options")
-                    for btn in menu_buttons:
-                        if btn.is_displayed():
-                            menu_button = btn
-                            self.logger.debug_msg("Found menu button by accessibility ID")
-                            break
+                    menu_button = self.driver._wait_for_element(
+                        "accessibility_id", "More options", timeout=3, expected_condition="visible"
+                    )
+                    if menu_button:
+                        self.logger.debug_msg("Found menu button by accessibility ID")
+                        # Cache successful strategy
+                        self._element_strategy_cache[screen_type] = ("accessibility_id", "More options")
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 3 failed: {e}")
             
@@ -791,6 +941,7 @@ class ChatExporter:
                                 if location['x'] > right_area_x and location['y'] < 400:
                                     menu_button = elem
                                     self.logger.debug_msg(f"Found potential menu button at ({location['x']}, {location['y']})")
+                                    # Note: This strategy is position-based, don't cache it
                                     break
                         except:
                             continue
@@ -798,24 +949,30 @@ class ChatExporter:
                     self.logger.debug_msg(f"Strategy 4 failed: {e}")
             
             if not menu_button:
+                # Clear cache on failure to allow retry with different strategies
+                if screen_type in self._element_strategy_cache:
+                    del self._element_strategy_cache[screen_type]
                 raise Exception("Could not locate three-dot menu button")
             
             if not menu_button.is_enabled():
                 raise Exception("Menu button found but not enabled!")
             
             menu_button.click()
-            sleep(2)
+            sleep(0.5)  # Brief delay for menu animation
             self.logger.success("Menu opened")
             
         except Exception as e:
             self.logger.error(f"ERROR opening menu: {e}")
+            # Clear cache on navigation errors
+            if "menu_button" in self._element_strategy_cache:
+                del self._element_strategy_cache["menu_button"]
             self.driver.get_page_source(f"menu_error_{chat_name}.xml")
             raise
         
         # STEP 2: Click "More"
         self.logger.step(2, "Looking for 'More' option...")
         try:
-            sleep(1)
+            sleep(0.3)  # Brief delay for menu to fully render
             
             more_option = None
             
@@ -863,14 +1020,14 @@ class ChatExporter:
                 # This is likely a community chat
                 self.logger.warning("Could not find 'More' option - likely a community chat")
                 self.driver.driver.press_keycode(4)  # Close menu
-                sleep(1)
+                sleep(0.3)
                 self.driver.driver.press_keycode(4)  # Go back to main screen
-                sleep(2)
+                sleep(0.5)
                 self.logger.info("Returned to main screen (skipped community chat)")
                 return False  # Skip this chat
             
             more_option.click()
-            sleep(2)
+            sleep(0.5)  # Brief delay for submenu to appear
             self.logger.success("'More' clicked")
             
         except Exception as e:
@@ -881,7 +1038,7 @@ class ChatExporter:
         # STEP 3: Click "Export chat"
         self.logger.step(3, "Looking for 'Export chat' option...")
         try:
-            sleep(1)
+            sleep(0.3)  # Brief delay for submenu to render
             
             export_option = None
             
@@ -902,16 +1059,16 @@ class ChatExporter:
                 self.logger.warning("Could not find 'Export chat' option - this chat may not support export")
                 self.logger.info("Closing menus and returning to main screen...")
                 self.driver.driver.press_keycode(4)  # Close submenu
-                sleep(1)
+                sleep(0.3)
                 self.driver.driver.press_keycode(4)  # Close main menu
-                sleep(1)
+                sleep(0.3)
                 self.driver.driver.press_keycode(4)  # Go back to main screen
-                sleep(2)
+                sleep(0.5)
                 self.logger.info("Returned to main screen (skipped - export not available)")
                 return False  # Skip this chat
             
             export_option.click()
-            sleep(2)
+            sleep(0.5)  # Brief delay for export dialog
             self.logger.success("'Export chat' clicked")
             
         except Exception as e:
@@ -923,7 +1080,7 @@ class ChatExporter:
         media_option_name = "Include media" if include_media else "Without media"
         self.logger.step(4, f"Selecting '{media_option_name}' or detecting text-only chat...")
         try:
-            sleep(2)  # Allow UI to settle after clicking "Export chat"
+            sleep(0.5)  # Brief delay for export dialog to appear
             
             # First, check if share dialog appeared immediately (text-only chat)
             if self._is_share_dialog_visible():
@@ -1022,7 +1179,7 @@ class ChatExporter:
                 
                 # If we still haven't found media option, check again if share dialog appeared
                 if not media_option:
-                    sleep(1)  # Brief wait
+                    sleep(0.5)  # Brief wait
                     if self._is_share_dialog_visible():
                         self.logger.info("Share dialog detected - WhatsApp skipped media selection (text-only chat)")
                         self.logger.success("Proceeding directly to share dialog selection")
@@ -1048,7 +1205,7 @@ class ChatExporter:
         # STEP 5: Select "My Drive" (Google Drive)
         self.logger.step(5, "Selecting 'My Drive' (Google Drive)...")
         try:
-            sleep(2)
+            sleep(0.5)  # Brief delay for share dialog to fully render
             
             google_drive_option = None
             
@@ -1133,7 +1290,7 @@ class ChatExporter:
                 self.logger.debug_msg(f"Verified: '{verification_text}' is Google Drive")
             
             google_drive_option.click()
-            sleep(2)
+            sleep(0.5)  # Brief delay for Google Drive to open
             self.logger.success("'My Drive' selected - Google Drive should now be opening")
             
         except Exception as e:
@@ -1186,7 +1343,7 @@ class ChatExporter:
             try:
                 # Navigate to main screen first
                 self.driver.navigate_to_main()
-                sleep(1)
+                sleep(0.3)  # Brief delay after navigation
                 
                 # Click into chat
                 if not self.driver.click_chat(chat_name):
