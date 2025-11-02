@@ -1202,31 +1202,59 @@ class ChatExporter:
             self.driver.get_page_source(f"media_option_error_{chat_name}.xml")
             raise
         
-        # STEP 5: Select "My Drive" (Google Drive)
-        self.logger.step(5, "Selecting 'My Drive' (Google Drive)...")
+        # STEP 5: Select "Drive" (Google Drive)
+        self.logger.step(5, "Selecting 'Drive' (Google Drive)...")
         try:
             sleep(0.5)  # Brief delay for share dialog to fully render
             
             google_drive_option = None
             
-            all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
-            clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.Button")
-            
-            # Strategy 1: Look for "My Drive"
-            for elem in all_text_elements:
-                try:
-                    if elem.is_displayed():
-                        text = elem.text.strip()
-                        if text and text.lower() == "my drive":
-                            if elem.is_enabled() or elem.is_displayed():
-                                google_drive_option = elem
-                                self.logger.debug_msg(f"Found 'My Drive': '{text}'")
-                                break
-                except:
-                    continue
-            
-            # Strategy 2: Look in clickable containers
-            if not google_drive_option:
+            # Helper function to find "Drive" option
+            def find_drive_option():
+                all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
+                clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.Button")
+                
+                # Strategy 1: Look for "Drive" in text elements
+                for elem in all_text_elements:
+                    try:
+                        if elem.is_displayed():
+                            text = elem.text.strip()
+                            if text and text.lower() == "drive":
+                                if elem.is_enabled() or elem.is_displayed():
+                                    self.logger.debug_msg(f"Found 'Drive': '{text}'")
+                                    return elem
+                    except:
+                        continue
+                
+                # Strategy 2: Look for "Drive" in clickable containers
+                for elem in clickable_elements:
+                    try:
+                        if elem.is_displayed() and elem.is_enabled():
+                            text_views = elem.find_elements("xpath", ".//android.widget.TextView")
+                            for tv in text_views:
+                                try:
+                                    text = tv.text.strip()
+                                    if text and text.lower() == "drive":
+                                        self.logger.debug_msg(f"Found 'Drive' in container: '{text}'")
+                                        return elem
+                                except:
+                                    continue
+                    except:
+                        continue
+                
+                # Strategy 3: Fallback to "My Drive"
+                for elem in all_text_elements:
+                    try:
+                        if elem.is_displayed():
+                            text = elem.text.strip()
+                            if text and text.lower() == "my drive":
+                                if elem.is_enabled() or elem.is_displayed():
+                                    self.logger.debug_msg(f"Found 'My Drive' (fallback): '{text}'")
+                                    return elem
+                    except:
+                        continue
+                
+                # Strategy 4: Look for "My Drive" in clickable containers
                 for elem in clickable_elements:
                     try:
                         if elem.is_displayed() and elem.is_enabled():
@@ -1235,32 +1263,47 @@ class ChatExporter:
                                 try:
                                     text = tv.text.strip()
                                     if text and text.lower() == "my drive":
-                                        google_drive_option = elem
-                                        self.logger.debug_msg(f"Found 'My Drive' in container: '{text}'")
-                                        break
+                                        self.logger.debug_msg(f"Found 'My Drive' in container (fallback): '{text}'")
+                                        return elem
                                 except:
                                     continue
-                            if google_drive_option:
-                                break
                     except:
                         continue
+                
+                return None
             
-            # Strategy 3: Fallback to "Drive"
+            # First attempt: try to find "Drive" without swiping
+            google_drive_option = find_drive_option()
+            
+            # If not found, swipe up from bottom to make it visible
             if not google_drive_option:
-                for elem in all_text_elements:
-                    try:
-                        if elem.is_displayed():
-                            text = elem.text.strip()
-                            if text and text.lower() == "drive":
-                                if elem.is_enabled() or elem.is_displayed():
-                                    google_drive_option = elem
-                                    self.logger.debug_msg(f"Found 'Drive': '{text}'")
-                                    break
-                    except:
-                        continue
+                self.logger.debug_msg("'Drive' not immediately visible, swiping up from bottom...")
+                window_size = self.driver.driver.get_window_size()
+                screen_height = window_size['height']
+                screen_width = window_size['width']
+                
+                # Swipe up from near bottom (swipe from Y=high to Y=low to scroll content up)
+                # Try up to 3 times
+                max_swipes = 3
+                for swipe_attempt in range(max_swipes):
+                    # Swipe from bottom (high Y) to top (low Y) to scroll content up
+                    start_y = int(screen_height * 0.85)  # Near bottom
+                    end_y = int(screen_height * 0.35)    # Upper portion
+                    center_x = screen_width // 2
+                    
+                    self.driver.driver.swipe(center_x, start_y, center_x, end_y, duration=300)
+                    sleep(0.5)  # Brief delay for UI to update
+                    
+                    # Try to find "Drive" again
+                    google_drive_option = find_drive_option()
+                    if google_drive_option:
+                        self.logger.debug_msg(f"Found 'Drive' after {swipe_attempt + 1} swipe(s)")
+                        break
+                    else:
+                        self.logger.debug_msg(f"Swipe {swipe_attempt + 1}/{max_swipes} - 'Drive' still not found")
             
             if not google_drive_option:
-                raise Exception("Could not locate 'My Drive' or 'Drive' option")
+                raise Exception("Could not locate 'Drive' option after swiping")
             
             # Verification
             verification_text = None
@@ -1291,11 +1334,227 @@ class ChatExporter:
             
             google_drive_option.click()
             sleep(0.5)  # Brief delay for Google Drive to open
-            self.logger.success("'My Drive' selected - Google Drive should now be opening")
+            self.logger.success("'Drive' selected - Google Drive window should now be opening")
             
         except Exception as e:
-            self.logger.error(f"ERROR selecting 'My Drive': {e}")
+            self.logger.error(f"ERROR selecting 'Drive': {e}")
             self.driver.get_page_source(f"google_drive_error_{chat_name}.xml")
+            raise
+        
+        # Wait for Google Drive window to appear
+        self.logger.debug_msg("Waiting for Google Drive window to appear...")
+        sleep(1.0)  # Initial wait for window transition
+        
+        # Check if we're now in Google Drive (package change or activity change)
+        try:
+            current_package = self.driver.driver.current_package
+            current_activity = self.driver.driver.current_activity
+            self.logger.debug_msg(f"After clicking Drive - Package: {current_package}, Activity: {current_activity}")
+            
+            # Google Drive package is typically com.google.android.apps.drive
+            if "drive" in current_package.lower() or "drive" in current_activity.lower():
+                self.logger.debug_msg("Google Drive window detected")
+            else:
+                # Wait a bit more for transition
+                sleep(1.0)
+                current_package = self.driver.driver.current_package
+                current_activity = self.driver.driver.current_activity
+                self.logger.debug_msg(f"After additional wait - Package: {current_package}, Activity: {current_activity}")
+        except Exception as e:
+            self.logger.debug_msg(f"Could not check package/activity: {e}")
+        
+        # STEP 6: Click "Upload" button in top right
+        self.logger.step(6, "Clicking 'Upload' button in Google Drive window...")
+        try:
+            sleep(0.5)  # Brief delay for Google Drive window to fully render
+            
+            upload_button = None
+            window_size = self.driver.driver.get_window_size()
+            screen_width = window_size['width']
+            screen_height = window_size['height']
+            
+            # Define top right area (rightmost 30% of screen width, top 15% of screen height)
+            top_right_x_min = int(screen_width * 0.7)
+            top_right_y_max = int(screen_height * 0.15)
+            
+            # Strategy 1: Try by resource ID (most reliable - com.google.android.apps.docs:id/save_button)
+            try:
+                upload_button = self.driver._wait_for_element(
+                    "id", "com.google.android.apps.docs:id/save_button", timeout=3, expected_condition="visible"
+                )
+                if upload_button:
+                    # Verify it has "Upload" text
+                    try:
+                        button_text = upload_button.text.strip().lower()
+                        if button_text == "upload":
+                            self.logger.debug_msg(f"Found 'Upload' button by resource ID: '{upload_button.text}'")
+                        else:
+                            upload_button = None  # Wrong button
+                    except:
+                        pass
+            except Exception as e:
+                self.logger.debug_msg(f"Strategy 1 (resource ID) failed: {e}")
+            
+            # Strategy 2: Look for Button elements with "Upload" text in top right area
+            if not upload_button:
+                all_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
+                for elem in all_buttons:
+                    try:
+                        if elem.is_displayed() and elem.is_enabled():
+                            # Check button's own text attribute
+                            button_text = elem.text.strip().lower()
+                            if button_text == "upload":
+                                location = elem.location
+                                # Check if in top right area (or just accept if text matches)
+                                if location['x'] >= top_right_x_min and location['y'] <= top_right_y_max:
+                                    upload_button = elem
+                                    self.logger.debug_msg(f"Found 'Upload' button by Button.text at ({location['x']}, {location['y']})")
+                                    break
+                                else:
+                                    # Still accept if text matches (may be slightly outside area)
+                                    upload_button = elem
+                                    self.logger.debug_msg(f"Found 'Upload' button by Button.text at ({location['x']}, {location['y']}) - position check relaxed")
+                                    break
+                    except:
+                        continue
+            
+            # Strategy 3: Look for "Upload" text in TextView elements in top right area
+            if not upload_button:
+                all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
+                for elem in all_text_elements:
+                    try:
+                        if elem.is_displayed():
+                            text = elem.text.strip().lower()
+                            if text == "upload":
+                                location = elem.location
+                                if location['x'] >= top_right_x_min and location['y'] <= top_right_y_max:
+                                    # Try to find parent button or clickable container
+                                    try:
+                                        parent = elem.find_element("xpath", "..")
+                                        if parent.tag_name == "android.widget.Button" and parent.is_enabled():
+                                            upload_button = parent
+                                            self.logger.debug_msg(f"Found 'Upload' button via TextView parent at ({location['x']}, {location['y']})")
+                                            break
+                                    except:
+                                        pass
+                    except:
+                        continue
+            
+            # Strategy 4: Look for "Upload" in clickable containers (buttons, ImageButtons)
+            if not upload_button:
+                clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.Button | //android.widget.ImageButton | //android.widget.ImageView[@clickable='true']")
+                for elem in clickable_elements:
+                    try:
+                        if elem.is_displayed() and elem.is_enabled():
+                            location = elem.location
+                            # Check if in top right area
+                            if location['x'] >= top_right_x_min and location['y'] <= top_right_y_max:
+                                # Check if it contains "Upload" text in child TextViews
+                                text_views = elem.find_elements("xpath", ".//android.widget.TextView")
+                                for tv in text_views:
+                                    try:
+                                        text = tv.text.strip().lower()
+                                        if text == "upload":
+                                            upload_button = elem
+                                            self.logger.debug_msg(f"Found 'Upload' button in container at ({location['x']}, {location['y']})")
+                                            break
+                                    except:
+                                        continue
+                                if upload_button:
+                                    break
+                    except:
+                        continue
+            
+            # Strategy 5: Fallback - find any button with "Upload" text regardless of position
+            if not upload_button:
+                all_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
+                for elem in all_buttons:
+                    try:
+                        if elem.is_displayed() and elem.is_enabled():
+                            button_text = elem.text.strip().lower()
+                            if button_text == "upload":
+                                upload_button = elem
+                                location = elem.location
+                                self.logger.debug_msg(f"Found 'Upload' button by Button.text (position-independent) at ({location['x']}, {location['y']})")
+                                break
+                    except:
+                        continue
+            
+            if not upload_button:
+                raise Exception("Could not locate 'Upload' button in Google Drive window")
+            
+            # Verify it's actually "Upload"
+            verification_text = None
+            verification_passed = False
+            try:
+                # First check the button's own text attribute (for Button elements)
+                if upload_button.tag_name == "android.widget.Button":
+                    try:
+                        button_text = upload_button.text
+                        if button_text:
+                            verification_text = button_text.strip()
+                            if verification_text.lower() == "upload":
+                                verification_passed = True
+                                self.logger.debug_msg(f"Verified: Button text is '{verification_text}'")
+                    except:
+                        pass
+                
+                # If not verified yet, check TextView children
+                if not verification_passed:
+                    text_views = upload_button.find_elements("xpath", ".//android.widget.TextView")
+                    for tv in text_views:
+                        try:
+                            text = tv.text.strip()
+                            if text and len(text) > 0:
+                                verification_text = text
+                                if "upload" in text.lower():
+                                    verification_passed = True
+                                    self.logger.debug_msg(f"Verified: TextView child text is '{verification_text}'")
+                                    break
+                        except:
+                            continue
+                
+                # If still not verified, check content description
+                if not verification_passed:
+                    try:
+                        content_desc = upload_button.get_attribute("content-desc")
+                        if content_desc and "upload" in content_desc.lower():
+                            verification_text = content_desc
+                            verification_passed = True
+                            self.logger.debug_msg(f"Verified: Content description is '{verification_text}'")
+                    except:
+                        pass
+                
+                # If found by resource ID (com.google.android.apps.docs:id/save_button), trust it
+                if not verification_passed:
+                    try:
+                        resource_id = upload_button.get_attribute("resource-id")
+                        if resource_id and "save_button" in resource_id:
+                            verification_passed = True
+                            self.logger.debug_msg(f"Verified: Found by resource ID '{resource_id}' - trusting it's the Upload button")
+                    except:
+                        pass
+                
+            except Exception as e:
+                self.logger.debug_msg(f"Verification check error: {e}")
+            
+            # Only fail if we have verification text but it doesn't contain "upload"
+            if verification_text and not verification_passed:
+                verification_text_lower = verification_text.lower()
+                if "upload" not in verification_text_lower:
+                    raise Exception(f"VERIFICATION FAILED: Not Upload button! Got '{verification_text}'")
+            
+            # If we got here without verification but button exists, log warning but proceed
+            if not verification_passed:
+                self.logger.debug_msg("Could not verify button text, but proceeding with click (button found by search strategies)")
+            
+            upload_button.click()
+            sleep(0.5)  # Brief delay after clicking Upload
+            self.logger.success("'Upload' button clicked - export should now be processing")
+            
+        except Exception as e:
+            self.logger.error(f"ERROR clicking 'Upload' button: {e}")
+            self.driver.get_page_source(f"upload_error_{chat_name}.xml")
             raise
         
         self.logger.success(f"SUCCESS: Export initiated for '{chat_name}'")
