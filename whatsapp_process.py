@@ -14,6 +14,7 @@ import zipfile
 import shutil
 from pathlib import Path
 from typing import List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     from colorama import init, Fore, Style
@@ -272,13 +273,13 @@ def create_processed_folder(source_dir: Path, logger: Logger) -> Optional[Path]:
 
 def move_files_to_processed(files: List[Path], processed_folder: Path, logger: Logger) -> List[Path]:
     """
-    Move files to processed folder.
+    Move files to processed folder using parallel processing.
     
     Args:
         files: List of source file paths
         processed_folder: Destination folder path
         logger: Logger instance for output
-        
+    
     Returns:
         List of paths to moved files in processed folder
     """
@@ -286,21 +287,42 @@ def move_files_to_processed(files: List[Path], processed_folder: Path, logger: L
     
     logger.info("Moving files to processed folder...")
     
-    for file_path in files:
+    def move_file(file_path: Path) -> Tuple[Path, bool, Optional[str]]:
+        """Move a single file. Returns (dest_path, success, error_msg)."""
         try:
             dest_path = processed_folder / file_path.name
             
             # Check if destination already exists
             if dest_path.exists():
-                logger.warning(f"File already exists in destination: {dest_path.name}")
-                logger.info(f"  Skipping: {file_path.name}")
-                continue
+                return (dest_path, False, f"File already exists in destination: {dest_path.name}")
             
             shutil.move(str(file_path), str(dest_path))
-            moved_files.append(dest_path)
             logger.debug_msg(f"Moved: {file_path.name} -> {dest_path}")
+            return (dest_path, True, None)
         except Exception as e:
-            logger.error(f"Failed to move {file_path.name}: {e}")
+            return (processed_folder / file_path.name, False, str(e))
+    
+    # Use ThreadPoolExecutor for parallel file moves
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        # Submit all move tasks
+        future_to_file = {executor.submit(move_file, file_path): file_path for file_path in files}
+        
+        # Process results as they complete
+        for future in as_completed(future_to_file):
+            file_path = future_to_file[future]
+            try:
+                dest_path, success, error_msg = future.result()
+                if success:
+                    moved_files.append(dest_path)
+                else:
+                    if error_msg:
+                        if "already exists" in error_msg:
+                            logger.warning(f"File already exists in destination: {dest_path.name}")
+                            logger.info(f"  Skipping: {file_path.name}")
+                        else:
+                            logger.error(f"Failed to move {file_path.name}: {error_msg}")
+            except Exception as e:
+                logger.error(f"Failed to move {file_path.name}: {e}")
     
     logger.success(f"Moved {len(moved_files)} file(s) to processed folder")
     return moved_files
@@ -349,12 +371,12 @@ def add_zip_extension(files: List[Path], logger: Logger) -> List[Path]:
 
 def extract_zip_files(zip_files: List[Path], logger: Logger) -> List[Path]:
     """
-    Extract all zip files.
+    Extract all zip files using parallel processing.
     
     Args:
         zip_files: List of zip file paths
         logger: Logger instance for output
-        
+    
     Returns:
         List of paths to extracted folders
     """
@@ -362,29 +384,52 @@ def extract_zip_files(zip_files: List[Path], logger: Logger) -> List[Path]:
     
     logger.info("Extracting zip files...")
     
-    for zip_path in zip_files:
+    def extract_zip(zip_path: Path) -> Tuple[Path, bool, Optional[str]]:
+        """Extract a single zip file. Returns (extract_folder, success, error_msg)."""
         try:
             # Extract to folder with same name (without .zip extension)
             extract_folder = zip_path.parent / zip_path.stem
             
             # Check if folder already exists
             if extract_folder.exists():
-                logger.warning(f"Extraction folder already exists: {extract_folder.name}")
-                logger.info(f"  Skipping extraction of: {zip_path.name}")
-                extracted_folders.append(extract_folder)
-                continue
+                return (extract_folder, False, f"Extraction folder already exists: {extract_folder.name}")
             
             extract_folder.mkdir(parents=True, exist_ok=True)
             
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_folder)
             
-            extracted_folders.append(extract_folder)
             logger.debug_msg(f"Extracted: {zip_path.name} -> {extract_folder.name}")
+            return (extract_folder, True, None)
         except zipfile.BadZipFile:
-            logger.error(f"Invalid or corrupted zip file: {zip_path.name}")
+            return (zip_path.parent / zip_path.stem, False, f"Invalid or corrupted zip file: {zip_path.name}")
         except Exception as e:
-            logger.error(f"Failed to extract {zip_path.name}: {e}")
+            return (zip_path.parent / zip_path.stem, False, str(e))
+    
+    # Use ThreadPoolExecutor for parallel zip extraction (max_workers=2 to avoid I/O bottleneck)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit all extraction tasks
+        future_to_zip = {executor.submit(extract_zip, zip_path): zip_path for zip_path in zip_files}
+        
+        # Process results as they complete
+        for future in as_completed(future_to_zip):
+            zip_path = future_to_zip[future]
+            try:
+                extract_folder, success, error_msg = future.result()
+                if success:
+                    extracted_folders.append(extract_folder)
+                else:
+                    if error_msg:
+                        if "already exists" in error_msg:
+                            logger.warning(f"Extraction folder already exists: {extract_folder.name}")
+                            logger.info(f"  Skipping extraction of: {zip_path.name}")
+                            extracted_folders.append(extract_folder)  # Include existing folder
+                        elif "corrupted" in error_msg.lower() or "invalid" in error_msg.lower():
+                            logger.error(error_msg)
+                        else:
+                            logger.error(f"Failed to extract {zip_path.name}: {error_msg}")
+            except Exception as e:
+                logger.error(f"Failed to extract {zip_path.name}: {e}")
     
     logger.success(f"Extracted {len(extracted_folders)} archive(s)")
     return extracted_folders

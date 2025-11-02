@@ -2,6 +2,11 @@
 
 An automated Python script that exports WhatsApp chats from your Android device to Google Drive using Appium automation. This tool provides an interactive interface to select and export multiple chats efficiently.
 
+# Concept
+
+WhatsApp often makes up the majority of particular correspondences. As such it provides a useful data set when paired with a LLM for scrutinizing correspondence styles, social dynamics, notable traits, memorable events, patterns, etc.
+
+
 # Personal Note
 
 Automating this process is a hack, but it's the only practical means given the encryption methodology WhatsApp uses.  As such, it's an ugly screenscraping process, but ultimately a time saver for extensive WhatsApp use. 
@@ -27,6 +32,9 @@ The script uses **Appium** and **UiAutomator2** to control your Android device, 
 ## Edge cases:
 
 * **Chat position changes during search**: If a chat moves position (due to new messages) while the script is searching for it, the script will scroll up to 120 times in each direction (240 total scrolls maximum). This allows searching through approximately 200 chats. If a chat moves beyond this search range during the search process, it may be missed and the chat will be skipped.
+
+# TODO
+Handle *'Advanced Chat Privacy has been turned on.'*.  This came up in one of the scrapes and caused the script to stall. 
 
 
 
@@ -59,87 +67,9 @@ pip install appium-python-client colorama
 ```
 
 
+## 🚀 Quick Start
 
-## 🚀 Quicks Start
-
-⚠️ **IMPORTANT**: This is a fragile screen scraping process which may be vulnerable to changes in the WhatsApp UI.  As such, it's recommended to monitor as it runs.  Additionally, follow these top tips to avoid unintended behaviours. 
-* Connect an Android device with WhatsApp installed and Google Drive app installed and configured.
-* Ensure that phone is unlocked and on the home screen. 
-* Do not interact with the phone while the script is running. 
-
-### Basic Usage
-
-Run the script in interactive mode:
-```bash
-python whatsapp_export.py
-```
-
-Or if installed via Poetry:
-```bash
-poetry run whatsapp-export
-```
-
-### Command Line Options
-
-The script supports several command-line options:
-
-```bash
-# Enable debug mode (verbose output)
-python whatsapp_export.py --debug
-
-# Skip starting Appium (assume it's already running)
-python whatsapp_export.py --skip-appium
-
-# Test mode: Limit to 10 chats (default test limit)
-python whatsapp_export.py --test
-
-# Test mode: Limit to specific number of chats
-python whatsapp_export.py --test 5
-python whatsapp_export.py --test 20
-
-# Export with media (default)
-python whatsapp_export.py --with-media
-
-# Export without media
-python whatsapp_export.py --without-media
-
-# Show chats in original WhatsApp order
-python whatsapp_export.py --sort-order original
-
-# Show chats alphabetically (default)
-python whatsapp_export.py --sort-order alphabetical
-```
-
-### Interactive Mode Workflow
-
-1. **Start the script** - It will:
-   - Start Appium server (unless `--skip-appium` is used)
-   - Connect to your Android device
-   - Launch WhatsApp
-   - Navigate to the main chats screen
-
-2. **Chat collection** - The script will:
-   - Scroll through your entire chat list
-   - Collect all available chats
-   - Display them in a numbered list (alphabetically or in original order)
-
-3. **Select chats** - You'll be prompted to:
-   - Enter chat numbers (comma-separated, e.g., `1,3,5`)
-   - Or enter `all` to export all chats
-   - Or enter `q`, `quit`, or `exit` to quit
-
-4. **Export process** - For each selected chat:
-   - The script navigates into the chat
-   - Opens the three-dot menu
-   - Selects "More" → "Export chat"
-   - Chooses media option (with/without media)
-   - Selects "My Drive" (Google Drive)
-   - Returns to main screen for next chat
-
-5. **Results summary** - At the end, you'll see:
-   - Total chats processed
-   - Successfully exported chats
-   - Skipped chats (community chats, etc.)
+For a quick start guide, see [QUICKSTART.md](quickstart.md).
 
 ## 🔧 How It Works
 
