@@ -12,6 +12,7 @@ import sys
 import time
 import os
 import signal
+import threading
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Set
 from time import sleep
@@ -34,6 +35,7 @@ Examples:
   %(prog)s --sort-order original  # Show chats in original WhatsApp order (default)
   %(prog)s --sort-order alphabetical  # Show chats alphabetically
   %(prog)s --resume /path/to/drive  # Skip chats already exported to Google Drive folder
+  %(prog)s --all               # Auto-select all chats after 30 seconds if no input
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
         """
@@ -89,6 +91,12 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         type=str,
         metavar='DIR',
         help='Resume mode: Skip chats that already exist in the specified Google Drive root folder'
+    )
+    
+    parser.add_argument(
+        '--all',
+        action='store_true',
+        help='Auto-select all chats after 30 seconds if no input is provided'
     )
     
     return parser
@@ -786,13 +794,28 @@ class WhatsAppDriver:
     def _find_chat_with_scrolling(self, chat_name: str, max_scrolls: int = 240):
         """
         Scroll through the chat list to find a specific chat.
-        Tries scrolling up first (since we're likely scrolled down), then down if needed.
+        First tries scrolling down once (since next chat is likely just below).
+        If that fails, tries scrolling up first (since we're likely scrolled down), then down if needed.
         Detects when at top/bottom to prevent infinite scrolling.
         Returns the chat element or None.
         """
         self.logger.debug_msg(f"Searching for '{chat_name}' by scrolling...")
         
-        # Default scroll strategy: try up first, then down
+        # Optimization: Try scrolling down once first (next chat is likely just below)
+        try:
+            self.logger.debug_msg(f"Trying quick scroll down to find chat...")
+            self.driver.swipe(500, 1500, 500, 500, duration=300)
+            sleep(0.2)  # Brief pause to let UI update after scroll
+            
+            # Check if chat is now visible
+            target_chat = self._find_chat_in_view(chat_name)
+            if target_chat:
+                self.logger.debug_msg(f"Found chat '{chat_name}' after quick scroll down")
+                return target_chat
+        except Exception as e:
+            self.logger.debug_msg(f"Error during quick scroll down: {e}")
+        
+        # If quick scroll down didn't work, use full scroll strategy: try up first, then down
         scroll_directions = [
             ("up", lambda: self.driver.swipe(500, 800, 500, 1800, duration=300)),
             ("down", lambda: self.driver.swipe(500, 1500, 500, 500, duration=300))
@@ -924,7 +947,143 @@ class ChatExporter:
         
         return False
     
-    def _wait_for_share_dialog(self, max_retries: int = 3) -> bool:
+    def _handle_advanced_chat_privacy_error(self, chat_name: str) -> bool:
+        """
+        Check for and handle the advanced chat privacy error dialog.
+        This dialog appears when a chat has advanced privacy settings enabled that prevent export.
+        
+        Returns True if error dialog was detected and handled (chat should be skipped), False otherwise.
+        """
+        try:
+            # Look for error dialog indicators
+            all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
+            error_dialog_detected = False
+            
+            for elem in all_text_elements:
+                try:
+                    if elem.is_displayed():
+                        text = elem.text.strip().lower()
+                        # Look for error message about advanced chat privacy
+                        if ("advanced chat privacy" in text or 
+                            "can't export chats" in text or
+                            "prevents the exporting" in text or
+                            "cannot export" in text):
+                            error_dialog_detected = True
+                            self.logger.warning(f"Advanced chat privacy error detected: '{elem.text.strip()}'")
+                            break
+                except:
+                    continue
+            
+            if not error_dialog_detected:
+                return False
+            
+            # Error dialog detected - find and click OK button
+            self.logger.warning(f"Advanced chat privacy prevents export of '{chat_name}'")
+            self.logger.info("Looking for OK button in error dialog...")
+            
+            ok_button = None
+            
+            # Strategy 1: Look for button with "OK" text
+            try:
+                all_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
+                for btn in all_buttons:
+                    try:
+                        if btn.is_displayed() and btn.is_enabled():
+                            button_text = btn.text.strip().lower()
+                            if button_text == "ok":
+                                ok_button = btn
+                                self.logger.debug_msg("Found OK button by text")
+                                break
+                    except:
+                        continue
+            except Exception as e:
+                self.logger.debug_msg(f"Strategy 1 failed: {e}")
+            
+            # Strategy 2: Look for clickable containers with "OK" text
+            if not ok_button:
+                try:
+                    clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.FrameLayout[@clickable='true']")
+                    for elem in clickable_elements:
+                        try:
+                            if elem.is_displayed() and elem.is_enabled():
+                                text_views = elem.find_elements("xpath", ".//android.widget.TextView")
+                                for tv in text_views:
+                                    try:
+                                        text = tv.text.strip().lower()
+                                        if text == "ok":
+                                            ok_button = elem
+                                            self.logger.debug_msg("Found OK button in container")
+                                            break
+                                    except:
+                                        continue
+                                if ok_button:
+                                    break
+                        except:
+                            continue
+                except Exception as e:
+                    self.logger.debug_msg(f"Strategy 2 failed: {e}")
+            
+            # Strategy 3: Look for TextView with "OK" text and find its clickable parent
+            if not ok_button:
+                try:
+                    for elem in all_text_elements:
+                        try:
+                            if elem.is_displayed():
+                                text = elem.text.strip().lower()
+                                if text == "ok":
+                                    # Try to find clickable parent
+                                    try:
+                                        parent = elem.find_element("xpath", "..")
+                                        if parent.get_attribute("clickable") == "true":
+                                            ok_button = parent
+                                            self.logger.debug_msg("Found OK button via TextView parent")
+                                            break
+                                    except:
+                                        # If parent isn't clickable, try clicking the TextView itself
+                                        ok_button = elem
+                                        self.logger.debug_msg("Using TextView directly as OK button")
+                                        break
+                        except:
+                            continue
+                except Exception as e:
+                    self.logger.debug_msg(f"Strategy 3 failed: {e}")
+            
+            if ok_button:
+                try:
+                    ok_button.click()
+                    sleep(0.5)  # Brief delay after clicking OK
+                    self.logger.info("Clicked OK button in error dialog")
+                except Exception as e:
+                    self.logger.debug_msg(f"Error clicking OK button: {e}")
+                    # Try pressing back as fallback
+                    self.driver.driver.press_keycode(4)
+                    sleep(0.5)
+            else:
+                # If we can't find OK button, try pressing back as fallback
+                self.logger.warning("Could not find OK button, using back button as fallback")
+                self.driver.driver.press_keycode(4)
+                sleep(0.5)
+            
+            # Close any remaining menus/dialogs and return to main screen
+            self.logger.info("Closing menus and returning to main screen...")
+            for _ in range(3):  # Press back up to 3 times to ensure we're back
+                try:
+                    current_activity = self.driver.driver.current_activity
+                    if ".home" in current_activity.lower() or "HomeActivity" in current_activity:
+                        break
+                    self.driver.driver.press_keycode(4)
+                    sleep(0.3)
+                except:
+                    break
+            
+            self.logger.info("Returned to main screen (skipped due to advanced chat privacy)")
+            return True  # Error dialog was handled, chat should be skipped
+            
+        except Exception as e:
+            self.logger.debug_msg(f"Error checking for advanced chat privacy dialog: {e}")
+            return False  # If we can't check properly, assume no error dialog
+    
+    def _wait_for_share_dialog(self, max_retries: int = 7) -> bool:
         """
         Wait for share dialog to appear after selecting media option.
         Uses exponential backoff with retries.
@@ -932,7 +1091,8 @@ class ChatExporter:
         Returns True if share dialog appears, False if it doesn't appear after retries.
         """
         for attempt in range(max_retries):
-            wait_time = 2 ** attempt  # Exponential backoff: 2s, 4s, 8s
+            # Exponential backoff: 2s, 4s, 8s, 16s, 32s, 64s, 90s (capped at 90)
+            wait_time = min(2 ** (attempt + 1), 90)
             self.logger.debug_msg(f"Waiting for share dialog (attempt {attempt + 1}/{max_retries}, waiting {wait_time}s)...")
             sleep(wait_time)
             
@@ -1170,6 +1330,11 @@ class ChatExporter:
             self.driver.get_page_source(f"export_error_{chat_name}.xml")
             raise
         
+        # Check for advanced chat privacy error dialog
+        if self._handle_advanced_chat_privacy_error(chat_name):
+            # Error dialog was detected and handled - skip this chat
+            return False
+        
         # STEP 4: Select media option (Include or Without) OR detect text-only chat
         media_option_name = "Include media" if include_media else "Without media"
         self.logger.step(4, f"Selecting '{media_option_name}' or detecting text-only chat...")
@@ -1286,7 +1451,7 @@ class ChatExporter:
                     
                     # Wait for share dialog with exponential backoff
                     self.logger.info("Waiting for share dialog to initialize...")
-                    if not self._wait_for_share_dialog(max_retries=3):
+                    if not self._wait_for_share_dialog():
                         self.logger.warning("Share dialog may not have appeared, but continuing...")
                     else:
                         self.logger.success("Share dialog ready")
@@ -1766,7 +1931,82 @@ class ChatExporter:
         return results, timings, total_time, skipped_already_exists
 
 
-def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True, resume_folder: Optional[Path] = None):
+def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value: str = "") -> Tuple[str, bool]:
+    """Get user input with optional timeout and countdown display.
+    
+    Args:
+        prompt: Prompt string to display
+        timeout: Timeout in seconds (0 = no timeout)
+        logger: Logger instance for output
+        default_value: Default value to return if timeout expires
+        
+    Returns:
+        Tuple of (user input string or default_value if timeout expires, timeout_occurred)
+    """
+    if timeout <= 0:
+        # No timeout, just get input normally
+        return input(prompt).strip(), False
+    
+    result = [None]
+    timeout_occurred = [False]
+    input_received = threading.Event()
+    countdown_active = threading.Event()
+    countdown_active.set()
+    
+    def get_input():
+        """Get input in a separate thread."""
+        try:
+            result[0] = input(prompt).strip()
+            countdown_active.clear()
+            input_received.set()
+        except (EOFError, KeyboardInterrupt):
+            countdown_active.clear()
+            input_received.set()
+    
+    def show_countdown():
+        """Show countdown timer on a separate line."""
+        remaining = timeout
+        # Print initial empty line for countdown (will be updated)
+        print()  # New line for countdown display
+        while remaining > 0 and countdown_active.is_set() and not input_received.is_set():
+            # Move cursor up one line, clear it, print countdown, then move back down
+            countdown_msg = f"⏱️  Time remaining: {remaining:2d} seconds (will default to 'all' if no input)..."
+            sys.stdout.write(f"\033[1A\033[2K{countdown_msg}\033[1B")  # Up, clear, print, down
+            sys.stdout.flush()
+            sleep(1)
+            remaining -= 1
+        
+        if countdown_active.is_set() and not input_received.is_set():
+            # Timeout reached - clear the countdown line
+            sys.stdout.write("\033[1A\033[2K")  # Move up and clear
+            sys.stdout.flush()
+            result[0] = default_value
+            timeout_occurred[0] = True
+            input_received.set()
+    
+    # Start countdown thread
+    countdown_thread = threading.Thread(target=show_countdown, daemon=True)
+    countdown_thread.start()
+    
+    # Small delay to let countdown start
+    sleep(0.1)
+    
+    # Start input thread
+    input_thread = threading.Thread(target=get_input, daemon=True)
+    input_thread.start()
+    
+    # Wait for input or timeout
+    input_received.wait(timeout + 1)
+    
+    # Clear countdown line if still visible
+    if countdown_active.is_set():
+        sys.stdout.write("\033[1A\033[2K")
+        sys.stdout.flush()
+    
+    return result[0] if result[0] is not None else default_value, timeout_occurred[0]
+
+
+def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True, resume_folder: Optional[Path] = None, auto_all: bool = False):
     """Interactive mode: prompt user to select chats to export.
     
     Args:
@@ -1777,6 +2017,7 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         include_media: If True, export with media; if False, export without media
         sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
         resume_folder: Optional path to Google Drive folder to check for existing exports
+        auto_all: If True, default to 'all' after 30 seconds if no input is provided
     """
     logger.info("=" * 70)
     if test_limit:
@@ -1809,11 +2050,20 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     logger.info("Select chats to export:")
     logger.info(f"  - Chats are listed {sort_info}")
     logger.info("  - Enter chat numbers (comma-separated, e.g., 1,3,5)")
+    logger.info("  - Use ranges with hyphens (e.g., 100-200 or 1,3,5-10,20)")
     logger.info("  - Enter 'all' to export all chats")
     logger.info("  - Enter 'q', 'quit', or 'exit' to quit")
+    if auto_all:
+        logger.info("  - Will default to 'all' after 30 seconds if no input is provided")
     logger.info("=" * 70)
     
-    selection = input("\nYour selection: ").strip().lower()
+    # Get user input with optional timeout
+    timeout_seconds = 30 if auto_all else 0
+    selection, timeout_occurred = input_with_timeout("\nYour selection: ", timeout_seconds, logger, default_value="all" if auto_all else "")
+    selection = selection.lower()
+    
+    if timeout_occurred:
+        logger.info("⏱️  Timeout reached - defaulting to 'all'")
     
     # Handle exit gracefully
     if selection == 'q' or selection == 'quit' or selection == 'exit':
@@ -1831,14 +2081,40 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         chats_to_export = all_chats
     else:
         try:
-            indices = [int(x.strip()) for x in selection.split(',')]
+            indices = []
+            # Split by comma first
+            parts = [x.strip() for x in selection.split(',')]
+            for part in parts:
+                if '-' in part:
+                    # Handle range (e.g., "100-200")
+                    range_parts = part.split('-')
+                    if len(range_parts) != 2:
+                        raise ValueError(f"Invalid range format: {part}")
+                    start = int(range_parts[0].strip())
+                    end = int(range_parts[1].strip())
+                    if start > end:
+                        raise ValueError(f"Invalid range: start ({start}) must be <= end ({end})")
+                    # Add all indices in range (inclusive)
+                    indices.extend(range(start, end + 1))
+                else:
+                    # Single number
+                    indices.append(int(part))
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_indices = []
             for idx in indices:
+                if idx not in seen:
+                    seen.add(idx)
+                    unique_indices.append(idx)
+            
+            for idx in unique_indices:
                 if 1 <= idx <= len(all_chats):
                     chats_to_export.append(all_chats[idx - 1])
                 else:
                     logger.warning(f"Invalid index: {idx}")
-        except ValueError:
-            logger.error("Invalid input. Please enter numbers separated by commas, 'all', or 'q' to quit.")
+        except ValueError as e:
+            logger.error(f"Invalid input: {e}. Please enter numbers separated by commas, ranges with hyphens (e.g., 100-200), 'all', or 'q' to quit.")
             return
     
     if not chats_to_export:
@@ -1994,7 +2270,7 @@ def main():
         
         # Run interactive mode
         sort_alphabetical = args.sort_order == 'alphabetical'
-        interactive_mode(driver_manager, exporter, logger, test_limit=args.test, include_media=args.include_media, sort_alphabetical=sort_alphabetical, resume_folder=resume_folder)
+        interactive_mode(driver_manager, exporter, logger, test_limit=args.test, include_media=args.include_media, sort_alphabetical=sort_alphabetical, resume_folder=resume_folder, auto_all=args.all)
         
     except KeyboardInterrupt:
         signal_handler(None, None)

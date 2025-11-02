@@ -33,6 +33,8 @@ The script uses **Appium** and **UiAutomator2** to control your Android device, 
 
 * **Chat position changes during search**: If a chat moves position (due to new messages) while the script is searching for it, the script will scroll up to 120 times in each direction (240 total scrolls maximum). This allows searching through approximately 200 chats. If a chat moves beyond this search range during the search process, it may be missed and the chat will be skipped.
 
+* Not currently handling communities - It is probably possible to go into each chat in a community and export. 
+
 # TODO
 Handle *'Advanced Chat Privacy has been turned on.'*.  This came up in one of the scrapes and caused the script to stall. 
 
