@@ -12,6 +12,7 @@ import sys
 import time
 import os
 import signal
+from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Set
 from time import sleep
 
@@ -32,6 +33,7 @@ Examples:
   %(prog)s --without-media    # Export without media
   %(prog)s --sort-order original  # Show chats in original WhatsApp order (default)
   %(prog)s --sort-order alphabetical  # Show chats alphabetically
+  %(prog)s --resume /path/to/drive  # Skip chats already exported to Google Drive folder
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
         """
@@ -80,6 +82,13 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         choices=['alphabetical', 'original'],
         default='original',
         help='Sort order for chat list: "original" (default, order in WhatsApp) or "alphabetical"'
+    )
+    
+    parser.add_argument(
+        '--resume',
+        type=str,
+        metavar='DIR',
+        help='Resume mode: Skip chats that already exist in the specified Google Drive root folder'
     )
     
     return parser
@@ -152,6 +161,91 @@ class Logger:
     def step(self, step_num: int, message: str):
         """Print step message."""
         self.info(f"STEP {step_num}: {message}", "🔍 ")
+
+
+def validate_resume_directory(directory_path: str, logger: Logger) -> Optional[Path]:
+    """
+    Validate resume directory path with robust validation.
+    
+    Args:
+        directory_path: Directory path string to validate
+        logger: Logger instance for output
+        
+    Returns:
+        Path to validated directory, or None if validation fails
+    """
+    # Handle empty input
+    if not directory_path:
+        logger.error("Resume directory path is required")
+        return None
+    
+    directory_path = directory_path.strip()
+    
+    # Expand user home directory (~)
+    if directory_path.startswith('~'):
+        directory_path = os.path.expanduser(directory_path)
+    
+    # Remove quotes if present
+    directory_path = directory_path.strip('"').strip("'")
+    
+    # Convert to Path
+    try:
+        path_obj = Path(directory_path).resolve()
+    except Exception as e:
+        logger.error(f"Invalid resume directory path format: {e}")
+        return None
+    
+    # Validate directory exists
+    if not path_obj.exists():
+        logger.error(f"Resume directory does not exist: {path_obj}")
+        return None
+    
+    # Validate it's actually a directory
+    if not path_obj.is_dir():
+        logger.error(f"Resume path is not a directory: {path_obj}")
+        return None
+    
+    # Validate readable
+    if not os.access(path_obj, os.R_OK):
+        logger.error(f"Resume directory is not readable: {path_obj}")
+        return None
+    
+    logger.success(f"Resume directory validated: {path_obj}")
+    return path_obj
+
+
+def check_chat_exists(drive_folder: Path, chat_name: str) -> Tuple[bool, List[str]]:
+    """
+    Check if a chat export already exists in the Google Drive folder.
+    
+    Args:
+        drive_folder: Path to Google Drive root folder
+        chat_name: Name of the chat to check
+        
+    Returns:
+        Tuple of (exists: bool, matching_files: List[str])
+        - exists: True if chat export found, False otherwise
+        - matching_files: List of matching file names found
+    """
+    matching_files = []
+    pattern = f"WhatsApp Chat with {chat_name}"
+    
+    try:
+        # Check for files matching the pattern (with or without .zip extension)
+        all_files = [f for f in drive_folder.iterdir() if f.is_file()]
+        
+        for file_path in all_files:
+            file_name = file_path.name
+            
+            # Check if file matches pattern (exact match)
+            if file_name == pattern or file_name == f"{pattern}.zip":
+                matching_files.append(file_name)
+        
+        return len(matching_files) > 0, matching_files
+        
+    except Exception as e:
+        # If we can't check, assume it doesn't exist (safer to re-export)
+        return False, []
 
 
 class AppiumManager:
@@ -1317,21 +1411,24 @@ class ChatExporter:
             secs = seconds % 60
             return f"{hours}h {minutes}m {secs:.1f}s"
     
-    def export_chats(self, chat_names: List[str], include_media: bool = True) -> Tuple[Dict[str, bool], Dict[str, float], float]:
+    def export_chats(self, chat_names: List[str], include_media: bool = True, resume_folder: Optional[Path] = None) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
         """Export multiple chats.
         
         Args:
             chat_names: List of chat names to export
             include_media: If True, export with media; if False, export without media
+            resume_folder: Optional path to Google Drive folder to check for existing exports
         
         Returns:
-            Tuple of (results dict, timing dict, total_time)
+            Tuple of (results dict, timing dict, total_time, skipped_already_exists dict)
             - results: Dict mapping chat_name -> success (bool)
             - timings: Dict mapping chat_name -> elapsed_time (float seconds)
             - total_time: Total time elapsed for batch (float seconds)
+            - skipped_already_exists: Dict mapping chat_name -> True if skipped because already exists
         """
         results = {}
         timings = {}
+        skipped_already_exists = {}
         total = len(chat_names)
         batch_start_time = time.time()
         
@@ -1339,6 +1436,23 @@ class ChatExporter:
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
             
             chat_start_time = time.time()
+            
+            # Check if chat already exists (resume mode)
+            if resume_folder:
+                exists, matching_files = check_chat_exists(resume_folder, chat_name)
+                if exists:
+                    skipped_already_exists[chat_name] = True
+                    if self.logger.debug:
+                        self.logger.debug_msg(f"Chat '{chat_name}' already exists in resume folder")
+                        for file_name in matching_files:
+                            self.logger.debug_msg(f"  Found existing file: {file_name}")
+                        self.logger.info(f"⏭️  Skipping '{chat_name}' (already exported)")
+                    else:
+                        self.logger.info(f"⏭️  Skipping '{chat_name}' (already exported)")
+                    results[chat_name] = False
+                    chat_end_time = time.time()
+                    timings[chat_name] = chat_end_time - chat_start_time
+                    continue
             
             try:
                 # Navigate to main screen first
@@ -1390,10 +1504,10 @@ class ChatExporter:
             self.logger.info(f"   ⏱️  Total elapsed time: {self.format_time(cumulative_time)}")
         
         total_time = time.time() - batch_start_time
-        return results, timings, total_time
+        return results, timings, total_time, skipped_already_exists
 
 
-def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True):
+def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True, resume_folder: Optional[Path] = None):
     """Interactive mode: prompt user to select chats to export.
     
     Args:
@@ -1403,6 +1517,7 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         test_limit: If set, limit to this many chats for testing
         include_media: If True, export with media; if False, export without media
         sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
+        resume_folder: Optional path to Google Drive folder to check for existing exports
     """
     logger.info("=" * 70)
     if test_limit:
@@ -1474,8 +1589,11 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     media_status = "with media" if include_media else "without media"
     logger.info(f"\n📤 Exporting {len(chats_to_export)} chat(s) {media_status}...")
     
+    if resume_folder:
+        logger.info(f"🔄 Resume mode enabled: Checking for existing exports in {resume_folder}")
+    
     # Export selected chats
-    results, timings, total_time = exporter.export_chats(chats_to_export, include_media=include_media)
+    results, timings, total_time, skipped_already_exists = exporter.export_chats(chats_to_export, include_media=include_media, resume_folder=resume_folder)
     
     # Summary
     logger.info("\n" + "=" * 70)
@@ -1483,7 +1601,8 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     logger.info("=" * 70)
     
     total_exported = sum(1 for v in results.values() if v)
-    total_skipped = sum(1 for v in results.values() if not v)
+    total_skipped_already_exists = len(skipped_already_exists)
+    total_skipped_other = sum(1 for v in results.values() if not v) - total_skipped_already_exists
     
     # Calculate average time (only for successfully exported chats)
     exported_timings = [timings[chat] for chat, success in results.items() if success]
@@ -1492,7 +1611,12 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     logger.info(f"\n📊 FINAL STATISTICS:")
     logger.info(f"   Total chats processed: {len(results)}")
     logger.info(f"   Successfully exported: {total_exported}")
-    logger.info(f"   Skipped: {total_skipped}")
+    if total_skipped_already_exists > 0:
+        logger.info(f"   Skipped (already exists): {total_skipped_already_exists}")
+    if total_skipped_other > 0:
+        logger.info(f"   Skipped (error/community): {total_skipped_other}")
+    if total_skipped_already_exists == 0 and total_skipped_other == 0:
+        logger.info(f"   Skipped: {sum(1 for v in results.values() if not v)}")
     
     logger.info(f"\n⏱️  TIMING SUMMARY:")
     logger.info(f"   Total time taken: {exporter.format_time(total_time)}")
@@ -1507,9 +1631,21 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     logger.info(f"\n📋 RESULTS BY CHAT:")
     logger.info("-" * 70)
     for chat_name, success in sorted(results.items()):
-        status = "✅ EXPORTED" if success else "⚠️ SKIPPED"
+        if chat_name in skipped_already_exists:
+            status = "⏭️  SKIPPED (already exists)"
+        elif success:
+            status = "✅ EXPORTED"
+        else:
+            status = "⚠️ SKIPPED"
         chat_time = timings.get(chat_name, 0)
         logger.info(f"   {status}: {chat_name} ({exporter.format_time(chat_time)})")
+        
+        # In debug mode, show matching files for skipped chats
+        if logger.debug and chat_name in skipped_already_exists:
+            exists, matching_files = check_chat_exists(resume_folder, chat_name)
+            if matching_files:
+                for file_name in matching_files:
+                    logger.debug_msg(f"      Found: {file_name}")
 
 
 def main():
@@ -1585,12 +1721,21 @@ def main():
             cleanup()
             sys.exit(1)
         
+        # Validate resume directory if provided
+        resume_folder = None
+        if args.resume:
+            resume_folder = validate_resume_directory(args.resume, logger)
+            if resume_folder is None:
+                logger.error("Invalid resume directory. Exiting.")
+                cleanup()
+                sys.exit(1)
+        
         # Initialize exporter
         exporter = ChatExporter(driver_manager, logger)
         
         # Run interactive mode
         sort_alphabetical = args.sort_order == 'alphabetical'
-        interactive_mode(driver_manager, exporter, logger, test_limit=args.test, include_media=args.include_media, sort_alphabetical=sort_alphabetical)
+        interactive_mode(driver_manager, exporter, logger, test_limit=args.test, include_media=args.include_media, sort_alphabetical=sort_alphabetical, resume_folder=resume_folder)
         
     except KeyboardInterrupt:
         signal_handler(None, None)
