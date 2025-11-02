@@ -5,6 +5,7 @@ This guide will help you get started with exporting WhatsApp chats to Google Dri
 ⚠️ **IMPORTANT**: This is a fragile screen scraping process which may be vulnerable to changes in the WhatsApp UI. As such, it's recommended to monitor as it runs. Follow these tips to avoid unintended behaviors:
 
 * Connect an Android device with WhatsApp installed and Google Drive app installed and configured
+* To avoid `WhatsApp Chat with ... (1)` appearing, ensure that you remove previous exports from Google Drive or set the `--resume <google home dir> flag.
 * Ensure your phone is unlocked and on the home screen
 * Do not interact with the phone while the script is running
 * Answer all interactive prompts in a timely manner, otherwise the session will time out
