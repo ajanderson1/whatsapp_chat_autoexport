@@ -45,8 +45,8 @@ Handle *'Advanced Chat Privacy has been turned on.'*.  This came up in one of th
 Before using this script, ensure you have:
 
 1. **Python 3.13+** installed
-2. **Android device** connected via USB with:
-   - USB debugging enabled
+2. **Android device** connected via USB or wireless ADB with:
+   - USB debugging enabled (or wireless debugging for wireless ADB)
    - WhatsApp installed
    - Google Drive app installed and configured
 3. **Appium** installed globally:
@@ -122,6 +122,36 @@ The script uses UI automation to:
   - Media content
   - Network speed
 
+## 📡 Wireless ADB Support
+
+This tool supports connecting to your Android device via wireless ADB, allowing you to run the script without a USB cable.
+
+### Setting Up Wireless ADB
+
+1. **First-time pairing (requires USB connection):**
+   - Connect your device via USB
+   - On your Android device, go to **Settings → Developer Options → Wireless debugging**
+   - Enable "Wireless debugging"
+   - Note the IP address and port shown (e.g., `192.168.1.100:5555`)
+   - On Android 11+, you may need to pair first:
+     ```bash
+     # Get pairing code from your device's wireless debugging settings
+     adb pair <IP>:<PAIRING_PORT>
+     # Then connect
+     adb connect <IP>:<PORT>
+     ```
+
+2. **Using wireless ADB with the script:**
+   ```bash
+   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:5555
+   ```
+
+3. **Important notes:**
+   - Your device and computer must be on the same Wi-Fi network
+   - You can disconnect USB after the initial pairing
+   - The IP address may change if your device reconnects to Wi-Fi
+   - For best results, keep your device on the same network throughout the export process
+
 ## 🐛 Troubleshooting
 
 ### Device Connection Issues
@@ -132,6 +162,10 @@ If you see "No device found":
 adb devices
 
 # If device appears as "unauthorized", check your phone for USB debugging authorization prompt
+
+# For wireless ADB, verify connection:
+adb connect <IP>:<PORT>
+adb devices
 ```
 
 ### Appium Connection Issues
