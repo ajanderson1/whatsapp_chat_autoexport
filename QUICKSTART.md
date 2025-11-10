@@ -15,8 +15,8 @@ This guide will help you get started with exporting WhatsApp chats to Google Dri
 Before starting, make sure you have:
 
 1. **Python 3.13+** installed
-2. **Android device** connected via USB with:
-   - USB debugging enabled
+2. **Android device** connected via USB or wireless ADB with:
+   - USB debugging enabled (or wireless debugging for wireless ADB)
    - WhatsApp installed
    - Google Drive app installed and configured
 3. **Appium** installed globally:
@@ -85,6 +85,9 @@ poetry run python whatsapp_export.py --sort-order original
 
 # Show chats alphabetically (default)
 poetry run python whatsapp_export.py --sort-order alphabetical
+
+# Connect via wireless ADB (device must be on same network)
+poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:5555
 ```
 
 ### What Happens During Export
@@ -139,6 +142,32 @@ WhatsApp Chats Processed/
         └── ...
 ```
 
+## Wireless ADB Setup
+
+To use wireless ADB instead of USB:
+
+1. **First-time setup (requires USB connection):**
+   - Connect your device via USB
+   - Enable "Wireless debugging" in Developer Options on your Android device
+   - Note the IP address and port shown (e.g., `192.168.1.100:5555`)
+   - On Android 11+, you may need to pair first:
+     ```bash
+     # Get pairing code from your device's wireless debugging settings
+     adb pair <IP>:<PAIRING_PORT>
+     # Then connect
+     adb connect <IP>:<PORT>
+     ```
+
+2. **Using wireless ADB:**
+   ```bash
+   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:5555
+   ```
+
+3. **Important notes:**
+   - Your device and computer must be on the same Wi-Fi network
+   - You can disconnect USB after the initial pairing
+   - The IP address may change if your device reconnects to Wi-Fi
+
 ## Troubleshooting
 
 ### Device Not Found
@@ -149,6 +178,10 @@ If you see "No device found":
 adb devices
 
 # If device appears as "unauthorized", check your phone for USB debugging authorization prompt
+
+# For wireless ADB, verify connection:
+adb connect <IP>:<PORT>
+adb devices
 ```
 
 ### Appium Issues

@@ -36,6 +36,7 @@ Examples:
   %(prog)s --sort-order alphabetical  # Show chats alphabetically
   %(prog)s --resume /path/to/drive  # Skip chats already exported to Google Drive folder
   %(prog)s --all               # Auto-select all chats after 30 seconds if no input
+  %(prog)s --wireless-adb 192.168.1.100:5555  # Connect via wireless ADB
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
         """
@@ -97,6 +98,13 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         '--all',
         action='store_true',
         help='Auto-select all chats after 30 seconds if no input is provided'
+    )
+    
+    parser.add_argument(
+        '--wireless-adb',
+        type=str,
+        metavar='IP:PORT',
+        help='Connect to device via wireless ADB. Format: IP:PORT (e.g., 192.168.1.100:5555). Device must already be paired via USB first.'
     )
     
     return parser
@@ -319,10 +327,11 @@ class AppiumManager:
 class WhatsAppDriver:
     """Manages WhatsApp connection and navigation."""
     
-    def __init__(self, logger: Logger):
+    def __init__(self, logger: Logger, wireless_adb: Optional[str] = None):
         self.logger = logger
         self.driver: Optional[webdriver.Remote] = None
         self.default_wait_timeout = 10  # Default timeout for explicit waits
+        self.wireless_adb = wireless_adb
     
     def _wait_for_element(self, locator_type: str, locator_value: str, timeout: Optional[int] = None, 
                          expected_condition: str = "presence") -> Optional[object]:
@@ -399,6 +408,31 @@ class WhatsAppDriver:
     def check_device_connection(self) -> bool:
         """Check if Android device is connected."""
         self.logger.info("Checking device connection...")
+        
+        # If wireless ADB is specified, connect to it first
+        if self.wireless_adb:
+            self.logger.info(f"Connecting to wireless ADB at {self.wireless_adb}...")
+            try:
+                result = subprocess.run(
+                    ["adb", "connect", self.wireless_adb],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    if "connected" in result.stdout.lower() or "already connected" in result.stdout.lower():
+                        self.logger.success(f"Connected to wireless ADB at {self.wireless_adb}")
+                        self.logger.debug_msg(f"ADB connect output: {result.stdout}")
+                    else:
+                        self.logger.warning(f"Wireless ADB connection output: {result.stdout}")
+                else:
+                    self.logger.error(f"Failed to connect to wireless ADB: {result.stderr}")
+                    return False
+                # Give ADB a moment to register the connection
+                sleep(1)
+            except Exception as e:
+                self.logger.error(f"Error connecting to wireless ADB: {e}")
+                return False
+        
         try:
             result = subprocess.run(
                 ["adb", "devices"],
@@ -411,6 +445,11 @@ class WhatsAppDriver:
                 return True
             else:
                 self.logger.error("No device found")
+                if self.wireless_adb:
+                    self.logger.error(f"Make sure your device is on the same network and wireless debugging is enabled.")
+                    self.logger.error(f"If this is the first time, you may need to pair via USB first using:")
+                    self.logger.error(f"  adb pair <IP>:<PAIRING_PORT>")
+                    self.logger.error(f"  adb connect {self.wireless_adb}")
                 return False
         except Exception as e:
             self.logger.error(f"Error checking device: {e}")
@@ -2236,7 +2275,7 @@ def main():
             logger.info("Skipping Appium startup (--skip-appium flag)")
         
         # Initialize driver
-        driver_manager = WhatsAppDriver(logger)
+        driver_manager = WhatsAppDriver(logger, wireless_adb=args.wireless_adb)
         
         # Check device connection
         if not driver_manager.check_device_connection():
