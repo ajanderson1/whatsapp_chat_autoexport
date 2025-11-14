@@ -1,3 +1,5 @@
 EXECUTIVE_SUMMARY.md
 .venv
 *.xml
+.serena
+.claude

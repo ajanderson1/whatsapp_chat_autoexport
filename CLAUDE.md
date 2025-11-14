@@ -30,8 +30,8 @@ poetry run python whatsapp_chat_autoexport/whatsapp_export.py
 # With debug output
 poetry run python whatsapp_chat_autoexport/whatsapp_export.py --debug
 
-# Test mode (limit number of chats)
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --test 5
+# Limit number of chats
+poetry run python whatsapp_chat_autoexport/whatsapp_export.py --limit 5
 
 # Export without media
 poetry run python whatsapp_chat_autoexport/whatsapp_export.py --without-media
@@ -70,7 +70,16 @@ poetry run python whatsapp_chat_autoexport/whatsapp_process.py --debug /path/to/
 3. **WhatsAppDriver** (line 327): Core UI automation driver using Appium + UiAutomator2
    - Connects to Android device via ADB (USB or wireless)
    - Manages WhatsApp connection and navigation
+   - **CRITICAL SAFETY**: Includes robust WhatsApp verification to prevent accidental system UI interaction
    - Key methods:
+     - `verify_whatsapp_is_open()`: **CRITICAL** - Comprehensive verification that WhatsApp is accessible before ANY UI interaction. Checks:
+       - Current package is com.whatsapp (not system settings or other apps)
+       - Current activity is safe (not lock screen, system UI, or settings)
+       - WhatsApp UI elements are actually visible and accessible
+       - Phone is not locked
+       - Called automatically by `connect()`, `interactive_mode()`, and before each export
+     - `check_if_phone_locked()`: Detects if phone is locked by checking activity, package, and UI elements
+     - `detect_phone_lock_state()`: User-friendly wrapper that provides clear error messages if phone is locked
      - `find_element()` / `find_elements()`: Locate UI elements by resource ID, text, or accessibility ID
      - `scroll_to_find_chat()`: Bidirectional scrolling with position change detection
      - `navigate_to_main_screen()`: Returns to main chat list
@@ -110,26 +119,45 @@ poetry run python whatsapp_chat_autoexport/whatsapp_process.py --debug /path/to/
 
 ## Edge Cases & Known Issues
 
-1. **Chat position changes during search**: If a chat moves beyond the 240-scroll search range due to new messages, it will be skipped.
+1. **CRITICAL SAFETY - WhatsApp Verification**: The script now includes comprehensive verification to prevent accidentally interacting with system settings or other non-WhatsApp UI:
+   - **Multi-layer verification** runs at multiple checkpoints:
+     - After initial connection to WhatsApp
+     - Before collecting chat list
+     - Before each individual chat export
+   - **Verification checks**:
+     - Current package is exactly `com.whatsapp` (not system settings or other apps)
+     - Current activity is safe (not lock screen, system UI, or settings)
+     - WhatsApp UI elements (toolbar, action bar, chat list) are actually visible and accessible
+     - Phone is not locked (via multiple lock detection strategies)
+   - **Fail-fast behavior**: Script immediately exits with detailed error message if verification fails
+   - **Action required**: Phone must be unlocked before running the script and remain unlocked throughout execution
 
-2. **Community chats**: Not supported - automatically skipped (WhatsApp doesn't allow export).
+2. **Chat position changes during search**: If a chat moves beyond the 240-scroll search range due to new messages, it will be skipped.
 
-3. **"Advanced Chat Privacy has been turned on"**: This dialog can cause the script to stall (TODO: handle this case).
+3. **Community chats**: Not supported - automatically skipped (WhatsApp doesn't allow export).
 
-4. **Google Drive setup**: Script assumes "My Drive" or "Drive" is available. Not tested for missing Google Drive setup.
+4. **"Advanced Chat Privacy has been turned on"**: Handling logic implemented in `_handle_advanced_chat_privacy_error()` method.
 
-5. **Duplicate exports**: To avoid "WhatsApp Chat with ... (1)" naming, either:
+5. **Google Drive setup**: Script assumes "My Drive" or "Drive" is available. Not tested for missing Google Drive setup.
+
+6. **Duplicate exports**: To avoid "WhatsApp Chat with ... (1)" naming, either:
    - Remove previous exports from Google Drive before running
    - Use `--resume` flag to skip already exported chats
 
 ## Important Notes for Development
 
+- **CRITICAL SAFETY**: The script now includes robust verification (`verify_whatsapp_is_open()`) at multiple checkpoints to prevent accidentally interacting with system settings or other apps. This is called:
+  - After connection
+  - Before collecting chats
+  - Before each export
 - **Android SDK**: Must be installed (typically at `~/Library/Android/sdk` on macOS)
 - **Python version**: Requires Python 3.13+
 - **Device requirements**: USB debugging enabled (or wireless debugging for wireless ADB)
+- **Phone must be unlocked**: The script includes comprehensive lock detection and will immediately exit if the phone is locked or WhatsApp is not accessible. Keep the phone unlocked throughout execution.
 - **Do not interfere**: Script requires exclusive control of the device during operation
 - **Timeout behavior**: Interactive prompts will timeout after a period; answer promptly
-- **Test mode**: Use `--test` flag to limit chat processing during development
+- **Limit flag**: Use `--limit` flag to limit chat processing during development
+- **Fail-fast design**: If WhatsApp verification fails at any checkpoint, the script stops immediately to prevent unintended actions
 
 ## File Organization
 
@@ -149,7 +177,7 @@ Project root:
 ## Testing Strategy
 
 When testing changes to the export script:
-1. Use `--test 5` to limit to 5 chats
+1. Use `--limit 5` to limit to 5 chats
 2. Enable `--debug` to see detailed navigation steps
 3. Use `--skip-appium` if manually managing Appium server
 4. Test with both `--with-media` and `--without-media`

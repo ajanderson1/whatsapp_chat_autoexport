@@ -68,11 +68,11 @@ poetry run python whatsapp_export.py --debug
 # Skip starting Appium (assume it's already running)
 poetry run python whatsapp_export.py --skip-appium
 
-# Test mode: Limit to 10 chats (default test limit)
-poetry run python whatsapp_export.py --test
+# Limit to 10 chats (default limit)
+poetry run python whatsapp_export.py --limit
 
-# Test mode: Limit to specific number of chats
-poetry run python whatsapp_export.py --test 5
+# Limit to specific number of chats
+poetry run python whatsapp_export.py --limit 5
 
 # Export with media (default)
 poetry run python whatsapp_export.py --with-media

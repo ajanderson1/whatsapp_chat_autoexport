@@ -12,6 +12,7 @@ import sys
 import os
 import zipfile
 import shutil
+import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -589,6 +590,168 @@ def organize_extracted_content(extracted_folders: List[Path], processed_folder: 
     logger.info(f"  Media files moved: {media_moved}")
 
 
+def is_duplicate_file(file_path: Path) -> bool:
+    """
+    Check if a file is a duplicate based on naming pattern (e.g., file(1).txt, file(2).txt).
+    
+    Args:
+        file_path: Path to the file to check
+        
+    Returns:
+        True if file matches duplicate pattern, False otherwise
+    """
+    # Pattern: filename ends with (number).txt
+    # e.g., "WhatsApp Chat with John(1).txt", "Chat(2).txt"
+    pattern = r'\(\d+\)\.txt$'
+    return bool(re.search(pattern, file_path.name))
+
+
+def move_transcripts_to_directory(transcripts_folder: Path, target_dir: Path, logger: Logger):
+    """
+    Move all .txt files from transcripts folder to target directory.
+    Handles duplicate detection and overwrite prompts.
+    
+    Args:
+        transcripts_folder: Source folder containing transcript files
+        target_dir: Target directory to move files to
+        logger: Logger instance for output
+    """
+    logger.info("")
+    logger.info("=" * 70)
+    logger.info("Move Transcripts to Target Directory")
+    logger.info("=" * 70)
+    
+    # Find all .txt files in transcripts folder
+    transcript_files = list(transcripts_folder.glob("*.txt"))
+    
+    if not transcript_files:
+        logger.warning("No transcript files found to move.")
+        return
+    
+    logger.info(f"\nFound {len(transcript_files)} transcript file(s) to move:")
+    for i, file_path in enumerate(transcript_files, 1):
+        logger.info(f"  {i:3d}. {file_path.name}")
+    
+    logger.info("")
+    logger.info(f"Target directory: {target_dir}")
+    logger.info("")
+    
+    # Check for duplicate files
+    duplicate_files = [f for f in transcript_files if is_duplicate_file(f)]
+    if duplicate_files:
+        logger.warning(f"\nFound {len(duplicate_files)} duplicate file(s) (ending with (1), (2), etc.):")
+        for dup_file in duplicate_files:
+            logger.warning(f"  - {dup_file.name}")
+        logger.info("")
+        
+        while True:
+            response = input("Remove duplicate files? (yes/no/q): ").strip().lower()
+            if response in ['y', 'yes']:
+                # Remove duplicate files
+                for dup_file in duplicate_files:
+                    try:
+                        dup_file.unlink()
+                        logger.debug_msg(f"Removed duplicate: {dup_file.name}")
+                    except Exception as e:
+                        logger.error(f"Failed to remove duplicate {dup_file.name}: {e}")
+                # Remove duplicates from transcript_files list
+                transcript_files = [f for f in transcript_files if not is_duplicate_file(f)]
+                logger.success(f"Removed {len(duplicate_files)} duplicate file(s)")
+                break
+            elif response in ['n', 'no', 'q', 'quit', 'exit']:
+                logger.info("Keeping duplicate files.")
+                break
+            else:
+                logger.warning("Please enter 'yes', 'no', or 'q' to quit")
+    
+    if not transcript_files:
+        logger.info("No files remaining to move.")
+        return
+    
+    # Check for existing files in target directory
+    existing_files = []
+    files_to_move = []
+    
+    for file_path in transcript_files:
+        dest_path = target_dir / file_path.name
+        if dest_path.exists():
+            existing_files.append((file_path, dest_path))
+        else:
+            files_to_move.append((file_path, dest_path))
+    
+    # Handle existing files
+    moved_count = 0
+    if existing_files:
+        logger.info("")
+        logger.warning(f"Found {len(existing_files)} file(s) that already exist in target directory:")
+        for src_path, dest_path in existing_files:
+            logger.warning(f"  - {src_path.name}")
+        logger.info("")
+        
+        overwrite_all = False
+        skip_all = False
+        
+        for src_path, dest_path in existing_files:
+            if skip_all:
+                logger.info(f"Skipping: {src_path.name}")
+                continue
+            
+            if not overwrite_all:
+                while True:
+                    response = input(f"Overwrite '{src_path.name}'? (yes/no/all/skip-all/q): ").strip().lower()
+                    if response in ['y', 'yes']:
+                        # Overwrite this file
+                        try:
+                            shutil.move(str(src_path), str(dest_path))
+                            moved_count += 1
+                            logger.debug_msg(f"Moved (overwritten): {src_path.name}")
+                        except Exception as e:
+                            logger.error(f"Failed to overwrite {src_path.name}: {e}")
+                        break
+                    elif response in ['n', 'no']:
+                        logger.info(f"Skipping: {src_path.name}")
+                        break
+                    elif response in ['a', 'all']:
+                        overwrite_all = True
+                        # Overwrite this file and all remaining
+                        try:
+                            shutil.move(str(src_path), str(dest_path))
+                            moved_count += 1
+                            logger.debug_msg(f"Moved (overwritten): {src_path.name}")
+                        except Exception as e:
+                            logger.error(f"Failed to overwrite {src_path.name}: {e}")
+                        break
+                    elif response in ['s', 'skip-all']:
+                        skip_all = True
+                        logger.info(f"Skipping: {src_path.name}")
+                        break
+                    elif response in ['q', 'quit', 'exit']:
+                        logger.info("Cancelled moving transcripts.")
+                        return
+                    else:
+                        logger.warning("Please enter 'yes', 'no', 'all', 'skip-all', or 'q' to quit")
+            else:
+                # Overwrite all remaining files
+                try:
+                    shutil.move(str(src_path), str(dest_path))
+                    moved_count += 1
+                    logger.debug_msg(f"Moved (overwritten): {src_path.name}")
+                except Exception as e:
+                    logger.error(f"Failed to overwrite {src_path.name}: {e}")
+    
+    # Move remaining files that don't exist in target
+    for src_path, dest_path in files_to_move:
+        try:
+            if src_path.exists() and not dest_path.exists():
+                shutil.move(str(src_path), str(dest_path))
+                moved_count += 1
+                logger.debug_msg(f"Moved: {src_path.name}")
+        except Exception as e:
+            logger.error(f"Failed to move {src_path.name}: {e}")
+    
+    logger.success(f"Moved {moved_count} transcript file(s) to {target_dir}")
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -596,9 +759,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s /path/to/exports              # Process files in specified directory
-  %(prog)s ~/Downloads/WhatsApp          # Process files using tilde expansion
-  %(prog)s --debug /path/to/exports      # Enable debug mode
+  %(prog)s /path/to/exports                              # Process files in specified directory
+  %(prog)s ~/Downloads/WhatsApp                          # Process files using tilde expansion
+  %(prog)s --debug /path/to/exports                      # Enable debug mode
+  %(prog)s /path/to/exports --transcripts-dir /path/to/transcripts  # Move transcripts after processing
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
         """
@@ -614,6 +778,13 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         '--debug',
         action='store_true',
         help='Enable debug mode (verbose output)'
+    )
+    
+    parser.add_argument(
+        '--transcripts-dir',
+        type=str,
+        metavar='DIR',
+        help='Optional directory to move extracted transcript files to after processing'
     )
     
     args = parser.parse_args()
@@ -685,6 +856,36 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         logger.step(9, "Cleanup")
         cleanup_zip_files_and_folders(zip_files, extracted_folders, logger)
         
+        # Step 10: Move transcripts to target directory (if specified)
+        if args.transcripts_dir:
+            logger.step(10, "Moving transcripts to target directory")
+            transcripts_folder = processed_folder / "transcripts"
+            
+            # Validate target directory
+            target_dir = validate_directory(args.transcripts_dir, logger)
+            if target_dir is None:
+                logger.error("Failed to validate transcripts directory. Skipping transcript move.")
+            else:
+                # Check if transcripts folder exists and has files
+                if transcripts_folder.exists() and transcripts_folder.is_dir():
+                    # Offer to move transcripts
+                    logger.info("")
+                    logger.info("Transcript files are ready to be moved to the target directory.")
+                    logger.info("")
+                    
+                    while True:
+                        response = input("Move transcript files to target directory? (yes/no/q): ").strip().lower()
+                        if response in ['y', 'yes']:
+                            move_transcripts_to_directory(transcripts_folder, target_dir, logger)
+                            break
+                        elif response in ['n', 'no', 'q', 'quit', 'exit']:
+                            logger.info("Skipping transcript move.")
+                            break
+                        else:
+                            logger.warning("Please enter 'yes', 'no', or 'q' to quit")
+                else:
+                    logger.warning("Transcripts folder not found or empty. Nothing to move.")
+        
         # Final summary
         logger.info("")
         logger.info("=" * 70)
@@ -697,6 +898,9 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         logger.info("Organized into:")
         logger.info(f"  - transcripts/")
         logger.info(f"  - media/[chat name]/")
+        if args.transcripts_dir:
+            logger.info("")
+            logger.info(f"Transcripts target directory: {args.transcripts_dir}")
         
     except KeyboardInterrupt:
         logger.info("\n\n⚠️ Interrupted by user (Ctrl+C)")

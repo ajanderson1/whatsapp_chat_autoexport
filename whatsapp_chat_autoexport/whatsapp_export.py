@@ -27,16 +27,18 @@ Examples:
   %(prog)s                    # Interactive mode (default, with media, alphabetical)
   %(prog)s --debug            # Interactive mode with debug output
   %(prog)s --skip-appium      # Skip starting Appium (assume it's running)
-  %(prog)s --test             # Test mode: Limit to 10 chats (default)
-  %(prog)s --test 5           # Test mode: Limit to 5 chats
-  %(prog)s --test 20          # Test mode: Limit to 20 chats
+  %(prog)s --limit            # Limit to 10 chats (default)
+  %(prog)s --limit 5          # Limit to 5 chats
+  %(prog)s --limit 20         # Limit to 20 chats
   %(prog)s --with-media       # Export with media (default)
   %(prog)s --without-media    # Export without media
   %(prog)s --sort-order original  # Show chats in original WhatsApp order (default)
   %(prog)s --sort-order alphabetical  # Show chats alphabetically
   %(prog)s --resume /path/to/drive  # Skip chats already exported to Google Drive folder
   %(prog)s --all               # Auto-select all chats after 30 seconds if no input
-  %(prog)s --wireless-adb 192.168.1.100:5555  # Connect via wireless ADB
+  %(prog)s --wireless-adb      # Wireless ADB (prompts: pairing IP:PORT, code, then connect port)
+  %(prog)s --wireless-adb 192.168.1.100:37273  # Wireless ADB (prompts: code, then connect port)
+  %(prog)s --wireless-adb 192.168.1.100:37273 123456  # Wireless ADB (prompts: connect port only)
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
         """
@@ -55,13 +57,13 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
     )
     
     parser.add_argument(
-        '--test',
+        '--limit',
         type=int,
         nargs='?',
         const=10,
         default=None,
         metavar='N',
-        help='Test mode: Limit to N chats for testing (default: 10 if --test used without number)'
+        help='Limit to N chats (default: 10 if --limit used without number)'
     )
     
     media_group = parser.add_mutually_exclusive_group()
@@ -102,9 +104,13 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
     
     parser.add_argument(
         '--wireless-adb',
-        type=str,
-        metavar='IP:PORT',
-        help='Connect to device via wireless ADB. Format: IP:PORT (e.g., 192.168.1.100:5555). Device must already be paired via USB first.'
+        nargs='*',
+        metavar='ARG',
+        help='Connect to device via wireless ADB. Pairing happens first, then you will be '
+             'prompted for connect port. Usage: '
+             '--wireless-adb (prompts for all), '
+             '--wireless-adb IP:PAIRING_PORT (prompts for code), '
+             '--wireless-adb IP:PAIRING_PORT PAIRING_CODE (prompts for connect port after pairing)'
     )
     
     return parser
@@ -263,6 +269,265 @@ def check_chat_exists(drive_folder: Path, chat_name: str) -> Tuple[bool, List[st
         # If we can't check, assume it doesn't exist (safer to re-export)
         return False, []
 
+def validate_pairing_code(code: str) -> bool:
+    """
+    Validate that pairing code is exactly 6 digits.
+    
+    Args:
+        code: Pairing code to validate
+        
+    Returns:
+        True if valid (exactly 6 digits), False otherwise
+    """
+    return code.isdigit() and len(code) == 6
+
+def prompt_for_pairing_code() -> str:
+    """
+    Prompt user for 6-digit pairing code with validation.
+    Keeps prompting until valid code is entered.
+    
+    Returns:
+        Valid 6-digit pairing code
+    """
+    while True:
+        code = input("Enter 6-digit pairing code: ").strip()
+        if validate_pairing_code(code):
+            return code
+        print("❌ Error: Pairing code must be exactly 6 digits. Please try again.")
+
+def prompt_for_connect_port(default: str = "5555") -> str:
+    """
+    Prompt user for ADB connect port with default suggestion.
+    
+    Args:
+        default: Default port to suggest (usually 5555)
+        
+    Returns:
+        Connect port (user input or default)
+    """
+    response = input(f"Enter connect port [default: {default}]: ").strip()
+    return response if response else default
+
+def check_existing_devices(logger: Logger) -> List[str]:
+    """
+    Check for already connected ADB devices.
+    
+    Args:
+        logger: Logger instance for debug output
+        
+    Returns:
+        List of device IDs currently connected
+    """
+    try:
+        result = subprocess.run(
+            ["adb", "devices"],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            logger.debug_msg(f"adb devices failed: {result.stderr}")
+            return []
+        
+        # Parse output - lines like "192.168.1.100:5555    device"
+        devices = []
+        for line in result.stdout.strip().split('\n')[1:]:  # Skip header line
+            if 'device' in line and 'offline' not in line and 'unauthorized' not in line:
+                device_id = line.split()[0]
+                devices.append(device_id)
+        
+        logger.debug_msg(f"Found {len(devices)} connected device(s): {devices}")
+        return devices
+        
+    except Exception as e:
+        logger.debug_msg(f"Error checking devices: {e}")
+        return []
+
+def prompt_device_selection(devices: List[str], logger: Logger) -> Optional[str]:
+    """
+    Prompt user to select a device from list.
+    
+    Args:
+        devices: List of device IDs
+        logger: Logger instance
+        
+    Returns:
+        Selected device ID, or None if user wants to connect new device
+    """
+    print("\nMultiple devices found:")
+    for i, device in enumerate(devices, 1):
+        print(f"  {i}. {device}")
+    print(f"  {len(devices) + 1}. Connect new wireless device")
+    
+    while True:
+        try:
+            response = input(f"\nSelect device (1-{len(devices) + 1}): ").strip()
+            selection = int(response)
+            
+            if 1 <= selection <= len(devices):
+                selected_device = devices[selection - 1]
+                logger.success(f"Selected device: {selected_device}")
+                return selected_device
+            elif selection == len(devices) + 1:
+                logger.info("Will connect new wireless device...")
+                return None
+            else:
+                print(f"❌ Please enter a number between 1 and {len(devices) + 1}")
+        except ValueError:
+            print("❌ Please enter a valid number")
+        except KeyboardInterrupt:
+            print("\n❌ Cancelled by user")
+            return None
+
+def prompt_yes_no(question: str, default: bool = True) -> bool:
+    """
+    Generic yes/no prompt with default value.
+    
+    Args:
+        question: Question to ask user
+        default: Default value if user just presses Enter
+        
+    Returns:
+        True for yes, False for no
+    """
+    default_str = "Y/n" if default else "y/N"
+    while True:
+        response = input(f"{question} ({default_str}): ").strip().lower()
+        
+        if not response:
+            return default
+        
+        if response in ['y', 'yes']:
+            return True
+        elif response in ['n', 'no']:
+            return False
+        else:
+            print("❌ Please answer 'y' or 'n'")
+
+def parse_ip_from_address(address: str) -> str:
+    """
+    Extract IP address from "IP:PORT" format.
+    
+    Args:
+        address: Address in "IP:PORT" format (e.g., "192.168.1.100:5555")
+        
+    Returns:
+        Just the IP part (e.g., "192.168.1.100")
+    """
+    return address.split(':')[0] if ':' in address else address
+
+def wireless_adb_pair(pairing_address: str, pairing_code: str, logger: Logger) -> bool:
+    """
+    Pair with wireless ADB device.
+    
+    Args:
+        pairing_address: Pairing address in "IP:PORT" format
+        pairing_code: 6-digit pairing code
+        logger: Logger instance
+        
+    Returns:
+        True if pairing successful, False otherwise
+    """
+    logger.info(f"Pairing with device at {pairing_address}...")
+    try:
+        result = subprocess.run(
+            ["adb", "pair", pairing_address, pairing_code],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        logger.debug_msg(f"Pairing output: {result.stdout}")
+        
+        if result.returncode != 0:
+            logger.error(f"Pairing failed: {result.stderr}")
+            return False
+        
+        if "Successfully paired" not in result.stdout and "success" not in result.stdout.lower():
+            logger.warning(f"Unexpected pairing output: {result.stdout}")
+            # Continue anyway as sometimes it still works
+        
+        logger.success("Pairing successful!")
+        return True
+        
+    except subprocess.TimeoutExpired:
+        logger.error("Pairing timed out after 30 seconds")
+        return False
+    except Exception as e:
+        logger.error(f"Error during pairing: {e}")
+        return False
+
+
+def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger) -> Tuple[bool, Optional[str]]:
+    """
+    Connect to wireless ADB device (after pairing).
+    
+    Args:
+        pairing_address: Original pairing address (to extract IP)
+        connect_port: Port to use for connection (usually 5555)
+        logger: Logger instance
+        
+    Returns:
+        Tuple of (success: bool, device_id: Optional[str])
+        - success: True if successfully connected, False otherwise
+        - device_id: Device ID if successful, None otherwise
+    """
+    ip = parse_ip_from_address(pairing_address)
+    connect_address = f"{ip}:{connect_port}"
+    
+    logger.info(f"Connecting to device at {connect_address}...")
+    try:
+        result = subprocess.run(
+            ["adb", "connect", connect_address],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        logger.debug_msg(f"Connect output: {result.stdout}")
+        
+        if result.returncode != 0:
+            logger.error(f"Connection failed: {result.stderr}")
+            return False, None
+        
+        if "connected" not in result.stdout.lower() and "already connected" not in result.stdout.lower():
+            logger.error(f"Unexpected connection output: {result.stdout}")
+            return False, None
+        
+        logger.success(f"Connected to {connect_address}!")
+        
+    except subprocess.TimeoutExpired:
+        logger.error("Connection timed out after 10 seconds")
+        return False, None
+    except Exception as e:
+        logger.error(f"Error during connection: {e}")
+        return False, None
+    
+    # Verify the device appears in adb devices
+    sleep(1)  # Give ADB a moment to register
+    
+    try:
+        result = subprocess.run(
+            ["adb", "devices"],
+            capture_output=True,
+            text=True
+        )
+        
+        logger.debug_msg(f"Verification output: {result.stdout}")
+        
+        # Check if our device is in the list
+        if connect_address in result.stdout and "device" in result.stdout:
+            logger.success(f"Device {connect_address} verified in device list!")
+            return True, connect_address
+        else:
+            logger.error(f"Device {connect_address} not found in device list")
+            logger.error(f"Current devices:\n{result.stdout}")
+            return False, None
+            
+    except Exception as e:
+        logger.error(f"Error verifying connection: {e}")
+        return False, None
+
 
 class AppiumManager:
     """Manages Appium server lifecycle."""
@@ -327,11 +592,12 @@ class AppiumManager:
 class WhatsAppDriver:
     """Manages WhatsApp connection and navigation."""
     
-    def __init__(self, logger: Logger, wireless_adb: Optional[str] = None):
+    def __init__(self, logger: Logger, wireless_adb: Optional[List[str]] = None):
         self.logger = logger
         self.driver: Optional[webdriver.Remote] = None
         self.default_wait_timeout = 10  # Default timeout for explicit waits
-        self.wireless_adb = wireless_adb
+        self.wireless_adb = wireless_adb if wireless_adb is not None else []
+        self.device_id: Optional[str] = None  # Store selected device ID for device-specific commands
     
     def _wait_for_element(self, locator_type: str, locator_value: str, timeout: Optional[int] = None, 
                          expected_condition: str = "presence") -> Optional[object]:
@@ -406,65 +672,165 @@ class WhatsAppDriver:
         return False
     
     def check_device_connection(self) -> bool:
-        """Check if Android device is connected."""
+        """
+        Check if Android device is connected with robust device selection and wireless ADB support.
+        
+        Workflow:
+        1. Check for existing connected devices
+        2. Handle existing device selection/confirmation
+        3. Optionally set up wireless ADB connection with pairing
+        4. Verify final connection
+        
+        Returns:
+            True if device is connected and ready, False otherwise
+        """
         self.logger.info("Checking device connection...")
         
-        # If wireless ADB is specified, connect to it first
-        if self.wireless_adb:
-            self.logger.info(f"Connecting to wireless ADB at {self.wireless_adb}...")
-            try:
-                result = subprocess.run(
-                    ["adb", "connect", self.wireless_adb],
-                    capture_output=True,
-                    text=True
-                )
-                if result.returncode == 0:
-                    if "connected" in result.stdout.lower() or "already connected" in result.stdout.lower():
-                        self.logger.success(f"Connected to wireless ADB at {self.wireless_adb}")
-                        self.logger.debug_msg(f"ADB connect output: {result.stdout}")
-                    else:
-                        self.logger.warning(f"Wireless ADB connection output: {result.stdout}")
-                else:
-                    self.logger.error(f"Failed to connect to wireless ADB: {result.stderr}")
-                    return False
-                # Give ADB a moment to register the connection
-                sleep(1)
-            except Exception as e:
-                self.logger.error(f"Error connecting to wireless ADB: {e}")
-                return False
+        # Step 1: Check for existing devices
+        existing_devices = check_existing_devices(self.logger)
         
-        try:
-            result = subprocess.run(
-                ["adb", "devices"],
-                capture_output=True,
-                text=True
-            )
-            if "device\n" in result.stdout:
-                self.logger.success("Device connected")
-                self.logger.debug_msg(f"ADB output: {result.stdout}")
-                return True
-            else:
-                self.logger.error("No device found")
+        # Step 2: Handle existing devices
+        if existing_devices:
+            if len(existing_devices) == 1:
+                # Single device found
+                device = existing_devices[0]
+                self.logger.info(f"Device already connected: {device}")
+                
+                # Check if user wants to use this device or connect wireless
                 if self.wireless_adb:
-                    self.logger.error(f"Make sure your device is on the same network and wireless debugging is enabled.")
-                    self.logger.error(f"If this is the first time, you may need to pair via USB first using:")
-                    self.logger.error(f"  adb pair <IP>:<PAIRING_PORT>")
-                    self.logger.error(f"  adb connect {self.wireless_adb}")
+                    # Wireless flag provided but device already exists
+                    if prompt_yes_no(f"Device {device} already connected. Still connect wireless device?", default=False):
+                        self.logger.info("Will proceed with wireless ADB setup...")
+                        # Continue to wireless setup below
+                    else:
+                        # Use existing device
+                        self.device_id = device
+                        self.logger.success(f"Using device: {device}")
+                        return True
+                else:
+                    # No wireless flag, ask if user wants to use existing device
+                    if prompt_yes_no(f"Use device {device}?", default=True):
+                        self.device_id = device
+                        self.logger.success(f"Using device: {device}")
+                        return True
+                    else:
+                        self.logger.error("No device selected")
+                        return False
+            
+            else:
+                # Multiple devices found
+                self.logger.info(f"Found {len(existing_devices)} devices")
+                
+                # Let user select device or connect new wireless device
+                selected_device = prompt_device_selection(existing_devices, self.logger)
+                
+                if selected_device is not None:
+                    # User selected existing device
+                    self.device_id = selected_device
+                    self.logger.success(f"Using device: {selected_device}")
+                    return True
+                else:
+                    # User wants to connect new wireless device
+                    if not self.wireless_adb:
+                        # No wireless flag provided, ensure empty list so Step 3 will prompt
+                        self.wireless_adb = []
+                    # Continue to wireless setup below (Step 3 will handle prompting)
+        
+        else:
+            # No existing devices
+            if not self.wireless_adb:
+                self.logger.error("No device found. Connect via USB or use --wireless-adb flag")
                 return False
-        except Exception as e:
-            self.logger.error(f"Error checking device: {e}")
-            return False
+            # else: continue to wireless setup
+        
+        # Step 3: Wireless ADB setup (if we reach here)
+        if self.wireless_adb is not None:
+            # Parse wireless_adb arguments to get pairing details (NOT connect port yet)
+            if len(self.wireless_adb) == 0:
+                # No arguments provided, prompt for pairing details only
+                self.logger.info("Wireless ADB mode - please provide pairing details...")
+                pairing_address = input("Enter pairing address (IP:PORT): ").strip()
+                pairing_code = prompt_for_pairing_code()
+
+            elif len(self.wireless_adb) == 1:
+                # Only pairing address provided
+                pairing_address = self.wireless_adb[0]
+                self.logger.info(f"Using pairing address: {pairing_address}")
+                pairing_code = prompt_for_pairing_code()
+
+            elif len(self.wireless_adb) == 2:
+                # Both pairing address and code provided
+                pairing_address = self.wireless_adb[0]
+                pairing_code = self.wireless_adb[1]
+                self.logger.info(f"Using pairing address: {pairing_address}")
+
+                # Validate pairing code
+                if not validate_pairing_code(pairing_code):
+                    self.logger.error(f"Invalid pairing code: {pairing_code} (must be 6 digits)")
+                    pairing_code = prompt_for_pairing_code()
+
+            else:
+                self.logger.error(f"Invalid number of wireless-adb arguments: {len(self.wireless_adb)}")
+                return False
+
+            # Step 4: Attempt pairing and connection with retry logic
+            while True:
+                # First, attempt pairing
+                pairing_success = wireless_adb_pair(pairing_address, pairing_code, self.logger)
+
+                if not pairing_success:
+                    # Pairing failed - ask if user wants to retry
+                    if prompt_yes_no("Pairing failed. Retry?", default=True):
+                        # Re-prompt for pairing details
+                        self.logger.info("Please re-enter pairing details...")
+                        pairing_address = input("Enter pairing address (IP:PORT): ").strip()
+                        pairing_code = prompt_for_pairing_code()
+                        # Loop will retry pairing
+                        continue
+                    else:
+                        self.logger.error("Wireless ADB pairing cancelled by user")
+                        return False
+
+                # Pairing successful! Now prompt for connect port
+                connect_port = prompt_for_connect_port()
+
+                # Attempt connection
+                connect_success, device_id = wireless_adb_connect(pairing_address, connect_port, self.logger)
+
+                if connect_success:
+                    self.device_id = device_id
+                    self.logger.success(f"Successfully connected to wireless device: {device_id}")
+                    return True
+                else:
+                    # Connection failed - ask if user wants to retry
+                    if prompt_yes_no("Connection failed. Retry?", default=True):
+                        # Re-prompt for all details (pairing might need to be redone)
+                        self.logger.info("Please re-enter wireless ADB details...")
+                        pairing_address = input("Enter pairing address (IP:PORT): ").strip()
+                        pairing_code = prompt_for_pairing_code()
+                        # Loop will retry from pairing step
+                    else:
+                        self.logger.error("Wireless ADB connection cancelled by user")
+                        return False
+
+        # Should not reach here, but just in case
+        self.logger.error("Device connection failed")
+        return False
     
     def connect(self) -> bool:
         """Connect to WhatsApp via Appium."""
         self.logger.info("Stopping WhatsApp (this does NOT delete any data)...")
-        subprocess.run(["adb", "shell", "am", "force-stop", "com.whatsapp"], capture_output=True)
+        adb_cmd = ["adb"]
+        if self.device_id:
+            adb_cmd.extend(["-s", self.device_id])
+        adb_cmd.extend(["shell", "am", "force-stop", "com.whatsapp"])
+        subprocess.run(adb_cmd, capture_output=True)
         sleep(0.5)  # Brief delay for app to stop (system command, not UI)
         self.logger.success("WhatsApp stopped")
         
         self.logger.info("Setting up WebDriver options...")
         options = UiAutomator2Options()
-        options.load_capabilities({
+        capabilities = {
             "platformName": "Android",
             "deviceName": "Pixel_10_Pro",
             "automationName": "UiAutomator2",
@@ -472,56 +838,28 @@ class WhatsAppDriver:
             "appActivity": "com.whatsapp.Main",
             "noReset": True,
             "fullReset": False
-        })
+        }
+
+        # If specific device selected, tell Appium which device to use
+        if self.device_id:
+            capabilities["udid"] = self.device_id
+            self.logger.debug_msg(f"Using device UDID: {self.device_id}")
+
+        options.load_capabilities(capabilities)
         
         self.logger.info("Connecting to Appium server...")
         try:
             self.driver = webdriver.Remote("http://127.0.0.1:4723", options=options)
             self.logger.success("Driver connected successfully!")
             
-            # Wait a moment for app to start, then check package
-            sleep(2)  # Give app time to launch
+            # Wait a moment for app to start
+            self.logger.info("Waiting for WhatsApp to launch...")
+            sleep(3)  # Give app time to launch and UI to stabilize
             
-            # Check package name directly (more reliable than activity)
-            current_package = self.driver.current_package
-            self.logger.debug_msg(f"Current package after launch: {current_package}")
+            # CRITICAL: Use robust verification instead of simple package check
+            # This prevents accidentally interacting with system UI
+            return self.verify_whatsapp_is_open()
             
-            if current_package == "com.whatsapp":
-                self.logger.success("WhatsApp is open!")
-                return True
-            else:
-                self.logger.warning(f"WhatsApp package not detected. Current: {current_package}")
-                
-                # Try waiting for activity as fallback
-                if self._wait_for_activity("Main", timeout=5):
-                    current_package = self.driver.current_package
-                    if current_package == "com.whatsapp":
-                        self.logger.success("WhatsApp is open!")
-                        return True
-            
-            # Try activating WhatsApp if not detected
-            try:
-                self.logger.info("Attempting to activate WhatsApp...")
-                self.driver.activate_app("com.whatsapp")
-                sleep(2)  # Brief wait after activation
-                current_package = self.driver.current_package
-                self.logger.debug_msg(f"After activation, package: {current_package}")
-                if current_package == "com.whatsapp":
-                    self.logger.success("WhatsApp activated successfully!")
-                    return True
-                else:
-                    self.logger.warning(f"Package still not correct after activation: {current_package}")
-            except Exception as e:
-                self.logger.error(f"Could not activate WhatsApp: {e}")
-            
-            # Final check - sometimes it takes a moment
-            sleep(1)
-            current_package = self.driver.current_package
-            if current_package == "com.whatsapp":
-                self.logger.success("WhatsApp detected on final check!")
-                return True
-            
-            return False
         except Exception as e:
             self.logger.error(f"Failed to connect: {e}")
             return False
@@ -537,6 +875,13 @@ class WhatsAppDriver:
             
             if current_package != "com.whatsapp":
                 self.logger.error(f"WhatsApp package not detected. Current: {current_package}")
+                
+                # Check if this might be due to locked phone
+                is_locked, reason = self.check_if_phone_locked()
+                if is_locked:
+                    self.logger.error("This may be because the phone is locked.")
+                    self.logger.error(f"Lock detection: {reason}")
+                
                 return False
             
             self.logger.success("WhatsApp package detected!")
@@ -564,6 +909,273 @@ class WhatsAppDriver:
             return True
         except Exception as e:
             self.logger.error(f"Error checking package/activity: {e}")
+            
+            # Check if this error might be due to phone being locked
+            try:
+                is_locked, reason = self.check_if_phone_locked()
+                if is_locked:
+                    self.logger.error("=" * 70)
+                    self.logger.error("🔒 PHONE MAY BE LOCKED")
+                    self.logger.error("=" * 70)
+                    self.logger.error(f"Lock detection: {reason}")
+                    self.logger.error("Please unlock your phone and ensure WhatsApp is accessible.")
+                    self.logger.error("=" * 70)
+            except:
+                # If lock check itself fails, just continue with original error
+                pass
+            
+            return False
+
+    def check_if_phone_locked(self) -> tuple[bool, str]:
+        """
+        Check if the phone appears to be locked.
+        
+        Returns:
+            Tuple of (is_locked: bool, reason: str)
+            - is_locked: True if phone appears locked, False otherwise
+            - reason: Description of why we think it's locked
+        """
+        try:
+            # Check 1: Try to get current activity
+            try:
+                current_activity = self.driver.current_activity
+                self.logger.debug_msg(f"Lock check - Current activity: {current_activity}")
+                
+                # Common lock screen activity indicators
+                lock_indicators = [
+                    "Keyguard",
+                    "LockScreen", 
+                    "lockscreen",
+                    "KeyguardView",
+                    "StatusBar"  # Sometimes appears when locked
+                ]
+                
+                for indicator in lock_indicators:
+                    if indicator in current_activity:
+                        return (True, f"Lock screen activity detected: {current_activity}")
+                        
+            except Exception as e:
+                self.logger.debug_msg(f"Lock check - Unable to get activity: {e}")
+                # If we can't get activity at all, might be locked
+                return (True, f"Unable to access device activity (common when locked): {e}")
+            
+            # Check 2: Try to get current package
+            try:
+                current_package = self.driver.current_package
+                self.logger.debug_msg(f"Lock check - Current package: {current_package}")
+                
+                # If we're not in WhatsApp and in system UI, likely locked
+                if current_package != "com.whatsapp" and "systemui" in current_package.lower():
+                    return (True, f"System UI detected instead of WhatsApp: {current_package}")
+                    
+            except Exception as e:
+                self.logger.debug_msg(f"Lock check - Unable to get package: {e}")
+                # Inability to get package can indicate lock screen
+                return (True, f"Unable to access app package (common when locked): {e}")
+            
+            # Check 3: Try to find any UI element (locked screens typically won't have app elements)
+            try:
+                # Look for WhatsApp-specific elements
+                elements = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
+                self.logger.debug_msg(f"Lock check - Found {len(elements)} chat elements")
+                
+                # If we can access WhatsApp elements, phone is likely unlocked
+                if len(elements) > 0:
+                    return (False, "WhatsApp UI elements accessible")
+                    
+            except Exception as e:
+                self.logger.debug_msg(f"Lock check - Unable to find elements: {e}")
+            
+            # Check 4: Check for lock screen UI elements (if Appium can see them)
+            try:
+                # Some common lock screen element IDs
+                lock_elements = self.driver.find_elements("id", "com.android.systemui:id/lock_icon")
+                if len(lock_elements) > 0:
+                    return (True, "Lock icon UI element found")
+            except:
+                pass  # This is expected to fail if not on lock screen
+            
+            # If we got here without clear indicators, phone is likely unlocked
+            # (we could access activity and package without errors)
+            return (False, "No lock indicators detected")
+            
+        except Exception as e:
+            self.logger.debug_msg(f"Lock check - Unexpected error: {e}")
+            # If we hit unexpected errors, might be locked
+            return (True, f"Unable to check phone state (may be locked): {e}")
+
+    def detect_phone_lock_state(self) -> bool:
+        """
+        Detect if phone is locked and provide user-friendly error message.
+        
+        Returns:
+            True if phone is unlocked and ready, False if locked
+        """
+        self.logger.info("Checking if phone is unlocked...")
+        
+        is_locked, reason = self.check_if_phone_locked()
+        
+        if is_locked:
+            self.logger.error("=" * 70)
+            self.logger.error("🔒 PHONE APPEARS TO BE LOCKED")
+            self.logger.error("=" * 70)
+            self.logger.error(f"Detection reason: {reason}")
+            self.logger.error("")
+            self.logger.error("Please:")
+            self.logger.error("  1. Unlock your phone")
+            self.logger.error("  2. Ensure WhatsApp is accessible")
+            self.logger.error("  3. Try running the script again")
+            self.logger.error("")
+            self.logger.error("The phone must remain unlocked throughout the export process.")
+            self.logger.error("=" * 70)
+            return False
+        else:
+            self.logger.success(f"Phone is unlocked and ready ({reason})")
+            return True
+
+    def verify_whatsapp_is_open(self) -> bool:
+        """
+        CRITICAL: Verify WhatsApp is actually open and accessible before proceeding.
+        This prevents the script from accidentally interacting with system settings
+        or other non-WhatsApp UI elements.
+        
+        Returns:
+            True if WhatsApp is confirmed open and accessible, False otherwise
+        """
+        self.logger.info("=" * 70)
+        self.logger.info("🔍 CRITICAL: Verifying WhatsApp is open and accessible")
+        self.logger.info("=" * 70)
+        
+        try:
+            # Check 1: Current package MUST be WhatsApp
+            current_package = self.driver.current_package
+            self.logger.info(f"Current package: {current_package}")
+            
+            if current_package != "com.whatsapp":
+                self.logger.error("=" * 70)
+                self.logger.error("❌ CRITICAL FAILURE: Not in WhatsApp!")
+                self.logger.error("=" * 70)
+                self.logger.error(f"Current package: {current_package}")
+                self.logger.error("Expected: com.whatsapp")
+                self.logger.error("")
+                self.logger.error("This could mean:")
+                self.logger.error("  - Phone is locked")
+                self.logger.error("  - WhatsApp failed to launch")
+                self.logger.error("  - In system settings or another app")
+                self.logger.error("")
+                self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
+                self.logger.error("=" * 70)
+                return False
+            
+            self.logger.success("✓ Package confirmed: com.whatsapp")
+            
+            # Check 2: Current activity MUST be a WhatsApp activity
+            current_activity = self.driver.current_activity
+            self.logger.info(f"Current activity: {current_activity}")
+            
+            # List of activities that are NOT safe WhatsApp screens
+            unsafe_activities = ["Keyguard", "LockScreen", "lockscreen", "StatusBar", "systemui", "Settings"]
+            for unsafe in unsafe_activities:
+                if unsafe in current_activity:
+                    self.logger.error("=" * 70)
+                    self.logger.error(f"❌ CRITICAL FAILURE: Unsafe activity detected!")
+                    self.logger.error("=" * 70)
+                    self.logger.error(f"Current activity: {current_activity}")
+                    self.logger.error(f"Unsafe indicator: {unsafe}")
+                    self.logger.error("")
+                    self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
+                    self.logger.error("=" * 70)
+                    return False
+            
+            self.logger.success(f"✓ Activity confirmed safe: {current_activity}")
+            
+            # Check 3: Verify we can see WhatsApp UI elements
+            self.logger.info("Checking for WhatsApp UI elements...")
+            
+            # Try to find common WhatsApp elements
+            whatsapp_elements_found = False
+            
+            # Look for chat list elements
+            try:
+                chat_elements = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
+                if len(chat_elements) > 0:
+                    self.logger.success(f"✓ Found {len(chat_elements)} chat elements")
+                    whatsapp_elements_found = True
+            except Exception as e:
+                self.logger.debug_msg(f"No chat elements found: {e}")
+            
+            # Look for toolbar (present on most WhatsApp screens)
+            try:
+                toolbar = self.driver.find_elements("id", "com.whatsapp:id/toolbar")
+                if len(toolbar) > 0:
+                    self.logger.success("✓ Found WhatsApp toolbar")
+                    whatsapp_elements_found = True
+            except Exception as e:
+                self.logger.debug_msg(f"No toolbar found: {e}")
+            
+            # Look for action bar (another common element)
+            try:
+                action_bar = self.driver.find_elements("id", "com.whatsapp:id/action_bar")
+                if len(action_bar) > 0:
+                    self.logger.success("✓ Found WhatsApp action bar")
+                    whatsapp_elements_found = True
+            except Exception as e:
+                self.logger.debug_msg(f"No action bar found: {e}")
+            
+            # Look for menu button
+            try:
+                menu_button = self.driver.find_elements("id", "com.whatsapp:id/menuitem_search")
+                if len(menu_button) > 0:
+                    self.logger.success("✓ Found WhatsApp menu button")
+                    whatsapp_elements_found = True
+            except Exception as e:
+                self.logger.debug_msg(f"No menu button found: {e}")
+            
+            if not whatsapp_elements_found:
+                self.logger.error("=" * 70)
+                self.logger.error("❌ CRITICAL FAILURE: No WhatsApp UI elements found!")
+                self.logger.error("=" * 70)
+                self.logger.error("Package is com.whatsapp but UI is not accessible.")
+                self.logger.error("")
+                self.logger.error("This could mean:")
+                self.logger.error("  - Phone is locked but showing WhatsApp in background")
+                self.logger.error("  - WhatsApp is loading but not ready")
+                self.logger.error("  - Dialog or overlay is blocking WhatsApp UI")
+                self.logger.error("")
+                self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
+                self.logger.error("=" * 70)
+                return False
+            
+            self.logger.success("✓ WhatsApp UI elements accessible")
+            
+            # Check 4: Final lock screen check
+            is_locked, lock_reason = self.check_if_phone_locked()
+            if is_locked:
+                self.logger.error("=" * 70)
+                self.logger.error("❌ CRITICAL FAILURE: Phone appears locked!")
+                self.logger.error("=" * 70)
+                self.logger.error(f"Detection reason: {lock_reason}")
+                self.logger.error("")
+                self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
+                self.logger.error("=" * 70)
+                return False
+            
+            self.logger.success("✓ Phone is unlocked")
+            
+            # All checks passed
+            self.logger.info("=" * 70)
+            self.logger.success("✅ VERIFICATION PASSED: WhatsApp is open and accessible")
+            self.logger.info("=" * 70)
+            return True
+            
+        except Exception as e:
+            self.logger.error("=" * 70)
+            self.logger.error("❌ CRITICAL FAILURE: Exception during verification!")
+            self.logger.error("=" * 70)
+            self.logger.error(f"Error: {e}")
+            self.logger.error("")
+            self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
+            self.logger.error("=" * 70)
             return False
     
     def check_status(self):
@@ -1897,9 +2509,17 @@ class ChatExporter:
         
         for i, chat_name in enumerate(chat_names, 1):
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
-            
+
+            # CRITICAL: Verify WhatsApp is still accessible before each export
+            # This prevents accidentally interacting with system UI
+            if not self.driver.verify_whatsapp_is_open():
+                self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
+                results[chat_name] = False
+                timings[chat_name] = 0
+                break  # Stop the batch if WhatsApp becomes inaccessible
+
             chat_start_time = time.time()
-            
+
             # Check if chat already exists (resume mode)
             if resume_folder:
                 exists, matching_files = check_chat_exists(resume_folder, chat_name)
@@ -2060,14 +2680,20 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     """
     logger.info("=" * 70)
     if test_limit:
-        logger.info(f"📋 INTERACTIVE MODE (TEST MODE - Limited to {test_limit} chats)")
+        logger.info(f"📋 INTERACTIVE MODE (Limited to {test_limit} chats)")
     else:
         logger.info("📋 INTERACTIVE MODE")
     logger.info("=" * 70)
-    
-    # Collect all chats (with limit if test mode)
+
+    # CRITICAL: Verify WhatsApp is still accessible before collecting chats
+    # This prevents accidentally interacting with system UI
+    if not driver.verify_whatsapp_is_open():
+        logger.error("Cannot proceed - WhatsApp is not accessible. Exiting.")
+        return
+
+    # Collect all chats (with limit if specified)
     if test_limit:
-        logger.info(f"Loading chats (test mode: limited to {test_limit})...")
+        logger.info(f"Loading chats (limited to {test_limit})...")
         all_chats = driver.collect_all_chats(limit=test_limit, sort_alphabetical=sort_alphabetical)
     else:
         logger.info("Loading all chats...")
@@ -2265,30 +2891,45 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     
     try:
-        # Start Appium (unless skipped)
-        appium_manager = AppiumManager(logger)
-        if not args.skip_appium:
-            if not appium_manager.start_appium():
-                logger.error("Failed to start Appium. Exiting.")
-                sys.exit(1)
-        else:
-            logger.info("Skipping Appium startup (--skip-appium flag)")
-        
-        # Initialize driver
+        # Initialize driver (doesn't need Appium yet)
         driver_manager = WhatsAppDriver(logger, wireless_adb=args.wireless_adb)
-        
-        # Check device connection
+
+        # Check device connection BEFORE starting Appium
         if not driver_manager.check_device_connection():
             logger.error("No device connected. Please connect your Android device and try again.")
             cleanup()
             sys.exit(1)
-        
-        # Connect to WhatsApp
+
+        # Start Appium (unless skipped) - only after device is confirmed connected
+        appium_manager = AppiumManager(logger)
+        if not args.skip_appium:
+            if not appium_manager.start_appium():
+                logger.error("Failed to start Appium. Exiting.")
+                cleanup()
+                sys.exit(1)
+        else:
+            logger.info("Skipping Appium startup (--skip-appium flag)")
+
+        # Connect to WhatsApp and verify it's actually open
+        # This includes lock detection and UI verification to prevent
+        # accidentally interacting with system settings
         if not driver_manager.connect():
-            logger.error("Failed to connect to WhatsApp. Exiting.")
+            logger.error("=" * 70)
+            logger.error("❌ CRITICAL: Failed to connect to WhatsApp or verify it's accessible")
+            logger.error("=" * 70)
+            logger.error("Possible causes:")
+            logger.error("  - Phone is locked")
+            logger.error("  - WhatsApp failed to launch")
+            logger.error("  - WhatsApp UI is not accessible")
+            logger.error("")
+            logger.error("Please ensure:")
+            logger.error("  1. Phone is unlocked")
+            logger.error("  2. WhatsApp is installed")
+            logger.error("  3. Phone remains unlocked during operation")
+            logger.error("=" * 70)
             cleanup()
             sys.exit(1)
-        
+
         # Navigate to main screen
         if not driver_manager.navigate_to_main():
             logger.error("Failed to navigate to main screen. Exiting.")
@@ -2309,7 +2950,7 @@ def main():
         
         # Run interactive mode
         sort_alphabetical = args.sort_order == 'alphabetical'
-        interactive_mode(driver_manager, exporter, logger, test_limit=args.test, include_media=args.include_media, sort_alphabetical=sort_alphabetical, resume_folder=resume_folder, auto_all=args.all)
+        interactive_mode(driver_manager, exporter, logger, test_limit=args.limit, include_media=args.include_media, sort_alphabetical=sort_alphabetical, resume_folder=resume_folder, auto_all=args.all)
         
     except KeyboardInterrupt:
         signal_handler(None, None)
