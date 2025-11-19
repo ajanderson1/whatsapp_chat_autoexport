@@ -21,8 +21,11 @@ WhatsApp deliberately makes direct downloading or programmatic access to chat da
 This project automates the tedious process of manually exporting WhatsApp chats to Google Drive. Instead of going through each chat individually in WhatsApp's interface, this script:
 
 - **Automatically navigates** through your WhatsApp chats
+- **Clears overlays automatically** by pressing home button before starting (prevents failures from settings/dialogs being open)
 - **Interactively lists** all available chats for selection
+- **Pre-select chat ranges** via `--range` flag (e.g., `--range 300-500`)
 - **Exports chats** directly to Google Drive with or without media
+- **Validates API keys early** before starting work (fail-fast approach)
 - **Handles navigation** seamlessly, including scrolling through long chat lists
 - **Provides detailed logging** with colored output and debug modes
 - **Skips incompatible chats** (like community chats) automatically
@@ -89,21 +92,209 @@ The script uses UI automation to:
 - Detect and skip incompatible chats (community chats)
 - Trigger Google Drive exports
 
+## 🔄 Complete Workflow: Export → Process → Output
+
+This project provides a complete end-to-end workflow for WhatsApp chat processing:
+
+### Recommended: Unified Command ⭐
+
+The simplest approach is the unified `whatsapp-export` command that handles everything:
+
+```bash
+# Complete workflow: export → download → transcribe → organize
+# Transcriptions included, no media in final output (RECOMMENDED)
+poetry run whatsapp-export --output ~/whatsapp_exports --no-output-media
+
+# Same with ElevenLabs + wireless ADB + auto-delete + pre-select chats 300-500
+poetry run whatsapp-export \
+  --output ~/whatsapp_exports \
+  --transcription-provider elevenlabs \
+  --delete-from-drive \
+  --no-output-media \
+  --wireless-adb 192.168.1.100:5555 \
+  --range 300-500
+
+# Full archive with media files included
+poetry run whatsapp-export --output ~/whatsapp_exports
+
+# Pre-select specific chats (ranges or comma-separated)
+poetry run whatsapp-export --output ~/whatsapp_exports --range 1,5,10-20,50
+
+# Faster: skip transcription entirely
+poetry run whatsapp-export --output ~/whatsapp_exports --no-transcribe
+
+# Force re-transcribe all audio/video (overwrites existing)
+poetry run whatsapp-export --output ~/whatsapp_exports --force-transcribe
+```
+
+### Alternative: Manual Export + Standalone Pipeline
+
+If you prefer to export and process separately:
+
+**Step 1: Export from WhatsApp**
+```bash
+# Export WITH media (required for voice message transcription)
+poetry run whatsapp-export
+
+# Export WITHOUT media (faster, but no transcription support)
+poetry run whatsapp-export --without-media
+```
+
+**Step 2: Process Exported Files**
+```bash
+# Complete pipeline: download → extract → transcribe → organize
+poetry run whatsapp-pipeline --output ~/whatsapp_exports
+
+# Transcriptions only (no media in final output)
+poetry run whatsapp-pipeline --output ~/whatsapp_exports --no-media
+
+# Process local files (skip Google Drive download)
+poetry run whatsapp-pipeline --skip-download --source ~/Downloads --output ~/whatsapp_exports
+```
+
+### Common Use Cases
+
+**Use Case 1: Transcriptions Without Media ⭐ RECOMMENDED**
+```bash
+# Single unified command (simplest)
+poetry run whatsapp-export --output ~/whatsapp_exports --no-output-media
+
+# With ElevenLabs, wireless ADB, and auto-delete from Drive
+poetry run whatsapp-export \
+  --output ~/whatsapp_exports \
+  --transcription-provider elevenlabs \
+  --delete-from-drive \
+  --no-output-media \
+  --wireless-adb 192.168.1.100:5555
+```
+**Result**: Chat transcripts and voice message transcriptions WITHOUT keeping large media files.
+**Why this works**: Media files are temporarily downloaded and used for transcription, but are not copied to the final output folder.
+
+**Use Case 2: Full Archive (Media + Transcriptions)**
+```bash
+# Single unified command
+poetry run whatsapp-export --output ~/whatsapp_exports
+
+# OR use separate commands (more control)
+poetry run whatsapp-export  # Export only
+poetry run whatsapp-pipeline --output ~/whatsapp_exports  # Process later
+```
+**Result**: Complete archive with chat transcripts, all media files, and voice message transcriptions.
+
+**Use Case 3: Text-Only Archive**
+```bash
+# Export without media, skip transcription
+poetry run whatsapp-export --output ~/whatsapp_exports --without-media --no-transcribe
+```
+**Result**: Chat transcripts only, no media, no transcriptions.
+
+### Understanding the Media Flags
+
+**Two main flags control media at different stages:**
+
+| Flag | Command | Stage | Purpose |
+|------|---------|-------|---------|
+| `--without-media` | whatsapp-export | Export | Controls what WhatsApp exports to Drive |
+| `--no-output-media` ⭐ | whatsapp-export | Processing | Controls what gets copied to final output |
+| `--no-media` | whatsapp-pipeline | Processing | Controls what gets copied to final output (standalone) |
+
+**Key Insights**:
+- **Always export WITH media (default)** for voice message transcription support
+- Use `--no-output-media` to get transcriptions WITHOUT keeping large media files
+- The `--no-output-media` flag is the recommended approach for most users
+- Media files are temporarily downloaded for transcription, then optionally discarded
+
+### Voice Message Transcription
+
+**Automatic Skip (Default)**:
+By default, the pipeline skips re-transcribing files that already have transcriptions, saving time and API costs.
+
+When you run the pipeline, you'll see clear feedback:
+```
+⏭️  Skipping (exists): Chat Name/PTT-001.opus
+🎤 Transcribing: PTT-003.opus
+```
+
+Summary shows which files were skipped:
+```
+Transcription Summary
+======================================================================
+Total files: 10
+Successful: 2 (newly transcribed)
+Skipped (existing): 7
+
+Skipped files (existing transcriptions found):
+  - Chat Name/PTT-001.opus
+  - Chat Name/VID-002.mp4
+  ... and 5 more
+```
+
+**Force Re-Transcription**:
+Use `--force-transcribe` to re-transcribe everything:
+```bash
+poetry run whatsapp-export --output ~/exports --force-transcribe
+```
+
+Use this when:
+- Previous transcriptions were poor quality
+- You want to try different language settings
+- You're testing transcription improvements
+
+**Transcription Providers**:
+
+The pipeline supports multiple transcription service providers:
+
+| Provider | Model | API Key | Notes |
+|----------|-------|---------|-------|
+| **Whisper** (default) | OpenAI Whisper API | `OPENAI_API_KEY` | $0.006 per minute, widely used, good quality |
+| **ElevenLabs** | Scribe v1 | `ELEVENLABS_API_KEY` | Supports up to 32 speakers, diarization, 99 languages |
+
+**Setting up API keys**:
+```bash
+# For Whisper (default)
+export OPENAI_API_KEY="your-openai-key"
+
+# For ElevenLabs
+export ELEVENLABS_API_KEY="your-elevenlabs-key"
+```
+
+**Using a specific provider**:
+```bash
+# Use Whisper (default)
+poetry run whatsapp-export --output ~/exports
+
+# Use ElevenLabs
+poetry run whatsapp-export --output ~/exports --transcription-provider elevenlabs
+
+# Standalone pipeline with ElevenLabs
+poetry run whatsapp-pipeline --output ~/exports --transcription-provider elevenlabs
+```
+
 ## ⚠️ Important Notes
 
 ### Before Running
 
-1. **Google Drive must be set up** on your device:
+1. **Set up API key for transcription** (if using transcription):
+   - For Whisper: `export OPENAI_API_KEY="your-key"`
+   - For ElevenLabs: `export ELEVENLABS_API_KEY="your-key"`
+   - The script will validate your API key before starting work (fail-fast)
+
+2. **Google Drive must be set up** on your device:
    - Ensure Google Drive app is installed
    - You must be logged into your Google account
    - "My Drive" option must be available in the share dialog
 
-2. **Do not interfere with the phone** while the script is running:
+3. **Phone setup**:
+   - Keep your phone unlocked during the entire process
+   - The script automatically clears overlays (presses home button before starting)
+   - No need to close settings or other apps manually - this is handled automatically
+
+4. **Do not interfere with the phone** while the script is running:
    - The script is busy screen scraping and automating interactions
    - Any manual interference may cause the script to fail
-   - Keep your phone unlocked and connected via USB
+   - Keep your phone connected via USB or wireless ADB
 
-3. **Allow time for exports**:
+5. **Allow time for exports**:
    - Large chats with media can take significant time to upload
    - The script initiates the export, but Google Drive handles the actual upload
    - You may need to wait for uploads to complete after the script finishes

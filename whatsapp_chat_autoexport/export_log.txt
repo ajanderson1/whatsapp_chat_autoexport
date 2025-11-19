@@ -1,0 +1,356 @@
+======================================================================
+🚀 WhatsApp Chat Auto-Export
+======================================================================
+🔍 STEP 1: Setting up Android environment...
+Setting up Android environment...
+🔍 Set ANDROID_HOME to: /Users/ajanderson/Library/Android/sdk
+Stopping any existing Appium instances...
+Starting Appium server...
+✅ Appium server started successfully
+Checking device connection...
+🔍 Found 1 connected device(s): ['100.65.67.81:34683']
+Device already connected: 100.65.67.81:34683
+Use device 100.65.67.81:34683? (Y/n): ✅ Using device: 100.65.67.81:34683
+🔍 STEP 2: Connecting to WhatsApp...
+Stopping WhatsApp (this does NOT delete any data)...
+✅ WhatsApp stopped
+Setting up WebDriver options...
+🔍 Using device UDID: 100.65.67.81:34683
+Connecting to Appium server...
+✅ Driver connected successfully!
+Waiting for WhatsApp to launch...
+======================================================================
+🔍 CRITICAL: Verifying WhatsApp is open and accessible
+======================================================================
+Current package: com.whatsapp
+✅ ✓ Package confirmed: com.whatsapp
+Current activity: .home.ui.HomeActivity
+✅ ✓ Activity confirmed safe: .home.ui.HomeActivity
+Checking for WhatsApp UI elements...
+✅ ✓ Found 8 chat elements
+✅ ✓ Found WhatsApp toolbar
+✅ ✓ WhatsApp UI elements accessible
+🔍 Lock check - Current activity: .home.ui.HomeActivity
+🔍 Lock check - Current package: com.whatsapp
+🔍 Lock check - Found 8 chat elements
+✅ ✓ Phone is unlocked
+======================================================================
+✅ ✅ VERIFICATION PASSED: WhatsApp is open and accessible
+======================================================================
+🔍 STEP 3: Navigating to main chats screen...
+Checking WhatsApp state...
+🔍 Current package: com.whatsapp
+🔍 Current activity: .home.ui.HomeActivity
+✅ WhatsApp package detected!
+✅ Already on main chats screen!
+
+======================================================================
+🔧 Configuring Pipeline
+======================================================================
+✅ Pipeline configured - output directory: /Users/ajanderson/whatsapp_test
+  🎤 Audio/video transcription enabled
+======================================================================
+📋 INTERACTIVE MODE
+======================================================================
+🤖 Pipeline mode: Auto-continuing after 30s timeout
+📋 Chats will be shown in original order (most recent first)
+======================================================================
+📋 INTERACTIVE MODE (Limited to 1 chats)
+======================================================================
+======================================================================
+🔍 CRITICAL: Verifying WhatsApp is open and accessible
+======================================================================
+Current package: com.whatsapp
+✅ ✓ Package confirmed: com.whatsapp
+Current activity: .home.ui.HomeActivity
+✅ ✓ Activity confirmed safe: .home.ui.HomeActivity
+Checking for WhatsApp UI elements...
+✅ ✓ Found 8 chat elements
+✅ ✓ Found WhatsApp toolbar
+✅ ✓ WhatsApp UI elements accessible
+🔍 Lock check - Current activity: .home.ui.HomeActivity
+🔍 Lock check - Current package: com.whatsapp
+🔍 Lock check - Found 8 chat elements
+✅ ✓ Phone is unlocked
+======================================================================
+✅ ✅ VERIFICATION PASSED: WhatsApp is open and accessible
+======================================================================
+Loading chats (limited to 1)...
+Collecting chats (limited to 1 for testing)...
+🔍 Scrolling to top...
+🔍 Reached top early - stopping scroll
+🔍 Reached limit of 1 chats. Stopping collection.
+🔍 Scrolling back to top after collection...
+🔍 Reached top early - stopping scroll
+✅ Finished scrolling! Found 1 chats (limited to 1 for testing)
+
+Found 1 chats:
+----------------------------------------------------------------------
+  1. Lindsay Walker
+
+======================================================================
+Select chats to export:
+  - Chats are listed in original order
+  - Enter chat numbers (comma-separated, e.g., 1,3,5)
+  - Use ranges with hyphens (e.g., 100-200 or 1,3,5-10,20)
+  - Enter 'all' to export all chats
+  - Enter 'q', 'quit', or 'exit' to quit
+  - Will default to 'all' after 30 seconds if no input is provided
+======================================================================
+
+Your selection: ⏱️  30s remaining (will default to 'all' if no input)...
+⏱️  25s remaining (will default to 'all' if no input)...
+⏱️  20s remaining (will default to 'all' if no input)...
+⏱️  15s remaining (will default to 'all' if no input)...
+
+📤 Exporting 1 chat(s) with media...
+
+Processing chat 1/1: 'Lindsay Walker'
+======================================================================
+🔍 CRITICAL: Verifying WhatsApp is open and accessible
+======================================================================
+Current package: com.whatsapp
+✅ ✓ Package confirmed: com.whatsapp
+Current activity: .home.ui.HomeActivity
+✅ ✓ Activity confirmed safe: .home.ui.HomeActivity
+Checking for WhatsApp UI elements...
+✅ ✓ Found 8 chat elements
+✅ ✓ Found WhatsApp toolbar
+✅ ✓ WhatsApp UI elements accessible
+🔍 Lock check - Current activity: .home.ui.HomeActivity
+🔍 Lock check - Current package: com.whatsapp
+🔍 Lock check - Found 8 chat elements
+✅ ✓ Phone is unlocked
+======================================================================
+✅ ✅ VERIFICATION PASSED: WhatsApp is open and accessible
+======================================================================
+Checking WhatsApp state...
+🔍 Current package: com.whatsapp
+🔍 Current activity: .home.ui.HomeActivity
+✅ WhatsApp package detected!
+✅ Already on main chats screen!
+🔍 Clicking into chat 'Lindsay Walker'...
+🔍 Using coordinate click at (336, 713)
+🔍 After click, activity: .Conversation
+
+======================================================================
+📤 EXPORTING CHAT: 'Lindsay Walker' (with media)
+======================================================================
+🔍 STEP 1: Opening menu...
+🔍 Found menu button by resource ID
+✅ Menu opened
+🔍 STEP 2: Looking for 'More' option...
+🔍 Found 'More' option: 'More'
+✅ 'More' clicked
+🔍 STEP 3: Looking for 'Export chat' option...
+🔍 Found 'Export chat' option: 'Export chat'
+✅ 'Export chat' clicked
+🔍 STEP 4: Selecting 'Include media' or detecting text-only chat...
+🔍 Media selection dialog expected - searching for options...
+🔍 Found in button: 'Include media'
+About to click: 'Include media'
+✅ ✓ 'Include media' clicked
+Waiting for share dialog to initialize...
+🔍 Waiting for share dialog (attempt 1/7, waiting 2s)...
+🔍 Share dialog detected by package name
+✅ ✓ Share dialog ready
+🔍 STEP 5: Selecting 'Drive' (Google Drive)...
+🔍 Found 'Drive': 'Drive'
+🔍 Verified: 'Drive' is Google Drive
+✅ 'Drive' selected - Google Drive window should now be opening
+🔍 Waiting for Google Drive window to appear...
+🔍 After clicking Drive - Package: com.google.android.apps.docs, Activity: .common.shareitem.UploadMenuActivity
+🔍 After additional wait - Package: com.google.android.apps.docs, Activity: .common.shareitem.UploadMenuActivity
+🔍 STEP 6: Clicking 'Upload' button in Google Drive window...
+🔍 Found 'Upload' button by resource ID: 'Upload'
+🔍 Verified: Found by resource ID 'com.google.android.apps.docs:id/save_button' - trusting it's the Upload button
+✅ 'Upload' button clicked - export should now be processing
+✅ SUCCESS: Export initiated for 'Lindsay Walker'
+📤 Google Drive should now be handling the export...
+🔍 Navigating back to main screen...
+
+🔄 Starting pipeline processing for 'Lindsay Walker'...
+
+======================================================================
+Processing export: 'Lindsay Walker'
+======================================================================
+🔍 Temp directory: /var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/whatsapp_Lindsay_Walker_4ltlpgoe
+
+----------------------------------------------------------------------
+Phase 1: Download from Google Drive
+----------------------------------------------------------------------
+Connecting to Google Drive...
+🔍 Credentials directory: /Users/ajanderson/.whatsapp_export
+🔍 Token loaded successfully
+Credentials expired. Refreshing...
+Refreshing access token...
+🔍 Credentials directory: /Users/ajanderson/.whatsapp_export
+✅ Token saved to: /Users/ajanderson/.whatsapp_export/google_credentials.json
+✅ Token refreshed successfully
+✅ Connected to Google Drive API
+✅ Google Drive connection established
+Looking for: WhatsApp Chat with Lindsay Walker.zip
+🔍 Found 2 files
+🔍 Found file: WhatsApp Chat with Lindsay Walker.zip
+🔍   Modified: 2025-11-10T23:05:20.033Z
+🔍   Age: 376931.3s
+🔍   Size: 74.5 KB
+⚠️ File is too old (376931s), waiting for fresh upload...
+⏳ Waiting 2s before retry 2/5...
+🔍 Found 2 files
+🔍 Found file: WhatsApp Chat with Lindsay Walker.zip
+🔍   Modified: 2025-11-10T23:05:20.033Z
+🔍   Age: 376933.9s
+🔍   Size: 74.5 KB
+⚠️ File is too old (376934s), waiting for fresh upload...
+⏳ Waiting 4s before retry 3/5...
+🔍 Found 2 files
+🔍 Found file: WhatsApp Chat with Lindsay Walker.zip
+🔍   Modified: 2025-11-10T23:05:20.033Z
+🔍   Age: 376938.4s
+🔍   Size: 74.5 KB
+⚠️ File is too old (376938s), waiting for fresh upload...
+⏳ Waiting 8s before retry 4/5...
+🔍 Found 2 files
+🔍 Found file: WhatsApp Chat with Lindsay Walker.zip
+🔍   Modified: 2025-11-10T23:05:20.033Z
+🔍   Age: 376947.0s
+🔍   Size: 74.5 KB
+⚠️ File is too old (376947s), waiting for fresh upload...
+⏳ Waiting 16s before retry 5/5...
+🔍 Found 2 files
+🔍 Found file: WhatsApp Chat with Lindsay Walker.zip
+🔍   Modified: 2025-11-10T23:05:20.033Z
+🔍   Age: 376963.5s
+🔍   Size: 74.5 KB
+⚠️ Using file despite age (376963s old)
+Note: Found 2 files with this name, selected most recent
+Downloading 1 file(s)...
+Downloading:   0%|          | 0/1 [00:00<?, ?file/s]Downloading WhatsApp Chat with Lindsay Walker.zip:   0%|          | 0/1 [00:00<?, ?file/s]Downloading: WhatsApp Chat with Lindsay Walker.zip (76252 bytes)
+🔍 Download progress: 100%
+✅ Downloaded to: /var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/whatsapp_Lindsay_Walker_4ltlpgoe/downloads/WhatsApp Chat with Lindsay Walker.zip
+Downloading WhatsApp Chat with Lindsay Walker.zip: 100%|██████████| 1/1 [00:01<00:00,  1.26s/file]Downloading WhatsApp Chat with Lindsay Walker.zip: 100%|██████████| 1/1 [00:01<00:00,  1.26s/file]
+✅ Downloaded 1/1 file(s)
+✅ Downloaded: WhatsApp Chat with Lindsay Walker.zip
+
+----------------------------------------------------------------------
+Phase 2: Extract and Organize
+----------------------------------------------------------------------
+
+======================================================================
+Phase 2: Extract and Organize
+======================================================================
+Scanning for WhatsApp chat files...
+🔍 Searching in: /var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/whatsapp_Lindsay_Walker_4ltlpgoe/downloads
+🔍 Found 1 total files in directory
+🔍 Found matching file: WhatsApp Chat with Lindsay Walker.zip
+🔍 Verified as zip file: WhatsApp Chat with Lindsay Walker.zip
+✅ Found 1 WhatsApp chat export file(s)
+Moving files to processed folder...
+🔍 Moved: WhatsApp Chat with Lindsay Walker.zip -> /var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/whatsapp_Lindsay_Walker_4ltlpgoe/downloads/WhatsApp Chats Processed/WhatsApp Chat with Lindsay Walker.zip
+✅ Moved 1 file(s) to processed folder
+Adding .zip extension to files...
+🔍 Already has .zip extension: WhatsApp Chat with Lindsay Walker.zip
+✅ Added .zip extension to 1 file(s)
+Extracting zip files...
+📦 ZIP contents for 'WhatsApp Chat with Lindsay Walker.zip':
+   Total files: 1
+   Transcript files (.txt): 1
+   Media files: 0
+✅ ✓ Extracted: WhatsApp Chat with Lindsay Walker.zip → 1 files
+✅ Extracted 1 archive(s)
+Organizing extracted content...
+🔍 Processing folder: WhatsApp Chat with Lindsay Walker
+🔍   Moved transcript: WhatsApp Chat with Lindsay Walker.txt
+✅ Organization complete:
+  Transcripts moved: 1
+  Media files moved: 0
+🔍 Media subdirectories found: []
+🔍 Transcript: WhatsApp Chat with Lindsay Walker.txt
+🔍   Chat name: WhatsApp Chat with Lindsay Walker
+🔍   Media dir: /var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/whatsapp_Lindsay_Walker_4ltlpgoe/downloads/WhatsApp Chats Processed/media/WhatsApp Chat with Lindsay Walker
+🔍   Media dir exists: False
+✅ Organized 1 chat(s)
+
+----------------------------------------------------------------------
+Phase 3: Transcribe Audio/Video
+----------------------------------------------------------------------
+
+======================================================================
+Phase 3: Transcribe Audio/Video
+======================================================================
+🔍 Initialized OpenAI Whisper with model: whisper-1
+✅ Total transcriptions: 0
+
+----------------------------------------------------------------------
+Phase 4: Build Output
+----------------------------------------------------------------------
+
+======================================================================
+Phase 4: Build Final Outputs
+======================================================================
+Building outputs for 1 chat(s)
+
+[1/1] Processing: WhatsApp Chat with Lindsay Walker.txt
+======================================================================
+Building output for: Lindsay Walker
+======================================================================
+Parsing transcript: WhatsApp Chat with Lindsay Walker.txt
+Parsing transcript: WhatsApp Chat with Lindsay Walker.txt
+✅ Parsed 2942 messages, found 258 media references
+Building merged transcript: transcript.txt
+✅ Merged transcript created: transcript.txt
+⚠️ Media directory not found: /var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/whatsapp_Lindsay_Walker_4ltlpgoe/downloads/WhatsApp Chats Processed/media/WhatsApp Chat with Lindsay Walker
+Copying media files to: /Users/ajanderson/whatsapp_test/Lindsay Walker/media
+✅ Copied 0 media file(s)
+Copying transcriptions to: /Users/ajanderson/whatsapp_test/Lindsay Walker/transcriptions
+✅ Copied 0 transcription(s)
+======================================================================
+✅ Output created: /Users/ajanderson/whatsapp_test/Lindsay Walker
+  Messages: 2942
+  Media references: 258
+  Media files copied: 0
+  Transcriptions copied: 0
+======================================================================
+
+======================================================================
+Batch Build Summary
+======================================================================
+Chats processed: 1/1
+Total messages: 2942
+Total media files: 0
+Total transcriptions: 0
+======================================================================
+✅ Created 1 output(s) in: /Users/ajanderson/whatsapp_test
+🔍 Cleaning up temporary files...
+✅ 
+✅ Successfully processed 'Lindsay Walker'
+   Output: /Users/ajanderson/whatsapp_test/Lindsay Walker
+✅ ✅ Pipeline completed for 'Lindsay Walker'
+   📁 Output: /Users/ajanderson/whatsapp_test/Lindsay Walker
+
+✅ Chat 'Lindsay Walker' EXPORTED
+   ⏱️  Time for this chat: 1m 2.6s
+   ⏱️  Total elapsed time: 1m 5.7s
+
+======================================================================
+✅ EXPORT COMPLETE
+======================================================================
+
+📊 FINAL STATISTICS:
+   Total chats processed: 1
+   Successfully exported: 1
+   Skipped: 0
+
+⏱️  TIMING SUMMARY:
+   Total time taken: 1m 5.7s
+   Average time per chat: 1m 2.6s
+
+📋 RESULTS BY CHAT:
+----------------------------------------------------------------------
+   ✅ EXPORTED: Lindsay Walker (1m 2.6s)
+Driver session closed
+Stopping Appium server...
+======================================================================
+✅ SCRIPT COMPLETE
+======================================================================
