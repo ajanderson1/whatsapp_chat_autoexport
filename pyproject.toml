@@ -10,11 +10,71 @@ python = "^3.13"
 appium-python-client = ">=5.2.4,<6.0.0"
 ipykernel = ">=7.1.0,<8.0.0"
 colorama = ">=0.4.6,<1.0.0"
+google-api-python-client = "^2.100.0"
+google-auth-httplib2 = "^0.2.0"
+google-auth-oauthlib = "^1.1.0"
+tqdm = "^4.66.0"
+openai = "^1.0.0"
+elevenlabs = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.11.1"
+pytest-timeout = "^2.1.0"
 
 [tool.poetry.scripts]
-whatsapp-export = "whatsapp_chat_autoexport.whatsapp_export:main"
-whatsapp-process = "whatsapp_chat_autoexport.whatsapp_process:main"
+whatsapp-export = "whatsapp_chat_autoexport.export.cli:main"
+whatsapp-process = "whatsapp_chat_autoexport.processing.cli:main"
+whatsapp-drive = "whatsapp_chat_autoexport.google_drive.cli:main"
+whatsapp-pipeline = "whatsapp_chat_autoexport.pipeline_cli.cli:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=whatsapp_chat_autoexport",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=0",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "requires_api: marks tests that require API keys",
+    "requires_device: marks tests that require an Android device",
+    "unit: marks tests as unit tests",
+]
+timeout = 300
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["whatsapp_chat_autoexport"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

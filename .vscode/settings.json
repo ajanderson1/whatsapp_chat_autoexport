@@ -1,0 +1,35 @@
+{
+  // Python interpreter - use Poetry's virtual environment
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+
+  // Enable pytest testing
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.nosetestsEnabled": false,
+
+  // Pytest configuration
+  "python.testing.pytestArgs": ["tests"],
+
+  // Use Poetry to run pytest (optional, but ensures consistency)
+  "python.testing.pytestPath": "${workspaceFolder}/.venv/bin/pytest",
+
+  // Auto-detect test discovery
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+
+  // CWD for tests
+  "python.testing.cwd": "${workspaceFolder}",
+
+  // Python path - include the project root
+  "python.analysis.extraPaths": ["${workspaceFolder}"],
+
+  // Format on save (optional)
+  "editor.formatOnSave": true,
+
+  // Python formatting (optional)
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  }
+}

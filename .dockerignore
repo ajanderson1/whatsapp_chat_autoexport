@@ -1,0 +1,75 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Project-specific
+output/
+whatsapp_chat_autoexport/export_log.txt
+sample_data/
+tests/
+docs/
+
+# Temporary files
+*.log
+*.tmp
+.cache/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Documentation (not needed in container - but keep README.md for package metadata)
+QUICKSTART.md
+TODO.md
+CLAUDE.md
+README.Docker.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml

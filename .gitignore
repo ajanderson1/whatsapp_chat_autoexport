@@ -3,3 +3,19 @@ EXECUTIVE_SUMMARY.md
 *.xml
 .serena
 .claude
+upload_error_*.xml
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.pyc
+__pycache__/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+whatsapp_chat_autoexport.code-workspace
