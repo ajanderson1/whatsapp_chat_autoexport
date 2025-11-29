@@ -11,7 +11,7 @@ from typing import Optional
 from io import BytesIO
 
 from .base_transcriber import BaseTranscriber, TranscriptionResult
-from ..utils.audio_converter import AudioConverter
+from ..utils.audio_converter import AudioConverter, is_whatsapp_video_message
 
 # ElevenLabs import (will be optional)
 try:
@@ -252,6 +252,37 @@ class ElevenLabsTranscriber(BaseTranscriber):
 
                 actual_file_to_transcribe = temp_m4a_file
                 self.log_debug(f"✓ Converted to: {temp_m4a_file.name}")
+
+        # Check if file is a WhatsApp video message and needs audio extraction
+        # WhatsApp video messages (VID-YYYYMMDD-WA####.mp4) need their audio extracted
+        # because the ElevenLabs API rejects raw video files
+        elif is_whatsapp_video_message(audio_path.name):
+            if self.audio_converter:
+                if not self.audio_converter.is_ffmpeg_available():
+                    return TranscriptionResult(
+                        success=False,
+                        error="WhatsApp video message requires FFmpeg for audio extraction. Install FFmpeg."
+                    )
+
+                self.log_info(f"🎬 Extracting audio from WhatsApp video message...")
+                temp_m4a_file = self.audio_converter.extract_audio_from_video(
+                    audio_path,
+                    temp_dir=audio_path.parent
+                )
+
+                if not temp_m4a_file:
+                    return TranscriptionResult(
+                        success=False,
+                        error="Failed to extract audio from WhatsApp video message"
+                    )
+
+                actual_file_to_transcribe = temp_m4a_file
+                self.log_debug(f"✓ Extracted audio to: {temp_m4a_file.name}")
+            else:
+                return TranscriptionResult(
+                    success=False,
+                    error="WhatsApp video message requires audio extraction but AudioConverter not initialized"
+                )
 
         # Check file size
         file_size_mb = actual_file_to_transcribe.stat().st_size / (1024 * 1024)

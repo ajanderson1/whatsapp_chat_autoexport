@@ -3,14 +3,46 @@ Audio conversion utilities using FFmpeg.
 
 Handles conversion of audio formats not supported by transcription APIs
 (e.g., Opus) to supported formats (e.g., M4A/AAC).
+
+Also handles extraction of audio from WhatsApp video messages for transcription.
 """
 
 import subprocess
 import shutil
+import re
 from pathlib import Path
 from typing import Optional
 
 from .logger import Logger
+
+
+# WhatsApp video message filename pattern: VID-YYYYMMDD-WA####.mp4
+WHATSAPP_VIDEO_PATTERN = re.compile(r'^VID-\d{8}-WA\d+\.mp4$', re.IGNORECASE)
+
+
+def is_whatsapp_video_message(filename: str) -> bool:
+    """
+    Check if a filename matches the WhatsApp video message pattern.
+
+    WhatsApp video messages follow the pattern: VID-YYYYMMDD-WA####.mp4
+    - VID: Video file prefix
+    - YYYYMMDD: Date (year, month, day)
+    - WA: WhatsApp identifier
+    - ####: Sequential number (e.g., 0000, 0001)
+
+    Examples:
+        - VID-20251004-WA0011.mp4 -> True
+        - VID-20231115-WA0000.mp4 -> True
+        - video.mp4 -> False
+        - movie.avi -> False
+
+    Args:
+        filename: The filename to check (not the full path)
+
+    Returns:
+        True if the filename matches the WhatsApp video message pattern
+    """
+    return bool(WHATSAPP_VIDEO_PATTERN.match(filename))
 
 
 class AudioConverter:
@@ -174,6 +206,94 @@ class AudioConverter:
             output_path = opus_file.with_suffix('.m4a')
 
         return self.convert_to_m4a(opus_file, output_path, overwrite=True)
+
+    def extract_audio_from_video(
+        self,
+        video_file: Path,
+        temp_dir: Optional[Path] = None
+    ) -> Optional[Path]:
+        """
+        Extract audio track from a video file to M4A format.
+
+        This is used to extract audio from WhatsApp video messages
+        for transcription API compatibility.
+
+        Args:
+            video_file: Path to video file (typically MP4)
+            temp_dir: Directory for temporary M4A file (default: same as video_file)
+
+        Returns:
+            Path to temporary M4A file if successful, None otherwise
+        """
+        if not self.is_ffmpeg_available():
+            self.logger.error("Cannot extract audio: FFmpeg not available")
+            return None
+
+        if not video_file.exists():
+            self.logger.error(f"Video file not found: {video_file}")
+            return None
+
+        # Create temp M4A path
+        if temp_dir:
+            temp_dir = Path(temp_dir)
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            output_path = temp_dir / f"{video_file.stem}_audio.m4a"
+        else:
+            output_path = video_file.parent / f"{video_file.stem}_audio.m4a"
+
+        try:
+            self.logger.debug_msg(f"Extracting audio from {video_file.name}...")
+
+            # FFmpeg command to extract audio:
+            # -i: input file
+            # -vn: no video (audio only)
+            # -c:a aac: use AAC audio codec
+            # -b:a 128k: audio bitrate 128 kbps
+            # -y: overwrite output file if exists
+            # -loglevel error: only show errors
+            cmd = [
+                'ffmpeg',
+                '-i', str(video_file),
+                '-vn',  # No video
+                '-c:a', 'aac',  # AAC codec for M4A
+                '-b:a', '128k',  # 128 kbps bitrate
+                '-loglevel', 'error',  # Only show errors
+                '-y',  # Overwrite
+                str(output_path)
+            ]
+
+            # Run FFmpeg
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120  # 2 minute timeout for video processing
+            )
+
+            if result.returncode != 0:
+                self.logger.error(f"FFmpeg audio extraction failed: {result.stderr}")
+                return None
+
+            if not output_path.exists():
+                self.logger.error("Audio extraction appeared to succeed but output file not found")
+                return None
+
+            # Log success
+            video_size_mb = video_file.stat().st_size / (1024 * 1024)
+            audio_size_mb = output_path.stat().st_size / (1024 * 1024)
+            self.logger.debug_msg(
+                f"Extracted audio from {video_file.name} ({video_size_mb:.2f} MB) "
+                f"to {output_path.name} ({audio_size_mb:.2f} MB)"
+            )
+
+            return output_path
+
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"FFmpeg audio extraction timed out after 120s")
+            return None
+        except Exception as e:
+            self.logger.error(f"Error during audio extraction: {e}")
+            return None
 
     def get_audio_info(self, audio_file: Path) -> Optional[dict]:
         """

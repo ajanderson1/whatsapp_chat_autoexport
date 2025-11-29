@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from .base_transcriber import BaseTranscriber, TranscriptionResult
-from ..utils.audio_converter import AudioConverter
+from ..utils.audio_converter import AudioConverter, is_whatsapp_video_message
 
 # OpenAI import (will be optional)
 try:
@@ -216,7 +216,7 @@ class WhisperTranscriber(BaseTranscriber):
         # Check if file is Opus and needs conversion
         temp_m4a_file = None
         actual_file_to_transcribe = audio_path
-        
+
         if audio_path.suffix.lower() == '.opus':
             if self.convert_opus and self.audio_converter:
                 if not self.audio_converter.is_ffmpeg_available():
@@ -224,25 +224,56 @@ class WhisperTranscriber(BaseTranscriber):
                         success=False,
                         error="Opus file requires FFmpeg for conversion. Install FFmpeg or use --skip-opus-conversion."
                     )
-                
+
                 self.log_info(f"🔄 Converting Opus to M4A for Whisper API compatibility...")
                 temp_m4a_file = self.audio_converter.convert_opus_to_m4a(
                     audio_path,
                     temp_dir=audio_path.parent
                 )
-                
+
                 if not temp_m4a_file:
                     return TranscriptionResult(
                         success=False,
                         error="Failed to convert Opus file to M4A"
                     )
-                
+
                 actual_file_to_transcribe = temp_m4a_file
                 self.log_debug(f"✓ Converted to: {temp_m4a_file.name}")
             else:
                 return TranscriptionResult(
                     success=False,
                     error="Opus format not supported by Whisper API. Enable opus conversion or install FFmpeg."
+                )
+
+        # Check if file is a WhatsApp video message and needs audio extraction
+        # WhatsApp video messages (VID-YYYYMMDD-WA####.mp4) need their audio extracted
+        # for more reliable transcription
+        elif is_whatsapp_video_message(audio_path.name):
+            if self.audio_converter:
+                if not self.audio_converter.is_ffmpeg_available():
+                    return TranscriptionResult(
+                        success=False,
+                        error="WhatsApp video message requires FFmpeg for audio extraction. Install FFmpeg."
+                    )
+
+                self.log_info(f"🎬 Extracting audio from WhatsApp video message...")
+                temp_m4a_file = self.audio_converter.extract_audio_from_video(
+                    audio_path,
+                    temp_dir=audio_path.parent
+                )
+
+                if not temp_m4a_file:
+                    return TranscriptionResult(
+                        success=False,
+                        error="Failed to extract audio from WhatsApp video message"
+                    )
+
+                actual_file_to_transcribe = temp_m4a_file
+                self.log_debug(f"✓ Extracted audio to: {temp_m4a_file.name}")
+            else:
+                return TranscriptionResult(
+                    success=False,
+                    error="WhatsApp video message requires audio extraction but AudioConverter not initialized"
                 )
 
         # Check file size

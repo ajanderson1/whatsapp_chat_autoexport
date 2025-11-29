@@ -353,3 +353,146 @@ def test_mock_transcriber_failure(temp_working_dir):
     assert result.success is False
     assert result.error is not None
     assert "Mock transcription failed" in result.error
+
+
+# ============================================================================
+# Tests for WhatsApp Video Message Detection and Audio Extraction (Issue #4)
+# ============================================================================
+
+from whatsapp_chat_autoexport.utils.audio_converter import (
+    is_whatsapp_video_message,
+    AudioConverter,
+)
+
+
+@pytest.mark.unit
+def test_is_whatsapp_video_message_valid_patterns():
+    """Test that valid WhatsApp video message patterns are detected."""
+    # Valid patterns
+    valid_filenames = [
+        "VID-20251004-WA0011.mp4",
+        "VID-20231115-WA0000.mp4",
+        "VID-20200101-WA9999.mp4",
+        "VID-19990101-WA0001.mp4",
+        "vid-20251004-wa0011.mp4",  # lowercase
+        "VID-20251004-WA0011.MP4",  # uppercase extension
+    ]
+
+    for filename in valid_filenames:
+        assert is_whatsapp_video_message(filename), f"Should match: {filename}"
+
+
+@pytest.mark.unit
+def test_is_whatsapp_video_message_invalid_patterns():
+    """Test that invalid patterns are NOT detected as WhatsApp video messages."""
+    # Invalid patterns
+    invalid_filenames = [
+        "video.mp4",
+        "movie.avi",
+        "VID-20251004-WA0011.avi",  # Wrong extension
+        "VID-20251004-0011.mp4",    # Missing WA
+        "VID-2025104-WA0011.mp4",   # Wrong date format (too short)
+        "VID-202510041-WA0011.mp4", # Wrong date format (too long)
+        "IMG-20251004-WA0011.jpg",  # Image, not video
+        "PTT-20251004-WA0011.opus", # Voice message, not video
+        "20251004-WA0011.mp4",      # Missing VID prefix
+        "VID-20251004-WA.mp4",      # Missing number after WA
+        "VID-YYYYMMDD-WA0000.mp4",  # Non-numeric date
+        "",                          # Empty string
+        "VID.mp4",                   # Too short
+    ]
+
+    for filename in invalid_filenames:
+        assert not is_whatsapp_video_message(filename), f"Should NOT match: {filename}"
+
+
+@pytest.mark.unit
+def test_audio_converter_extract_audio_from_video_missing_file(temp_working_dir):
+    """Test that extract_audio_from_video handles missing files gracefully."""
+    logger = Logger()
+    converter = AudioConverter(logger=logger)
+
+    # Try to extract from non-existent file
+    missing_file = temp_working_dir / "missing.mp4"
+    result = converter.extract_audio_from_video(missing_file)
+
+    assert result is None, "Should return None for missing file"
+
+
+@pytest.mark.unit
+def test_audio_converter_extract_audio_creates_output_path(temp_working_dir):
+    """Test that extract_audio_from_video creates correct output path."""
+    logger = Logger()
+    converter = AudioConverter(logger=logger)
+
+    # Create a fake video file (extraction will fail but we can check path logic)
+    video_file = temp_working_dir / "VID-20251004-WA0011.mp4"
+    video_file.write_bytes(b"fake video content")
+
+    # Test with default temp_dir (same directory as video)
+    # Note: This will fail because the file isn't a real video,
+    # but we're testing the path generation logic
+    if converter.is_ffmpeg_available():
+        # If FFmpeg is available, it will try to extract and fail
+        # because the file isn't a real video
+        result = converter.extract_audio_from_video(video_file)
+        # Result may be None (failed extraction) but path would have been correct
+        # Just verify no exception was raised
+        assert result is None or result.name == "VID-20251004-WA0011_audio.m4a"
+    else:
+        # FFmpeg not available, should return None
+        result = converter.extract_audio_from_video(video_file)
+        assert result is None
+
+
+@pytest.mark.unit
+def test_audio_converter_extract_audio_with_custom_temp_dir(temp_working_dir):
+    """Test that extract_audio_from_video uses custom temp directory."""
+    logger = Logger()
+    converter = AudioConverter(logger=logger)
+
+    # Create directories
+    video_dir = temp_working_dir / "videos"
+    video_dir.mkdir()
+    output_dir = temp_working_dir / "output"
+    output_dir.mkdir()
+
+    # Create a fake video file
+    video_file = video_dir / "VID-20251004-WA0011.mp4"
+    video_file.write_bytes(b"fake video content")
+
+    if converter.is_ffmpeg_available():
+        # Test with custom temp_dir - will fail extraction but tests path logic
+        result = converter.extract_audio_from_video(video_file, temp_dir=output_dir)
+        # Result may be None but path generation should be correct
+        assert result is None or result.parent == output_dir
+
+
+@pytest.mark.unit
+def test_whatsapp_video_message_not_detected_for_other_videos():
+    """Test that non-WhatsApp video files are not detected."""
+    # Various video file patterns that should NOT be processed
+    other_videos = [
+        "vacation_video.mp4",
+        "screen_recording.mp4",
+        "tutorial.mp4",
+        "clip_2024_01_15.mp4",
+        "video-2024-01-15.mp4",  # Different format
+    ]
+
+    for filename in other_videos:
+        assert not is_whatsapp_video_message(filename), \
+            f"Non-WhatsApp video should NOT be detected: {filename}"
+
+
+@pytest.mark.unit
+def test_audio_converter_initialization_with_logger():
+    """Test AudioConverter initialization with and without logger."""
+    # With logger
+    logger = Logger()
+    converter_with_logger = AudioConverter(logger=logger)
+    assert converter_with_logger.logger is not None
+
+    # Without logger (should use default)
+    converter_without_logger = AudioConverter()
+    assert converter_without_logger.logger is not None
