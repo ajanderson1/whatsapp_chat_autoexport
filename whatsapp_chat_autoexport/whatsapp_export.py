@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Set
 from time import sleep
 
+# Import checkpoint manager for resuming exports
+from whatsapp_chat_autoexport.export.checkpoint_manager import CheckpointManager
+
 def create_parser():
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
@@ -1240,7 +1243,7 @@ class WhatsAppDriver:
             sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
         """
         if limit:
-            self.logger.info(f"Collecting chats (limited to {limit} for testing)...")
+            self.logger.info(f"Collecting chats (limited to {limit})...")
         else:
             self.logger.info("Collecting all chats by scrolling...")
         
@@ -1348,7 +1351,7 @@ class WhatsAppDriver:
             chat_list = sorted(chat_list)
         if limit:
             chat_list = chat_list[:limit]  # Ensure we don't exceed limit
-            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit} for testing)")
+            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit})")
         else:
             self.logger.success(f"Finished scrolling! Found {len(chat_list)} total chats")
         return chat_list
@@ -2486,13 +2489,14 @@ class ChatExporter:
             secs = seconds % 60
             return f"{hours}h {minutes}m {secs:.1f}s"
     
-    def export_chats(self, chat_names: List[str], include_media: bool = True, resume_folder: Optional[Path] = None) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
+    def export_chats(self, chat_names: List[str], include_media: bool = True, resume_folder: Optional[Path] = None, checkpoint_manager=None) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
         """Export multiple chats.
         
         Args:
             chat_names: List of chat names to export
             include_media: If True, export with media; if False, export without media
             resume_folder: Optional path to Google Drive folder to check for existing exports
+            checkpoint_manager: Optional CheckpointManager for saving progress
         
         Returns:
             Tuple of (results dict, timing dict, total_time, skipped_already_exists dict)
@@ -2512,11 +2516,24 @@ class ChatExporter:
 
             # CRITICAL: Verify WhatsApp is still accessible before each export
             # This prevents accidentally interacting with system UI
+            # If verification fails, try reconnecting once before giving up
             if not self.driver.verify_whatsapp_is_open():
-                self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
-                results[chat_name] = False
-                timings[chat_name] = 0
-                break  # Stop the batch if WhatsApp becomes inaccessible
+                self.logger.warning("WhatsApp verification failed - attempting to reconnect...")
+                
+                # Attempt one reconnection
+                if self.driver.reconnect():
+                    self.logger.success("Reconnection successful! Continuing with exports...")
+                    # Verify again after reconnection
+                    if not self.driver.verify_whatsapp_is_open():
+                        self.logger.error(f"WhatsApp is not accessible after reconnection - cannot export '{chat_name}'. Stopping batch.")
+                        results[chat_name] = False
+                        timings[chat_name] = 0
+                        break
+                else:
+                    self.logger.error(f"Reconnection failed - cannot export '{chat_name}'. Stopping batch.")
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    break
 
             chat_start_time = time.time()
 
@@ -2554,8 +2571,27 @@ class ChatExporter:
                 success = self.export_chat_to_google_drive(chat_name, include_media=include_media)
                 results[chat_name] = success
                 
+                # Save checkpoint after successful export
+                if success and checkpoint_manager:
+                    checkpoint_manager.save_checkpoint(
+                        chat_index=i - 1,  # 0-based index
+                        chat_name=chat_name,
+                        total_chats=total,
+                        success=True
+                    )
+                    self.logger.debug_msg(f"💾 Checkpoint saved at {i}/{total}")
+                
                 # Navigate back to main screen
                 self.driver.navigate_back_to_main()
+                
+                # PROACTIVE: Check session health after export completes
+                # This catches session loss immediately rather than waiting for next chat
+                if not self.driver.is_session_active():
+                    self.logger.warning("Session became inactive after export - attempting recovery...")
+                    if not self.driver.reconnect():
+                        self.logger.error("Failed to reconnect after export - stopping batch")
+                        break
+                    self.logger.success("Session recovered successfully")
                 
             except Exception as e:
                 error_msg = str(e)
@@ -2665,7 +2701,7 @@ def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value:
     return result[0] if result[0] is not None else default_value, timeout_occurred[0]
 
 
-def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True, resume_folder: Optional[Path] = None, auto_all: bool = False):
+def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True, resume_folder: Optional[Path] = None, auto_all: bool = False, checkpoint_manager: Optional[CheckpointManager] = None):
     """Interactive mode: prompt user to select chats to export.
     
     Args:
@@ -2677,6 +2713,7 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
         resume_folder: Optional path to Google Drive folder to check for existing exports
         auto_all: If True, default to 'all' after 30 seconds if no input is provided
+        checkpoint_manager: Optional CheckpointManager for saving/loading progress
     """
     logger.info("=" * 70)
     if test_limit:
@@ -2793,7 +2830,17 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         logger.info(f"🔄 Resume mode enabled: Checking for existing exports in {resume_folder}")
     
     # Export selected chats
-    results, timings, total_time, skipped_already_exists = exporter.export_chats(chats_to_export, include_media=include_media, resume_folder=resume_folder)
+    results, timings, total_time, skipped_already_exists = exporter.export_chats(
+        chats_to_export, 
+        include_media=include_media, 
+        resume_folder=resume_folder,
+        checkpoint_manager=checkpoint_manager
+    )
+    
+    # Clear checkpoint on successful completion
+    if checkpoint_manager and sum(1 for v in results.values() if v) > 0:
+        checkpoint_manager.clear_checkpoint()
+        logger.info("✓ Checkpoint cleared (export completed successfully)")
     
     # Summary
     logger.info("\n" + "=" * 70)
@@ -2870,6 +2917,7 @@ def main():
     
     appium_manager = None
     driver_manager = None
+    checkpoint_manager = None
     
     def cleanup():
         """Cleanup handler."""
@@ -2891,6 +2939,27 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     
     try:
+        # Initialize checkpoint manager
+        checkpoint_manager = CheckpointManager()
+        
+        # Check for existing checkpoint
+        checkpoint = checkpoint_manager.load_checkpoint()
+        if checkpoint:
+            logger.info("\n" + "=" * 70)
+            logger.info("💾 CHECKPOINT FOUND")
+            logger.info("=" * 70)
+            logger.info(checkpoint_manager.format_checkpoint_info())
+            logger.info("")
+            
+            # Prompt user to resume
+            resume_from_checkpoint = prompt_yes_no("Resume from checkpoint?", logger, default_yes=True)
+            if not resume_from_checkpoint:
+                logger.info("Clearing checkpoint and starting fresh...")
+                checkpoint_manager.clear_checkpoint()
+                checkpoint_manager = None  # Disable checkpoint for this run
+            else:
+                logger.info("✓ Will resume from checkpoint")
+        
         # Initialize driver (doesn't need Appium yet)
         driver_manager = WhatsAppDriver(logger, wireless_adb=args.wireless_adb)
 
@@ -2950,7 +3019,17 @@ def main():
         
         # Run interactive mode
         sort_alphabetical = args.sort_order == 'alphabetical'
-        interactive_mode(driver_manager, exporter, logger, test_limit=args.limit, include_media=args.include_media, sort_alphabetical=sort_alphabetical, resume_folder=resume_folder, auto_all=args.all)
+        interactive_mode(
+            driver_manager, 
+            exporter, 
+            logger, 
+            test_limit=args.limit, 
+            include_media=args.include_media, 
+            sort_alphabetical=sort_alphabetical, 
+            resume_folder=resume_folder, 
+            auto_all=args.all,
+            checkpoint_manager=checkpoint_manager
+        )
         
     except KeyboardInterrupt:
         signal_handler(None, None)
