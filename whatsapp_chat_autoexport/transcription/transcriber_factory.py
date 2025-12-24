@@ -30,6 +30,7 @@ class TranscriberFactory:
         api_key: Optional[str] = None,
         logger=None,
         convert_opus: bool = True,
+        video_test_mode: bool = False,
         **provider_kwargs
     ) -> BaseTranscriber:
         """
@@ -40,6 +41,7 @@ class TranscriberFactory:
             api_key: Optional API key (if None, uses environment variable)
             logger: Optional logger instance
             convert_opus: Whether to convert Opus files to M4A (default: True)
+            video_test_mode: Debug mode for video transcription (keeps temp files)
             **provider_kwargs: Additional provider-specific arguments
 
         Returns:
@@ -84,6 +86,7 @@ class TranscriberFactory:
                 api_key=api_key,
                 logger=logger,
                 convert_opus=convert_opus,
+                video_test_mode=video_test_mode,
                 **provider_kwargs
             )
 

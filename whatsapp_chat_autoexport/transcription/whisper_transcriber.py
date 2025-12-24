@@ -265,7 +265,7 @@ class WhisperTranscriber(BaseTranscriber):
                 if not temp_m4a_file:
                     return TranscriptionResult(
                         success=False,
-                        error="Failed to extract audio from WhatsApp video message"
+                        error="Failed to extract audio from WhatsApp video message. The video may not contain an audio track."
                     )
 
                 actual_file_to_transcribe = temp_m4a_file

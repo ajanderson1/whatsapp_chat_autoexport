@@ -305,10 +305,27 @@ class ElevenLabsTranscriber(BaseTranscriber):
             with open(actual_file_to_transcribe, 'rb') as audio_file:
                 audio_data = audio_file.read()
 
+            # Determine content type based on file extension
+            # This helps ElevenLabs correctly identify the file format
+            extension_to_mime = {
+                '.m4a': 'audio/mp4',
+                '.mp4': 'video/mp4',
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.opus': 'audio/opus',
+                '.ogg': 'audio/ogg',
+                '.flac': 'audio/flac',
+                '.webm': 'audio/webm',
+                '.aac': 'audio/aac',
+            }
+            file_ext = actual_file_to_transcribe.suffix.lower()
+            content_type = extension_to_mime.get(file_ext, 'application/octet-stream')
+
             # Build request parameters
+            # Pass file as tuple (filename, bytes, content_type) for better format detection
             request_params = {
                 'model_id': self.model,
-                'file': audio_data,
+                'file': (actual_file_to_transcribe.name, audio_data, content_type),
             }
 
             # Add optional parameters

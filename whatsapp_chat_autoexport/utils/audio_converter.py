@@ -233,6 +233,11 @@ class AudioConverter:
             self.logger.error(f"Video file not found: {video_file}")
             return None
 
+        # Check if video has an audio stream before attempting extraction
+        if not self._has_audio_stream(video_file):
+            self.logger.error(f"Video file has no audio track: {video_file.name}")
+            return None
+
         # Create temp M4A path
         if temp_dir:
             temp_dir = Path(temp_dir)
