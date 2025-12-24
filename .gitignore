@@ -19,3 +19,5 @@ dist/
 build/
 
 whatsapp_chat_autoexport.code-workspace
+
+.DS_Store
