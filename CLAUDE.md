@@ -105,43 +105,105 @@ docker-compose build
 ```
 
 #### USB ADB Connection (Recommended)
+
+**Interactive mode** (add `-it` for prompts and confirmations):
 ```bash
-# Basic export with USB connection
-docker run --rm --privileged \
+# Basic export with USB connection (interactive)
+docker run -it --rm --privileged \
   -v /dev/bus/usb:/dev/bus/usb \
   -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
   whatsapp-export --output /output
 
 # With transcriptions but no media in output (RECOMMENDED)
-docker run --rm --privileged \
+docker run -it --rm --privileged \
   -v /dev/bus/usb:/dev/bus/usb \
   -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
   whatsapp-export --output /output --no-output-media
 
 # Limit to 5 chats for testing
+docker run -it --rm --privileged \
+  -v /dev/bus/usb:/dev/bus/usb \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --limit 5
+```
+
+**Non-interactive mode** (for automation - no prompts):
+```bash
+# Automated export with auto-selection
 docker run --rm --privileged \
   -v /dev/bus/usb:/dev/bus/usb \
   -v ./output:/output \
-  whatsapp-export --output /output --limit 5
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --auto-select
+```
 
-# Using docker-compose (USB)
+**Using docker-compose:**
+```bash
+# Edit docker-compose.yml first to add -it flags if you want interactive mode
 docker-compose --profile usb run --rm whatsapp-export-usb --output /output --limit 5
 ```
 
 #### Wireless ADB Connection
+
+You can use wireless ADB in Docker in **two modes**:
+
+**Option 1: Interactive Mode (RECOMMENDED)** - Get prompts for pairing details
+
+Add `-it` flags for full interactive experience (just like running outside Docker):
+
 ```bash
-# Container establishes connection automatically - no need to connect from host
+# Interactive wireless ADB - script will prompt for pairing details
+docker run -it --rm --network=host \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --wireless-adb
+
+# Interactive with some details pre-filled
+docker run -it --rm --network=host \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --wireless-adb 192.168.1.100:37453
+
+# Interactive with limit for testing
+docker run -it --rm --network=host \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --wireless-adb --limit 5
+```
+
+**Option 2: Non-Interactive Mode** - Provide all arguments upfront
+
+Useful for automation/scripts where you can't answer prompts:
+
+```bash
+# All pairing details provided (no prompts)
 docker run --rm --network=host \
   -v ./output:/output \
-  whatsapp-export --output /output --wireless-adb 192.168.1.100:5555
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --wireless-adb 192.168.1.100:37453 123456
 
-# Using docker-compose (wireless)
-# Edit docker-compose.yml to set your DEVICE_IP first
-docker-compose --profile wireless run --rm whatsapp-export-wireless
-
-# Note: The container's ADB server connects directly to the device
-# No need to run 'adb connect' on the host beforehand
+# With limit for testing
+docker run --rm --network=host \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --wireless-adb 192.168.1.100:37453 123456 --limit 5
 ```
+
+**Setup steps for wireless debugging:**
+1. On Android: Settings → Developer Options → Wireless Debugging
+2. Tap "Pair device with pairing code"
+3. Note the **Pairing IP:PORT** (e.g., `192.168.1.100:37453`) and **6-digit code** (e.g., `123456`)
+
+**⚠️ Common issues:**
+- Pairing codes expire after a few minutes - get a fresh code if pairing fails
+- Use the **pairing port** (shown in "Pair device" dialog), NOT port 5555
+- Device must remain on the wireless debugging screen during pairing
+- After pairing succeeds, connection uses standard port 5555 automatically
+
+**Note:** The container's ADB server connects directly to the device - no need to run 'adb connect' on the host beforehand.
 
 #### Docker Environment Variables
 

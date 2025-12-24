@@ -111,7 +111,7 @@ poetry run whatsapp-export \
   --transcription-provider elevenlabs \
   --delete-from-drive \
   --no-output-media \
-  --wireless-adb 192.168.1.100:5555 \
+  --wireless-adb 192.168.1.100:37453 123456 \
   --range 300-500
 
 # Full archive with media files included
@@ -165,7 +165,7 @@ poetry run whatsapp-export \
   --transcription-provider elevenlabs \
   --delete-from-drive \
   --no-output-media \
-  --wireless-adb 192.168.1.100:5555
+  --wireless-adb 192.168.1.100:37453 123456
 ```
 **Result**: Chat transcripts and voice message transcriptions WITHOUT keeping large media files.
 **Why this works**: Media files are temporarily downloaded and used for transcription, but are not copied to the final output folder.
@@ -333,13 +333,43 @@ This tool supports connecting to your Android device via wireless ADB, allowing 
      ```
 
 2. **Using wireless ADB with the script:**
+
+   **Interactive mode** (script will prompt for missing details):
    ```bash
-   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:5555
+   # Provide just the flag - script will prompt for pairing details
+   poetry run python whatsapp_export.py --wireless-adb
+
+   # Or provide pairing address - script will prompt for code
+   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:37453
+
+   # Or provide both pairing address and code (no prompts)
+   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:37453 123456
    ```
+
+   **Docker interactive mode** (add `-it` for prompts - RECOMMENDED):
+   ```bash
+   # Interactive - script will prompt for pairing details
+   docker run -it --rm --network=host \
+     -v ./output:/output \
+     -e OPENAI_API_KEY='your-key' \
+     whatsapp-export --output /output --wireless-adb
+   ```
+
+   **Docker non-interactive mode** (all arguments required):
+   ```bash
+   # MUST provide both pairing IP:PORT and 6-digit code
+   docker run --rm --network=host \
+     -v ./output:/output \
+     -e OPENAI_API_KEY='your-key' \
+     whatsapp-export --output /output --wireless-adb 192.168.1.100:37453 123456
+   ```
+
+   **Note:** Use the **pairing port** (e.g., 37453), NOT the standard port 5555. The script will automatically use port 5555 for the actual connection after pairing succeeds.
 
 3. **Important notes:**
    - Your device and computer must be on the same Wi-Fi network
-   - You can disconnect USB after the initial pairing
+   - Pairing codes expire after a few minutes - get a fresh code if it fails
+   - Device must remain on wireless debugging screen during pairing
    - The IP address may change if your device reconnects to Wi-Fi
    - For best results, keep your device on the same network throughout the export process
 
