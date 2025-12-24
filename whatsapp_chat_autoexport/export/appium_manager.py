@@ -18,7 +18,11 @@ class AppiumManager:
     def __init__(self, logger: Logger):
         self.logger = logger
         self.appium_proc: Optional[subprocess.Popen] = None
-        self.android_home = os.path.expanduser("~/Library/Android/sdk")
+        # Use ANDROID_HOME from environment (Docker sets this), fall back to macOS default
+        self.android_home = os.environ.get(
+            "ANDROID_HOME",
+            os.path.expanduser("~/Library/Android/sdk")
+        )
 
     def start_appium(self) -> bool:
         """Start Appium server."""

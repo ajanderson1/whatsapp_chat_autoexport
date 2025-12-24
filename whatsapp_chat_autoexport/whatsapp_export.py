@@ -1243,7 +1243,7 @@ class WhatsAppDriver:
             sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
         """
         if limit:
-            self.logger.info(f"Collecting chats (limited to {limit} for testing)...")
+            self.logger.info(f"Collecting chats (limited to {limit})...")
         else:
             self.logger.info("Collecting all chats by scrolling...")
         
@@ -1351,7 +1351,7 @@ class WhatsAppDriver:
             chat_list = sorted(chat_list)
         if limit:
             chat_list = chat_list[:limit]  # Ensure we don't exceed limit
-            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit} for testing)")
+            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit})")
         else:
             self.logger.success(f"Finished scrolling! Found {len(chat_list)} total chats")
         return chat_list

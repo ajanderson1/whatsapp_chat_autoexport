@@ -138,6 +138,14 @@ Examples:
         help='Enable debug mode (verbose output)'
     )
 
+    # Debug/testing options
+    debug_group = parser.add_argument_group('Debug/Testing Options')
+    debug_group.add_argument(
+        '--video-test',
+        action='store_true',
+        help='Video transcription test mode: only process video files, keep extracted audio files for inspection, auto-enable debug'
+    )
+
     return parser
 
 

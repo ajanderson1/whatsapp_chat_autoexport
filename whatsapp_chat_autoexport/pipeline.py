@@ -59,6 +59,9 @@ class PipelineConfig:
     cleanup_temp: bool = True
     dry_run: bool = False
 
+    # Debug/testing settings
+    video_test_mode: bool = False  # Only process videos, keep extracted audio files
+
 
 class WhatsAppPipeline:
     """
