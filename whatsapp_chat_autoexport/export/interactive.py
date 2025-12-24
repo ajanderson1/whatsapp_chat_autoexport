@@ -15,6 +15,36 @@ from .chat_exporter import ChatExporter
 from ..utils.logger import Logger
 
 
+def parse_range_max_index(range_str: str) -> Optional[int]:
+    """Parse a range string and return the maximum index needed.
+
+    Args:
+        range_str: Range string like "3", "1,5,10", "100-200", or "1,5,10-20,30"
+
+    Returns:
+        Maximum index needed to satisfy the range, or None if invalid/empty
+    """
+    if not range_str or range_str.lower() == 'all':
+        return None
+
+    try:
+        max_index = 0
+        parts = [x.strip() for x in range_str.split(',')]
+        for part in parts:
+            if '-' in part:
+                # Handle range (e.g., "100-200")
+                range_parts = part.split('-')
+                if len(range_parts) == 2:
+                    end = int(range_parts[1].strip())
+                    max_index = max(max_index, end)
+            else:
+                # Single number
+                max_index = max(max_index, int(part))
+        return max_index if max_index > 0 else None
+    except (ValueError, IndexError):
+        return None
+
+
 def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value: str = "") -> Tuple[str, bool]:
     """Get user input with optional timeout and countdown display.
     
@@ -46,30 +76,33 @@ def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value:
     # Start input thread
     input_thread = threading.Thread(target=get_input, daemon=True)
     input_thread.start()
-    
-    # Simple countdown - print updates every 5 seconds
+
+    # Dynamic countdown - update every second with in-place replacement
     remaining = timeout
-    last_update = 0
-    
+    default_msg = f"'{default_value}'" if default_value else "no default"
+
     while remaining > 0 and not input_received.is_set():
-        # Print countdown every 5 seconds (or at final 10, 5, 3, 2, 1 seconds)
-        if remaining % 5 == 0 or remaining <= 5:
-            if remaining != last_update:
-                default_msg = f"'{default_value}'" if default_value else "no default"
-                print(f"⏱️  {remaining}s remaining (will default to {default_msg} if no input)...", flush=True)
-                last_update = remaining
-        
+        # Use \r to return to start of line, then overwrite
+        countdown_msg = f"⏱️  {remaining:2d}s remaining (will default to {default_msg} if no input)..."
+        sys.stdout.write(f"\r{countdown_msg}")
+        sys.stdout.flush()
+
         sleep(1)
         remaining -= 1
-    
+
+    # Clear the countdown line when done
+    if not input_received.is_set():
+        sys.stdout.write("\r" + " " * 70 + "\r")  # Clear the line
+        sys.stdout.flush()
+
     # Wait a bit more for input thread to complete
     input_received.wait(timeout=1)
-    
+
     if result[0] is None:
         # Timeout reached
         result[0] = default_value
         timeout_occurred[0] = True
-        print()  # New line after countdown
+        print()  # New line after timeout
     
     return result[0] if result[0] is not None else default_value, timeout_occurred[0]
 
@@ -90,7 +123,11 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         default_range: Optional range to use as default on timeout (e.g., "300-500" or "1,5,10-20")
     """
     logger.info("=" * 70)
-    if test_limit:
+    # Calculate range limit early for display purposes (--range takes precedence)
+    range_max_index_display = parse_range_max_index(default_range) if default_range else None
+    if range_max_index_display:
+        logger.info(f"📋 INTERACTIVE MODE (Collecting up to {range_max_index_display} chats for --range)")
+    elif test_limit:
         logger.info(f"📋 INTERACTIVE MODE (Limited to {test_limit} chats)")
     else:
         logger.info("📋 INTERACTIVE MODE")
@@ -102,10 +139,25 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         logger.error("Cannot proceed - WhatsApp is not accessible. Exiting.")
         return
 
-    # Collect all chats (with limit if specified)
-    if test_limit:
-        logger.info(f"Loading chats (limited to {test_limit})...")
-        all_chats = driver.collect_all_chats(limit=test_limit, sort_alphabetical=sort_alphabetical)
+    # Calculate effective limit based on --range (takes precedence over --limit)
+    range_max_index = parse_range_max_index(default_range) if default_range else None
+
+    # Determine effective limit:
+    # - If --range is set, it takes full precedence (--limit is ignored)
+    # - If only --limit is set, use that
+    # - If neither is set, collect all chats
+    effective_limit = None
+    if range_max_index:
+        effective_limit = range_max_index
+        if test_limit:
+            logger.warning(f"--limit {test_limit} is being ignored because --range was specified")
+    elif test_limit:
+        effective_limit = test_limit
+
+    # Collect chats with the calculated limit
+    if effective_limit:
+        logger.info(f"Loading chats (limited to {effective_limit})...")
+        all_chats = driver.collect_all_chats(limit=effective_limit, sort_alphabetical=sort_alphabetical)
     else:
         logger.info("Loading all chats...")
         all_chats = driver.collect_all_chats(sort_alphabetical=sort_alphabetical)
