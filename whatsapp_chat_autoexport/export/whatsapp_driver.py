@@ -302,28 +302,108 @@ class WhatsAppDriver:
         self.wireless_adb = wireless_adb
         self.device_id: Optional[str] = None  # Store selected device ID for device-specific commands
         self.is_wireless = wireless_adb is not None  # Track if using wireless ADB
+        # Store original device settings for restoration on cleanup
+        self._original_stay_awake_setting: Optional[str] = None
+        self._original_screen_timeout: Optional[str] = None
 
     def keep_device_awake(self) -> None:
         """
-        Prevent device from sleeping during export by using ADB to keep screen on.
-        This helps prevent session loss during long-running exports.
+        Prevent device from sleeping during export by using ADB to:
+        1. Enable stay_on_while_plugged_in (works when plugged in)
+        2. Extend screen_off_timeout (works when unplugged)
+
+        Saves original settings for restoration on cleanup.
         """
         try:
             adb_cmd = ["adb"]
             if self.device_id:
                 adb_cmd.extend(["-s", self.device_id])
-            
-            # Enable "stay_on_while_plugged_in" setting (keeps screen on while USB connected)
-            adb_cmd_stay_on = adb_cmd + ["shell", "settings", "put", "global", "stay_on_while_plugged_in", "7"]
-            result = subprocess.run(adb_cmd_stay_on, capture_output=True, text=True)
-            
+
+            # === Setting 1: stay_on_while_plugged_in (for plugged-in scenarios) ===
+            # Save original value
+            get_cmd = adb_cmd + ["shell", "settings", "get", "global", "stay_on_while_plugged_in"]
+            result = subprocess.run(get_cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                self.logger.success("✓ Device configured to stay awake while connected")
-            else:
-                self.logger.warning("Could not configure device to stay awake (may require manual settings)")
-                
+                original_value = result.stdout.strip()
+                if original_value and original_value.lower() != "null":
+                    self._original_stay_awake_setting = original_value
+                else:
+                    self._original_stay_awake_setting = "0"
+                self.logger.debug_msg(f"Saved original stay_on_while_plugged_in: {self._original_stay_awake_setting}")
+
+            # Set to stay awake on all power sources (1=AC + 2=USB + 4=Wireless = 7)
+            set_cmd = adb_cmd + ["shell", "settings", "put", "global", "stay_on_while_plugged_in", "7"]
+            result = subprocess.run(set_cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                self.logger.debug_msg("stay_on_while_plugged_in set to 7")
+
+            # === Setting 2: screen_off_timeout (for unplugged scenarios) ===
+            # Save original value
+            get_cmd = adb_cmd + ["shell", "settings", "get", "system", "screen_off_timeout"]
+            result = subprocess.run(get_cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                original_timeout = result.stdout.strip()
+                if original_timeout and original_timeout.lower() != "null":
+                    self._original_screen_timeout = original_timeout
+                else:
+                    self._original_screen_timeout = "60000"  # Default 1 minute
+                self.logger.debug_msg(f"Saved original screen_off_timeout: {self._original_screen_timeout}ms")
+
+            # Set to 30 minutes (1800000ms) - long enough for most exports
+            # Max varies by device, but 30 mins is commonly supported
+            set_cmd = adb_cmd + ["shell", "settings", "put", "system", "screen_off_timeout", "1800000"]
+            result = subprocess.run(set_cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                self.logger.debug_msg("screen_off_timeout set to 30 minutes")
+
+            self.logger.success("✓ Device configured to stay awake during export")
+
         except Exception as e:
-            self.logger.debug_msg(f"Could not keep device awake: {e}")
+            self.logger.debug_msg(f"Could not configure device awake settings: {e}")
+
+    def restore_device_settings(self) -> None:
+        """
+        Restore device settings that were modified during the export session.
+        Restores: stay_on_while_plugged_in, screen_off_timeout
+
+        Called automatically by quit() during cleanup.
+        """
+        if self._original_stay_awake_setting is None and self._original_screen_timeout is None:
+            self.logger.debug_msg("No device settings to restore")
+            return
+
+        try:
+            adb_cmd = ["adb"]
+            if self.device_id:
+                adb_cmd.extend(["-s", self.device_id])
+
+            restored_count = 0
+
+            # Restore stay_on_while_plugged_in
+            if self._original_stay_awake_setting is not None:
+                restore_cmd = adb_cmd + ["shell", "settings", "put", "global", "stay_on_while_plugged_in", self._original_stay_awake_setting]
+                result = subprocess.run(restore_cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    self.logger.debug_msg(f"Restored stay_on_while_plugged_in to: {self._original_stay_awake_setting}")
+                    restored_count += 1
+
+            # Restore screen_off_timeout
+            if self._original_screen_timeout is not None:
+                restore_cmd = adb_cmd + ["shell", "settings", "put", "system", "screen_off_timeout", self._original_screen_timeout]
+                result = subprocess.run(restore_cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    try:
+                        timeout_sec = int(self._original_screen_timeout) // 1000
+                        self.logger.debug_msg(f"Restored screen_off_timeout to: {timeout_sec}s")
+                    except ValueError:
+                        self.logger.debug_msg(f"Restored screen_off_timeout to: {self._original_screen_timeout}ms")
+                    restored_count += 1
+
+            if restored_count > 0:
+                self.logger.info(f"✓ Restored {restored_count} device setting(s) to original values")
+
+        except Exception as e:
+            self.logger.debug_msg(f"Could not restore device settings: {e}")
 
     def is_session_active(self) -> bool:
         """
@@ -555,7 +635,12 @@ class WhatsAppDriver:
         Returns:
             True if device is connected and ready, False otherwise
         """
+        import sys
+        
         self.logger.info("Checking device connection...")
+        
+        # Check if running in interactive mode (TTY available)
+        is_interactive = sys.stdin.isatty()
 
         # Step 1: Check for existing devices
         existing_devices = check_existing_devices(self.logger)
@@ -570,42 +655,54 @@ class WhatsAppDriver:
                 # Check if user wants to use this device or connect wireless
                 if self.wireless_adb:
                     # Wireless flag provided but device already exists
-                    if prompt_yes_no(f"Device {device} already connected. Still connect wireless device?", default=False):
+                    if is_interactive and prompt_yes_no(f"Device {device} already connected. Still connect wireless device?", default=False):
                         self.logger.info("Will proceed with wireless ADB setup...")
                         # Continue to wireless setup below
                     else:
-                        # Use existing device
+                        # Use existing device (or non-interactive mode - use existing)
                         self.device_id = device
                         self.logger.success(f"Using device: {device}")
                         return True
                 else:
                     # No wireless flag, ask if user wants to use existing device
-                    if prompt_yes_no(f"Use device {device}?", default=True):
+                    if is_interactive:
+                        if prompt_yes_no(f"Use device {device}?", default=True):
+                            self.device_id = device
+                            self.logger.success(f"Using device: {device}")
+                            return True
+                        else:
+                            self.logger.error("No device selected")
+                            return False
+                    else:
+                        # Non-interactive mode - automatically use existing device
                         self.device_id = device
                         self.logger.success(f"Using device: {device}")
                         return True
-                    else:
-                        self.logger.error("No device selected")
-                        return False
 
             else:
                 # Multiple devices found
                 self.logger.info(f"Found {len(existing_devices)} devices")
 
-                # Let user select device or connect new wireless device
-                selected_device = prompt_device_selection(existing_devices, self.logger)
+                if is_interactive:
+                    # Let user select device or connect new wireless device
+                    selected_device = prompt_device_selection(existing_devices, self.logger)
 
-                if selected_device is not None:
-                    # User selected existing device
-                    self.device_id = selected_device
-                    self.logger.success(f"Using device: {selected_device}")
-                    return True
+                    if selected_device is not None:
+                        # User selected existing device
+                        self.device_id = selected_device
+                        self.logger.success(f"Using device: {selected_device}")
+                        return True
+                    else:
+                        # User wants to connect new wireless device
+                        if self.wireless_adb is None:
+                            # No wireless flag provided, ensure empty list so Step 3 will prompt
+                            self.wireless_adb = []
+                        # Continue to wireless setup below (Step 3 will handle prompting)
                 else:
-                    # User wants to connect new wireless device
-                    if self.wireless_adb is None:
-                        # No wireless flag provided, ensure empty list so Step 3 will prompt
-                        self.wireless_adb = []
-                    # Continue to wireless setup below (Step 3 will handle prompting)
+                    # Non-interactive mode with multiple devices - use first device
+                    self.device_id = existing_devices[0]
+                    self.logger.warning(f"Multiple devices found. Using first device: {existing_devices[0]}")
+                    return True
 
         else:
             # No existing devices
@@ -618,7 +715,20 @@ class WhatsAppDriver:
         if self.wireless_adb is not None:
             # Parse wireless_adb arguments to get pairing details (NOT connect port yet)
             if len(self.wireless_adb) == 0:
-                # No arguments provided, prompt for pairing details only
+                # No arguments provided
+                if not is_interactive:
+                    # Non-interactive mode (Docker) - cannot prompt for input
+                    self.logger.error("Wireless ADB mode requires arguments in non-interactive mode (Docker)")
+                    self.logger.error("Usage: --wireless-adb PAIRING_IP:PORT PAIRING_CODE")
+                    self.logger.error("Example: --wireless-adb 192.168.1.100:37453 123456")
+                    self.logger.error("")
+                    self.logger.error("To get pairing code:")
+                    self.logger.error("1. On Android: Settings → Developer Options → Wireless Debugging")
+                    self.logger.error("2. Tap 'Pair device with pairing code'")
+                    self.logger.error("3. Use the IP:PORT and 6-digit code shown")
+                    return False
+                
+                # Interactive mode - prompt for pairing details
                 self.logger.info("Wireless ADB mode - please provide pairing details...")
                 pairing_address = input("Enter pairing address (IP:PORT): ").strip()
                 pairing_code = prompt_for_pairing_code()
@@ -627,6 +737,15 @@ class WhatsAppDriver:
                 # Only pairing address provided
                 pairing_address = self.wireless_adb[0]
                 self.logger.info(f"Using pairing address: {pairing_address}")
+                
+                if not is_interactive:
+                    # Non-interactive mode - need pairing code too
+                    self.logger.error("Wireless ADB mode requires both IP:PORT and pairing code in non-interactive mode")
+                    self.logger.error("Usage: --wireless-adb PAIRING_IP:PORT PAIRING_CODE")
+                    self.logger.error("Example: --wireless-adb 192.168.1.100:37453 123456")
+                    return False
+                
+                # Interactive mode - prompt for code
                 pairing_code = prompt_for_pairing_code()
 
             elif len(self.wireless_adb) == 2:
@@ -638,6 +757,8 @@ class WhatsAppDriver:
                 # Validate pairing code
                 if not validate_pairing_code(pairing_code):
                     self.logger.error(f"Invalid pairing code: {pairing_code} (must be 6 digits)")
+                    if not is_interactive:
+                        return False
                     pairing_code = prompt_for_pairing_code()
 
             else:
@@ -650,7 +771,18 @@ class WhatsAppDriver:
                 pairing_success = wireless_adb_pair(pairing_address, pairing_code, self.logger)
 
                 if not pairing_success:
-                    # Pairing failed - ask if user wants to retry
+                    # Pairing failed
+                    if not is_interactive:
+                        # Non-interactive mode - cannot retry
+                        self.logger.error("Wireless ADB pairing failed in non-interactive mode")
+                        self.logger.error("Please verify:")
+                        self.logger.error("  1. Device has wireless debugging enabled")
+                        self.logger.error("  2. Device is on the same network")
+                        self.logger.error("  3. Pairing IP:PORT and code are correct")
+                        self.logger.error("  4. Pairing code hasn't expired (tap 'Pair device' again to get new code)")
+                        return False
+                    
+                    # Interactive mode - ask if user wants to retry
                     if prompt_yes_no("Pairing failed. Retry?", default=True):
                         # Re-prompt for pairing details
                         self.logger.info("Please re-enter pairing details...")
@@ -662,8 +794,14 @@ class WhatsAppDriver:
                         self.logger.error("Wireless ADB pairing cancelled by user")
                         return False
 
-                # Pairing successful! Now prompt for connect port
-                connect_port = prompt_for_connect_port()
+                # Pairing successful! Now determine connect port
+                if is_interactive:
+                    # Interactive mode - prompt for connect port
+                    connect_port = prompt_for_connect_port()
+                else:
+                    # Non-interactive mode - use standard port 5555
+                    self.logger.info("Using standard wireless ADB port 5555 for connection")
+                    connect_port = "5555"
 
                 # Attempt connection
                 connect_success, device_id = wireless_adb_connect(pairing_address, connect_port, self.logger)
@@ -673,7 +811,15 @@ class WhatsAppDriver:
                     self.logger.success(f"Successfully connected to wireless device: {device_id}")
                     return True
                 else:
-                    # Connection failed - ask if user wants to retry
+                    # Connection failed
+                    if not is_interactive:
+                        # Non-interactive mode - cannot retry
+                        self.logger.error("Wireless ADB connection failed in non-interactive mode")
+                        self.logger.error(f"Tried connecting to port {connect_port}")
+                        self.logger.error("Please verify device is still on wireless debugging screen")
+                        return False
+                    
+                    # Interactive mode - ask if user wants to retry
                     if prompt_yes_no("Connection failed. Retry?", default=True):
                         # Re-prompt for all details (pairing might need to be redone)
                         self.logger.info("Please re-enter wireless ADB details...")
@@ -1168,7 +1314,7 @@ class WhatsAppDriver:
             sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
         """
         if limit:
-            self.logger.info(f"Collecting chats (limited to {limit} for testing)...")
+            self.logger.info(f"Collecting chats (limited to {limit})...")
         else:
             self.logger.info("Collecting all chats by scrolling...")
 
@@ -1276,7 +1422,7 @@ class WhatsAppDriver:
             chat_list = sorted(chat_list)
         if limit:
             chat_list = chat_list[:limit]  # Ensure we don't exceed limit
-            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit} for testing)")
+            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit})")
         else:
             self.logger.success(f"Finished scrolling! Found {len(chat_list)} total chats")
         return chat_list
@@ -1462,7 +1608,10 @@ class WhatsAppDriver:
             self.logger.error(f"Error navigating back: {e}")
 
     def quit(self):
-        """Close the driver session."""
+        """Close the driver session and restore device settings."""
+        # Restore device settings before closing (ADB still works after Appium session ends)
+        self.restore_device_settings()
+
         if self.driver:
             try:
                 self.driver.quit()
