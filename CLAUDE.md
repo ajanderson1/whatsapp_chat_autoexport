@@ -409,7 +409,8 @@ poetry run whatsapp-pipeline /downloads /output --force-transcribe
      - `find_element()` / `find_elements()`: Locate UI elements by resource ID, text, or accessibility ID
      - `scroll_to_find_chat()`: Bidirectional scrolling with position change detection
      - `navigate_to_main_screen()`: Returns to main chat list
-     - Handles chat collection, scrolling through long lists (up to ~200 chats)
+     - `restart_app_to_top()`: Restarts WhatsApp to reliably return to the top of the chat list. Faster and more reliable than scrolling (which would require 20-30 swipes from the bottom vs ~4-6s for restart). Used by `collect_all_chats()` before and after collection.
+     - Handles chat collection using app restart to ensure consistent starting position
 
 4. **ChatExporter** (line 934): Executes the export workflow
    - Opens chat → menu → "More" → "Export chat" → media option → Google Drive selection

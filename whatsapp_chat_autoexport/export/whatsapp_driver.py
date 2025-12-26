@@ -1252,6 +1252,80 @@ class WhatsAppDriver:
             self.logger.error("=" * 70)
             return False
 
+    def restart_app_to_top(self) -> bool:
+        """
+        Restart WhatsApp to reliably return to the top of the chat list.
+
+        WhatsApp always opens at the top of the chat list, making this a
+        faster and more reliable alternative to scrolling (which would
+        require 20-30 swipes from the bottom vs ~4-6s for restart).
+
+        This method:
+        1. Force-stops WhatsApp using ADB (preserves all data)
+        2. Relaunches WhatsApp using ADB
+        3. Waits for app to be ready (3s USB, 5s wireless)
+        4. Verifies WhatsApp is open and accessible
+
+        The Appium session remains valid since we use noReset: True in capabilities.
+
+        Returns:
+            True if restart successful and WhatsApp is accessible, False otherwise
+
+        Note:
+            - Uses longer timeout for wireless ADB connections (5s vs 3s)
+            - Calls verify_whatsapp_is_open() to ensure WhatsApp is ready
+            - Handles device_id for multi-device ADB support
+        """
+        self.logger.info("Restarting WhatsApp to return to top of chat list...")
+
+        try:
+            # Build ADB command prefix with device ID if set
+            adb_prefix = ["adb"]
+            if self.device_id:
+                adb_prefix.extend(["-s", self.device_id])
+
+            # Step 1: Force stop WhatsApp (preserves all data, just closes the app)
+            self.logger.debug_msg("Force stopping WhatsApp...")
+            stop_cmd = adb_prefix + ["shell", "am", "force-stop", "com.whatsapp"]
+            result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                self.logger.warning(f"Force stop returned non-zero: {result.returncode}")
+                self.logger.debug_msg(f"stderr: {result.stderr}")
+
+            sleep(0.5)  # Brief delay for app to fully stop
+
+            # Step 2: Launch WhatsApp (it will open at top of chat list)
+            self.logger.debug_msg("Launching WhatsApp...")
+            start_cmd = adb_prefix + ["shell", "am", "start", "-n", "com.whatsapp/.Main"]
+            result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                self.logger.error(f"Failed to launch WhatsApp: {result.stderr}")
+                return False
+
+            self.logger.debug_msg(f"Launch result: {result.stdout.strip() if result.stdout else 'success'}")
+
+            # Step 3: Wait for app to be ready (longer for wireless ADB due to latency)
+            wait_time = 5 if self.is_wireless else 3
+            self.logger.debug_msg(f"Waiting {wait_time}s for WhatsApp to initialize...")
+            sleep(wait_time)
+
+            # Step 4: Verify WhatsApp is open and accessible
+            if not self.verify_whatsapp_is_open():
+                self.logger.error("WhatsApp restart failed - app not accessible after restart")
+                return False
+
+            self.logger.success("WhatsApp restarted - now at top of chat list")
+            return True
+
+        except subprocess.TimeoutExpired:
+            self.logger.error("ADB command timed out during app restart")
+            return False
+        except Exception as e:
+            self.logger.error(f"Failed to restart WhatsApp: {e}")
+            return False
+
     def check_status(self):
         """Quick status check - shows package, activity, and visible chat count."""
         try:
@@ -1326,23 +1400,11 @@ class WhatsAppDriver:
         max_scrolls = 50  # Safety limit
         current_time = time.time()
 
-        # Scroll to top first - optimized to detect when at top
-        self.logger.debug_msg("Scrolling to top...")
-        previous_top_chat = None
-        for i in range(5):
-            try:
-                self.driver.swipe(500, 800, 500, 1800, duration=300)  # Scroll up
-                sleep(0.05)  # Reduced from 0.2 - minimal delay for UI update
-
-                # Check if we're at the top (no movement means we're already there)
-                current_top_chat = self._get_top_chat_name()
-                if current_top_chat == previous_top_chat and previous_top_chat is not None:
-                    self.logger.debug_msg("Reached top early - stopping scroll")
-                    break
-                previous_top_chat = current_top_chat
-            except:
-                break
-        sleep(0.1)  # Reduced from 0.5 - brief settle time
+        # Restart app to ensure we're at the top of the chat list
+        # (faster and more reliable than scrolling 20-30 times)
+        if not self.restart_app_to_top():
+            self.logger.error("Failed to restart WhatsApp - cannot collect chats")
+            return []
 
         while scroll_attempts < max_scrolls:
             try:
@@ -1398,23 +1460,10 @@ class WhatsAppDriver:
                 self.logger.error(f"Error during scroll {scroll_attempts + 1}: {e}")
                 break
 
-        # Scroll back to top after collection (ensures we start from known position)
-        self.logger.debug_msg("Scrolling back to top after collection...")
-        previous_top_chat = None
-        for i in range(5):
-            try:
-                self.driver.swipe(500, 800, 500, 1800, duration=300)  # Scroll up
-                sleep(0.05)  # Reduced from 0.2 - minimal delay for UI update
-
-                # Check if we're at the top (no movement means we're already there)
-                current_top_chat = self._get_top_chat_name()
-                if current_top_chat == previous_top_chat and previous_top_chat is not None:
-                    self.logger.debug_msg("Reached top early - stopping scroll")
-                    break
-                previous_top_chat = current_top_chat
-            except:
-                break
-        sleep(0.1)  # Reduced from 0.5 - brief settle time
+        # Restart app to return to top of chat list for export
+        if not self.restart_app_to_top():
+            self.logger.warning("Failed to restart WhatsApp after collection - may need to scroll during export")
+            # Continue anyway - we have the chat list, just might need to scroll more during export
 
         # Convert dict keys to list (preserves insertion order)
         chat_list = list(all_chats_dict.keys())

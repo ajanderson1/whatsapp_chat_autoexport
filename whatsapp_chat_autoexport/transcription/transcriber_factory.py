@@ -86,7 +86,6 @@ class TranscriberFactory:
                 api_key=api_key,
                 logger=logger,
                 convert_opus=convert_opus,
-                video_test_mode=video_test_mode,
                 **provider_kwargs
             )
 
