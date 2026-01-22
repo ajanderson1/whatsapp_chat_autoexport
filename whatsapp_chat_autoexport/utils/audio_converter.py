@@ -207,6 +207,56 @@ class AudioConverter:
 
         return self.convert_to_m4a(opus_file, output_path, overwrite=True)
 
+    def _has_audio_stream(self, video_file: Path) -> bool:
+        """
+        Check if a video file contains an audio stream.
+
+        Uses ffprobe to analyze the video file and detect audio streams.
+
+        Args:
+            video_file: Path to video file
+
+        Returns:
+            True if the video has an audio stream, False otherwise
+        """
+        if not self.is_ffmpeg_available():
+            # If ffprobe unavailable, assume audio exists and let extraction fail gracefully
+            return True
+
+        try:
+            # Use ffprobe to check for audio streams
+            # -v quiet: suppress output
+            # -select_streams a: select only audio streams
+            # -show_entries stream=codec_type: show codec type
+            # -of csv=p=0: output in CSV format without headers
+            cmd = [
+                'ffprobe',
+                '-v', 'quiet',
+                '-select_streams', 'a',
+                '-show_entries', 'stream=codec_type',
+                '-of', 'csv=p=0',
+                str(video_file)
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10  # 10 second timeout
+            )
+
+            # If ffprobe returns "audio" for any stream, the video has audio
+            return 'audio' in result.stdout.lower()
+
+        except subprocess.TimeoutExpired:
+            self.logger.debug_msg(f"Timeout checking audio stream in {video_file.name}")
+            # Assume audio exists on timeout, let extraction handle it
+            return True
+        except Exception as e:
+            self.logger.debug_msg(f"Error checking audio stream: {e}")
+            # Assume audio exists on error, let extraction handle it
+            return True
+
     def extract_audio_from_video(
         self,
         video_file: Path,
