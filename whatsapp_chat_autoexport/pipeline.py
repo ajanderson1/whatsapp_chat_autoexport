@@ -450,11 +450,19 @@ class WhatsAppPipeline:
         # Initialize transcription service using factory
         self.logger.info(f"Initializing {self.config.transcription_provider} transcription service...")
 
+        # Create debug directory if debug mode is enabled (via logger.debug flag)
+        debug_dir = None
+        if self.logger.debug:
+            debug_dir = self.config.output_dir / "debug"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.debug_msg(f"Debug mode enabled - failed videos will be saved to: {debug_dir}/failed_videos/")
+
         try:
             self.transcriber = TranscriberFactory.create_transcriber(
                 provider=self.config.transcription_provider,
                 logger=self.logger,
-                convert_opus=self.config.convert_opus_to_m4a
+                convert_opus=self.config.convert_opus_to_m4a,
+                debug_dir=debug_dir
             )
         except ValueError as e:
             self.logger.error(f"Failed to create transcriber: {e}")

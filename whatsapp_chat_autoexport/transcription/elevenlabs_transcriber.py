@@ -11,7 +11,12 @@ from typing import Optional
 from io import BytesIO
 
 from .base_transcriber import BaseTranscriber, TranscriptionResult
-from ..utils.audio_converter import AudioConverter, is_whatsapp_video_message
+from ..utils.audio_converter import (
+    AudioConverter,
+    is_whatsapp_video_message,
+    ExtractionResult,
+    ExtractionErrorCode,
+)
 
 # ElevenLabs import (will be optional)
 try:
@@ -51,7 +56,8 @@ class ElevenLabsTranscriber(BaseTranscriber):
         model: str = "scribe_v1",
         convert_opus: bool = True,
         diarize: bool = False,
-        tag_audio_events: bool = False
+        tag_audio_events: bool = False,
+        debug_dir: Optional[Path] = None
     ):
         """
         Initialize ElevenLabs transcriber.
@@ -63,8 +69,11 @@ class ElevenLabsTranscriber(BaseTranscriber):
             convert_opus: Whether to convert Opus files to M4A (default: True)
             diarize: Enable speaker identification (default: False)
             tag_audio_events: Detect audio events like laughter (default: False)
+            debug_dir: Optional directory to save failed files for debugging
         """
         super().__init__(logger)
+
+        self.debug_dir = debug_dir
 
         if not ELEVENLABS_AVAILABLE:
             self.log_error("ElevenLabs package not installed. Install with: pip install elevenlabs")
@@ -91,7 +100,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
         self.convert_opus = convert_opus
         self.diarize = diarize
         self.tag_audio_events = tag_audio_events
-        self.audio_converter = AudioConverter(logger=logger) if convert_opus else None
+        self.audio_converter = AudioConverter(logger=logger, debug_dir=debug_dir) if convert_opus else None
 
         try:
             # Initialize ElevenLabs client with the API key
@@ -265,17 +274,27 @@ class ElevenLabsTranscriber(BaseTranscriber):
                     )
 
                 self.log_info(f"🎬 Extracting audio from WhatsApp video message...")
-                temp_m4a_file = self.audio_converter.extract_audio_from_video(
+
+                # Use detailed extraction for better error reporting
+                extraction_result = self.audio_converter.extract_audio_from_video_detailed(
                     audio_path,
-                    temp_dir=audio_path.parent
+                    temp_dir=audio_path.parent,
+                    contact_name=audio_path.parent.name  # Use parent folder as contact name
                 )
 
-                if not temp_m4a_file:
+                if not extraction_result.success:
+                    # Return user-friendly error message based on specific failure reason
                     return TranscriptionResult(
                         success=False,
-                        error="Failed to extract audio from WhatsApp video message"
+                        error=extraction_result.user_friendly_message,
+                        metadata={
+                            'error_code': extraction_result.error_code.value,
+                            'video_info': extraction_result.video_info,
+                            'ffmpeg_stderr': extraction_result.ffmpeg_stderr,
+                        }
                     )
 
+                temp_m4a_file = extraction_result.output_path
                 actual_file_to_transcribe = temp_m4a_file
                 self.log_debug(f"✓ Extracted audio to: {temp_m4a_file.name}")
             else:

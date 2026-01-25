@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Optional
 
 from .base_transcriber import BaseTranscriber, TranscriptionResult
-from ..utils.audio_converter import AudioConverter, is_whatsapp_video_message
+from ..utils.audio_converter import (
+    AudioConverter,
+    is_whatsapp_video_message,
+    ExtractionResult,
+    ExtractionErrorCode,
+)
 
 # OpenAI import (will be optional)
 try:
@@ -38,7 +43,14 @@ class WhisperTranscriber(BaseTranscriber):
         '.opus', '.flac'
     ]
 
-    def __init__(self, api_key: Optional[str] = None, logger=None, model: str = "whisper-1", convert_opus: bool = True):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        logger=None,
+        model: str = "whisper-1",
+        convert_opus: bool = True,
+        debug_dir: Optional[Path] = None
+    ):
         """
         Initialize Whisper transcriber.
 
@@ -47,8 +59,11 @@ class WhisperTranscriber(BaseTranscriber):
             logger: Optional logger instance
             model: Whisper model to use (default: "whisper-1")
             convert_opus: Whether to convert Opus files to M4A (default: True)
+            debug_dir: Optional directory to save failed files for debugging
         """
         super().__init__(logger)
+
+        self.debug_dir = debug_dir
 
         if not OPENAI_AVAILABLE:
             self.log_error("OpenAI package not installed. Install with: pip install openai")
@@ -73,7 +88,7 @@ class WhisperTranscriber(BaseTranscriber):
 
         self.model = model
         self.convert_opus = convert_opus
-        self.audio_converter = AudioConverter(logger=logger) if convert_opus else None
+        self.audio_converter = AudioConverter(logger=logger, debug_dir=debug_dir) if convert_opus else None
 
         try:
             # Initialize OpenAI client with the API key
@@ -257,17 +272,27 @@ class WhisperTranscriber(BaseTranscriber):
                     )
 
                 self.log_info(f"🎬 Extracting audio from WhatsApp video message...")
-                temp_m4a_file = self.audio_converter.extract_audio_from_video(
+
+                # Use detailed extraction for better error reporting
+                extraction_result = self.audio_converter.extract_audio_from_video_detailed(
                     audio_path,
-                    temp_dir=audio_path.parent
+                    temp_dir=audio_path.parent,
+                    contact_name=audio_path.parent.name  # Use parent folder as contact name
                 )
 
-                if not temp_m4a_file:
+                if not extraction_result.success:
+                    # Return user-friendly error message based on specific failure reason
                     return TranscriptionResult(
                         success=False,
-                        error="Failed to extract audio from WhatsApp video message. The video may not contain an audio track."
+                        error=extraction_result.user_friendly_message,
+                        metadata={
+                            'error_code': extraction_result.error_code.value,
+                            'video_info': extraction_result.video_info,
+                            'ffmpeg_stderr': extraction_result.ffmpeg_stderr,
+                        }
                     )
 
+                temp_m4a_file = extraction_result.output_path
                 actual_file_to_transcribe = temp_m4a_file
                 self.log_debug(f"✓ Extracted audio to: {temp_m4a_file.name}")
             else:

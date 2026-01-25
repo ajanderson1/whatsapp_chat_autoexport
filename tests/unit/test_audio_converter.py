@@ -11,6 +11,8 @@ import pytest
 from whatsapp_chat_autoexport.utils.audio_converter import (
     AudioConverter,
     is_whatsapp_video_message,
+    ExtractionResult,
+    ExtractionErrorCode,
 )
 
 
@@ -169,7 +171,7 @@ class TestExtractAudioFromVideoIntegration:
     @patch('subprocess.run')
     def test_skips_extraction_when_no_audio(self, mock_run, converter, temp_working_dir):
         """Test that extraction is skipped when video has no audio stream."""
-        # First call to ffprobe (for _has_audio_stream) returns no audio
+        # Both _get_video_info and _has_audio_stream call ffprobe
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         dummy_video = temp_working_dir / "VID-20231207-WA0000.mp4"
@@ -181,6 +183,113 @@ class TestExtractAudioFromVideoIntegration:
         # Should return None because no audio stream
         assert result is None
 
-        # FFprobe should be called for audio check, but ffmpeg extraction should NOT be called
-        # (only one subprocess.run call for ffprobe)
-        assert mock_run.call_count == 1
+        # FFprobe should be called twice: once for _get_video_info and once for _has_audio_stream
+        # But ffmpeg extraction should NOT be called
+        assert mock_run.call_count == 2
+
+
+class TestExtractionResult:
+    """Tests for the ExtractionResult dataclass."""
+
+    def test_success_result(self):
+        """Test creating a successful extraction result."""
+        result = ExtractionResult(
+            success=True,
+            output_path=Path("/tmp/audio.m4a"),
+        )
+        assert result.success is True
+        assert result.output_path == Path("/tmp/audio.m4a")
+        assert result.error_code == ExtractionErrorCode.SUCCESS
+
+    def test_no_audio_stream_error(self):
+        """Test error result for video with no audio."""
+        result = ExtractionResult(
+            success=False,
+            error_code=ExtractionErrorCode.NO_AUDIO_STREAM,
+            error_message="test_video.mp4",
+        )
+        assert result.success is False
+        assert result.error_code == ExtractionErrorCode.NO_AUDIO_STREAM
+        assert "silent video" in result.user_friendly_message.lower()
+
+    def test_ffmpeg_not_available_error(self):
+        """Test error result when FFmpeg is not available."""
+        result = ExtractionResult(
+            success=False,
+            error_code=ExtractionErrorCode.FFMPEG_NOT_AVAILABLE,
+        )
+        assert result.success is False
+        assert "ffmpeg" in result.user_friendly_message.lower()
+        assert "install" in result.user_friendly_message.lower()
+
+    def test_timeout_error(self):
+        """Test error result for extraction timeout."""
+        result = ExtractionResult(
+            success=False,
+            error_code=ExtractionErrorCode.TIMEOUT,
+            error_message="120 seconds",
+        )
+        assert result.success is False
+        assert "timed out" in result.user_friendly_message.lower()
+
+    def test_video_info_storage(self):
+        """Test that video info is stored in result."""
+        video_info = {"format": {"duration": "120.5"}, "streams": []}
+        result = ExtractionResult(
+            success=False,
+            error_code=ExtractionErrorCode.NO_AUDIO_STREAM,
+            video_info=video_info,
+        )
+        assert result.video_info == video_info
+
+
+class TestExtractAudioFromVideoDetailed:
+    """Tests for the detailed extraction method."""
+
+    @pytest.fixture
+    def converter(self):
+        """Create an AudioConverter instance with mocked logger."""
+        logger = MagicMock()
+        return AudioConverter(logger=logger)
+
+    @patch('subprocess.run')
+    def test_returns_extraction_result_on_no_audio(self, mock_run, converter, temp_working_dir):
+        """Test that detailed method returns ExtractionResult with proper error code."""
+        # Mock ffprobe to return no audio stream
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        dummy_video = temp_working_dir / "VID-20231207-WA0000.mp4"
+        dummy_video.write_bytes(b"dummy video content")
+
+        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+            result = converter.extract_audio_from_video_detailed(dummy_video)
+
+        assert isinstance(result, ExtractionResult)
+        assert result.success is False
+        assert result.error_code == ExtractionErrorCode.NO_AUDIO_STREAM
+        assert "silent video" in result.user_friendly_message.lower()
+
+    @patch('subprocess.run')
+    def test_returns_ffmpeg_not_available_error(self, mock_run, converter, temp_working_dir):
+        """Test error when FFmpeg is not available."""
+        dummy_video = temp_working_dir / "VID-20231207-WA0000.mp4"
+        dummy_video.write_bytes(b"dummy video content")
+
+        with patch.object(converter, 'is_ffmpeg_available', return_value=False):
+            result = converter.extract_audio_from_video_detailed(dummy_video)
+
+        assert isinstance(result, ExtractionResult)
+        assert result.success is False
+        assert result.error_code == ExtractionErrorCode.FFMPEG_NOT_AVAILABLE
+
+    @patch('subprocess.run')
+    def test_returns_file_not_found_error(self, mock_run, converter, temp_working_dir):
+        """Test error when video file doesn't exist."""
+        nonexistent_video = temp_working_dir / "VID-20231207-WA0000.mp4"
+
+        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+            result = converter.extract_audio_from_video_detailed(nonexistent_video)
+
+        assert isinstance(result, ExtractionResult)
+        assert result.success is False
+        assert result.error_code == ExtractionErrorCode.FILE_NOT_FOUND
