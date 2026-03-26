@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from whatsapp_chat_autoexport.output import OutputBuilder
+from whatsapp_chat_autoexport.output import OutputBuilder, SpecFormatter, IndexBuilder
 from whatsapp_chat_autoexport.utils.logger import Logger
 
 
@@ -335,3 +335,276 @@ def test_empty_transcript(temp_working_dir, temp_output_dir):
     # Should still create output structure
     assert summary["total_messages"] == 0
     assert summary["output_dir"].exists()
+
+
+# =========================================================================
+# V2 format tests
+# =========================================================================
+
+
+@pytest.mark.unit
+def test_v2_produces_transcript_md(temp_working_dir, temp_output_dir):
+    """Test that v2 format produces transcript.md (not transcript.txt)."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger, format_version="v2")
+
+    transcript_path = temp_working_dir / "chat.txt"
+    transcript_path.write_text(
+        "1/15/24, 10:30 AM - Alice: Hello!\n"
+        "1/15/24, 10:31 AM - Bob: Hi there!\n"
+    )
+
+    media_dir = temp_working_dir / "media"
+    media_dir.mkdir()
+
+    summary = builder.build_output(
+        transcript_path,
+        media_dir,
+        temp_output_dir,
+        contact_name="Alice",
+        copy_media=False,
+        include_transcriptions=False,
+        chat_jid="1234@s.whatsapp.net",
+    )
+
+    contact_dir = temp_output_dir / "Alice"
+    assert (contact_dir / "transcript.md").exists(), "transcript.md should exist in v2 mode"
+    assert not (contact_dir / "transcript.txt").exists(), "transcript.txt should NOT exist in v2 mode"
+    assert summary["format_version"] == "v2"
+    assert summary["transcript_path"].name == "transcript.md"
+
+
+@pytest.mark.unit
+def test_v2_produces_index_md(temp_working_dir, temp_output_dir):
+    """Test that v2 format produces index.md alongside transcript."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger, format_version="v2")
+
+    transcript_path = temp_working_dir / "chat.txt"
+    transcript_path.write_text("1/15/24, 10:30 AM - Alice: Hello!\n")
+
+    media_dir = temp_working_dir / "media"
+    media_dir.mkdir()
+
+    builder.build_output(
+        transcript_path,
+        media_dir,
+        temp_output_dir,
+        contact_name="Alice",
+        copy_media=False,
+        include_transcriptions=False,
+        chat_jid="1234@s.whatsapp.net",
+    )
+
+    contact_dir = temp_output_dir / "Alice"
+    index_path = contact_dir / "index.md"
+    assert index_path.exists(), "index.md should exist in v2 mode"
+
+    index_content = index_path.read_text()
+    assert "---" in index_content, "index.md should contain YAML frontmatter"
+
+
+@pytest.mark.unit
+def test_v2_transcript_has_day_headers_and_typed_media(temp_working_dir, temp_output_dir):
+    """Test that v2 transcript.md has day headers and typed media tags."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger, format_version="v2")
+
+    transcript_path = temp_working_dir / "chat.txt"
+    transcript_path.write_text(
+        "1/15/24, 10:30 AM - Alice: Hello!\n"
+        "1/15/24, 10:31 AM - Bob: IMG-20240115-WA0001.jpg (file attached)\n"
+        "1/16/24, 09:00 AM - Alice: Good morning\n"
+    )
+
+    media_dir = temp_working_dir / "media"
+    media_dir.mkdir()
+
+    summary = builder.build_output(
+        transcript_path,
+        media_dir,
+        temp_output_dir,
+        contact_name="Alice",
+        copy_media=False,
+        include_transcriptions=False,
+        chat_jid="1234@s.whatsapp.net",
+    )
+
+    transcript_content = summary["transcript_path"].read_text()
+
+    # Day headers
+    assert "## 2024-01-15" in transcript_content, "Should have day header for 2024-01-15"
+    assert "## 2024-01-16" in transcript_content, "Should have day header for 2024-01-16"
+
+    # Typed media tag (image -> <photo>)
+    assert "<photo>" in transcript_content, "Should have typed <photo> media tag"
+
+    # Spec format: [HH:MM] Sender: content
+    assert "[10:30] Alice: Hello!" in transcript_content, "Should use spec message format"
+
+
+@pytest.mark.unit
+def test_v2_index_has_correct_frontmatter(temp_working_dir, temp_output_dir):
+    """Test that v2 index.md has correct YAML frontmatter fields."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger, format_version="v2")
+
+    transcript_path = temp_working_dir / "chat.txt"
+    transcript_path.write_text(
+        "1/15/24, 10:30 AM - Alice: Hello!\n"
+        "1/15/24, 10:31 AM - Bob: Hi there!\n"
+    )
+
+    media_dir = temp_working_dir / "media"
+    media_dir.mkdir()
+
+    builder.build_output(
+        transcript_path,
+        media_dir,
+        temp_output_dir,
+        contact_name="Alice",
+        copy_media=False,
+        include_transcriptions=False,
+        chat_jid="1234@s.whatsapp.net",
+    )
+
+    index_content = (temp_output_dir / "Alice" / "index.md").read_text()
+
+    assert "type: note" in index_content
+    assert "chat_type: direct" in index_content
+    assert 'jid: "1234@s.whatsapp.net"' in index_content
+    assert "message_count: 2" in index_content
+    assert "whatsapp" in index_content
+    assert "correspondence" in index_content
+
+
+@pytest.mark.unit
+def test_legacy_format_unchanged_regression(temp_working_dir, temp_output_dir):
+    """Regression: legacy format must produce transcript.txt, no index.md."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger)  # default = legacy
+
+    transcript_path = temp_working_dir / "chat.txt"
+    transcript_path.write_text(
+        "1/15/24, 10:30 AM - Alice: Hello!\n"
+        "1/15/24, 10:31 AM - Bob: Hi there!\n"
+    )
+
+    media_dir = temp_working_dir / "media"
+    media_dir.mkdir()
+
+    summary = builder.build_output(
+        transcript_path,
+        media_dir,
+        temp_output_dir,
+        contact_name="Alice",
+        copy_media=False,
+    )
+
+    contact_dir = temp_output_dir / "Alice"
+    assert (contact_dir / "transcript.txt").exists(), "Legacy must produce transcript.txt"
+    assert not (contact_dir / "transcript.md").exists(), "Legacy must NOT produce transcript.md"
+    assert not (contact_dir / "index.md").exists(), "Legacy must NOT produce index.md"
+    assert summary["format_version"] == "legacy"
+
+    # Content should use old-style header
+    content = summary["transcript_path"].read_text()
+    assert "# WhatsApp Chat with Alice" in content
+
+
+@pytest.mark.unit
+def test_v2_atomic_write_safety(temp_working_dir, temp_output_dir):
+    """Test that atomic write preserves original on failure."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger, format_version="v2")
+
+    target = temp_output_dir / "test_file.md"
+    original_content = "original content"
+    target.write_text(original_content)
+
+    # Successful atomic write should replace the file
+    OutputBuilder._atomic_write(target, "new content")
+    assert target.read_text() == "new content"
+
+    # Verify no .tmp file is left behind
+    tmp_path = target.with_suffix(".md.tmp")
+    assert not tmp_path.exists(), "Temp file should be cleaned up after successful write"
+
+
+@pytest.mark.unit
+def test_v2_atomic_write_no_leftover_tmp_on_success(temp_output_dir):
+    """Verify .tmp file is not left behind after a successful atomic write."""
+    target = temp_output_dir / "clean.md"
+    OutputBuilder._atomic_write(target, "content")
+    assert target.read_text() == "content"
+    assert not target.with_suffix(".md.tmp").exists()
+
+
+@pytest.mark.unit
+def test_batch_build_outputs_with_v2(temp_working_dir, temp_output_dir):
+    """Test batch_build_outputs passes format_version='v2' through."""
+    logger = Logger()
+    builder = OutputBuilder(logger=logger)
+
+    transcripts = []
+    for i, name in enumerate(["Alice", "Bob"], 1):
+        transcript = temp_working_dir / f"chat_{name}.txt"
+        transcript.write_text(f"1/15/24, 10:{30+i:02d} AM - {name}: Hello!\n")
+
+        media_dir = temp_working_dir / f"media_{name}"
+        media_dir.mkdir()
+
+        transcripts.append((transcript, media_dir))
+
+    results = builder.batch_build_outputs(
+        transcripts,
+        temp_output_dir,
+        copy_media=False,
+        include_transcriptions=False,
+        format_version="v2",
+    )
+
+    assert len(results) == 2
+    for result in results:
+        assert result["format_version"] == "v2"
+        assert result["transcript_path"].name == "transcript.md"
+        # Verify index.md was also created
+        index_path = result["output_dir"] / "index.md"
+        assert index_path.exists(), f"index.md should exist for {result['contact_name']}"
+
+
+@pytest.mark.unit
+def test_build_output_format_version_override(temp_working_dir, temp_output_dir):
+    """Test that per-call format_version overrides the instance default."""
+    logger = Logger()
+    # Instance is legacy by default
+    builder = OutputBuilder(logger=logger, format_version="legacy")
+
+    transcript_path = temp_working_dir / "chat.txt"
+    transcript_path.write_text("1/15/24, 10:30 AM - Alice: Hello!\n")
+
+    media_dir = temp_working_dir / "media"
+    media_dir.mkdir()
+
+    # Override to v2 for this specific call
+    summary = builder.build_output(
+        transcript_path,
+        media_dir,
+        temp_output_dir,
+        contact_name="Alice",
+        copy_media=False,
+        include_transcriptions=False,
+        format_version="v2",
+        chat_jid="override@s.whatsapp.net",
+    )
+
+    assert summary["format_version"] == "v2"
+    assert (temp_output_dir / "Alice" / "transcript.md").exists()
+    assert (temp_output_dir / "Alice" / "index.md").exists()
+
+
+@pytest.mark.unit
+def test_invalid_format_version_raises():
+    """Test that an invalid format_version raises ValueError."""
+    with pytest.raises(ValueError, match="Unsupported format_version"):
+        OutputBuilder(format_version="v3")
