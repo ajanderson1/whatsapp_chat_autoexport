@@ -32,7 +32,8 @@ class AppiumManager:
         self.logger.debug_msg(f"Set ANDROID_HOME to: {self.android_home}")
 
         self.logger.info("Stopping any existing Appium instances...")
-        subprocess.run("pkill -f appium || true", shell=True)
+        # Use array syntax to avoid shell=True fd inheritance issues
+        subprocess.run(["pkill", "-f", "appium"], capture_output=True, close_fds=True)
 
         self.logger.info("Starting Appium server...")
         appium_env = os.environ.copy()
@@ -41,7 +42,8 @@ class AppiumManager:
                 ["appium", "-a", "127.0.0.1", "-p", "4723"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=appium_env
+                env=appium_env,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
             time.sleep(5)  # Wait for Appium to start
 
@@ -49,7 +51,8 @@ class AppiumManager:
             result = subprocess.run(
                 ["curl", "-s", "http://127.0.0.1:4723/wd/hub/status"],
                 capture_output=True,
-                text=True
+                text=True,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
             if result.returncode == 0:
                 self.logger.success("Appium server started successfully")
@@ -73,4 +76,5 @@ class AppiumManager:
             self.appium_proc = None
         else:
             # Try to kill any Appium process
-            subprocess.run("pkill -f appium || true", shell=True)
+            # Use array syntax to avoid shell=True fd inheritance issues
+            subprocess.run(["pkill", "-f", "appium"], capture_output=True, close_fds=True)

@@ -6,7 +6,6 @@ Handles batch transcription of media files with resume functionality.
 
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Callable
-from tqdm import tqdm
 import json
 
 from .base_transcriber import BaseTranscriber, TranscriptionResult
@@ -208,6 +207,7 @@ class TranscriptionManager:
         skip_existing: bool = True,
         show_progress: bool = True,
         transcript_path: Optional[Path] = None,
+        on_progress: Optional[Callable] = None,
         **transcribe_kwargs
     ) -> Dict[str, any]:
         """
@@ -218,6 +218,8 @@ class TranscriptionManager:
             skip_existing: Skip files that are already transcribed
             show_progress: Show progress bar
             transcript_path: Optional transcript path (for checking output directory)
+            on_progress: Optional callback for progress updates.
+                         Signature: on_progress(phase, message, current, total, item_name="")
             **transcribe_kwargs: Additional arguments passed to transcriber
 
         Returns:
@@ -267,12 +269,14 @@ class TranscriptionManager:
             'errors': []
         }
 
-        # Process files with progress bar
-        iterator = tqdm(media_files, desc="Transcribing", unit="file") if show_progress else media_files
+        # Process files with logger-based progress
+        # Skip tqdm entirely to avoid "bad value(s) in fds_to_keep" errors
+        # tqdm creates multiprocessing locks that can fail in threaded contexts (TUI workers)
+        total_files = len(media_files)
 
-        for media_file in iterator:
+        for i, media_file in enumerate(media_files, 1):
             if show_progress:
-                iterator.set_description(f"Transcribing {media_file.name[:30]}")
+                self.logger.info(f"[{i}/{total_files}] Transcribing {media_file.name}")
 
             # Check if already transcribed (for skipped count)
             already_transcribed, _ = self.is_transcribed(media_file, transcript_path) if skip_existing else (False, None)
@@ -297,6 +301,12 @@ class TranscriptionManager:
             else:
                 results['failed'] += 1
                 results['errors'].append((media_file, error or "Unknown error"))
+
+            if on_progress:
+                try:
+                    on_progress("transcribe", f"Transcribed {media_file.name}", i, total_files, media_file.name)
+                except Exception:
+                    pass  # Never let callback errors crash transcription
 
         # Log summary
         self.logger.info("=" * 70)

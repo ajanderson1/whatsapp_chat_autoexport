@@ -16,24 +16,37 @@ google-auth-oauthlib = "^1.1.0"
 tqdm = "^4.66.0"
 openai = "^1.0.0"
 elevenlabs = "^1.0.0"
+pydantic-settings = "^2.12.0"
+python-dotenv = "^1.1.0"
+pyyaml = "^6.0.3"
+rich = "^14.3.1"
+typer = "^0.21.1"
+textual = ">=0.94.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
 pytest-cov = "^4.1.0"
 pytest-mock = "^3.11.1"
 pytest-timeout = "^2.1.0"
+pytest-asyncio = "^0.23"
 
 [tool.poetry.scripts]
-whatsapp-export = "whatsapp_chat_autoexport.export.cli:main"
-whatsapp-process = "whatsapp_chat_autoexport.processing.cli:main"
-whatsapp-drive = "whatsapp_chat_autoexport.google_drive.cli:main"
-whatsapp-pipeline = "whatsapp_chat_autoexport.pipeline_cli.cli:main"
+# New unified CLI (recommended)
+whatsapp = "whatsapp_chat_autoexport.cli_entry:main"
+
+# Deprecated commands (print migration notice and exit)
+whatsapp-export = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_export_main"
+whatsapp-process = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_process_main"
+whatsapp-drive = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_drive_main"
+whatsapp-pipeline = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_pipeline_main"
+whatsapp-logs = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_logs_main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

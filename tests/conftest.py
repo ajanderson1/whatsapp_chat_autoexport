@@ -175,3 +175,28 @@ def reset_environment():
     """
     yield
     # Cleanup happens automatically after yield
+
+
+# =========================================================================
+# Textual TUI Fixtures
+# =========================================================================
+
+
+@pytest.fixture
+def tui_app():
+    """
+    Creates a WhatsAppExporterApp with all backends mocked for testing.
+
+    The app is configured in dry-run mode with a temporary output directory,
+    so no real Appium, ADB, or device connection is needed.
+    """
+    from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp
+    from whatsapp_chat_autoexport.state.state_manager import StateManager
+
+    app = WhatsAppExporterApp(
+        state_manager=StateManager(),
+        output_dir=Path(tempfile.mkdtemp()),
+        dry_run=True,
+        debug=False,
+    )
+    return app
