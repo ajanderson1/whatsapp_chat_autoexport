@@ -1,0 +1,131 @@
+# Google Drive UI Selectors
+# For the Drive picker / share sheet integration
+version: "1.0"
+app: "com.google.android.apps.docs"
+
+selectors:
+  # Share sheet
+  drive_share_option:
+    description: "Google Drive option in Android share sheet"
+    strategies:
+      - type: text
+        value: "Drive"
+        priority: 1
+      - type: text
+        value: "Save to Drive"
+        priority: 2
+      - type: content_desc
+        value: "Save to Drive"
+        priority: 3
+      - type: text_contains
+        value: "drive"
+        case_sensitive: false
+        priority: 4
+
+  # Drive folder picker
+  my_drive_folder:
+    description: "'My Drive' folder option"
+    strategies:
+      - type: text
+        value: "My Drive"
+        priority: 1
+      - type: text
+        value: "Drive"
+        priority: 2
+      - type: content_desc
+        value: "My Drive"
+        priority: 3
+
+  folder_list_item:
+    description: "Folder entry in Drive picker"
+    strategies:
+      - type: id
+        value: "com.google.android.apps.docs:id/title"
+        priority: 1
+
+  # Save/Upload actions
+  save_button:
+    description: "Save/Upload button in Drive picker"
+    strategies:
+      - type: text
+        value: "Save"
+        priority: 1
+      - type: content_desc
+        value: "Save"
+        priority: 2
+      - type: id
+        value: "com.google.android.apps.docs:id/save_button"
+        priority: 3
+      - type: id
+        value: "com.google.android.apps.docs:id/toolbar_save_button"
+        priority: 4
+
+  upload_button:
+    description: "Upload confirmation button"
+    strategies:
+      - type: text
+        value: "Upload"
+        priority: 1
+      - type: content_desc
+        value: "Upload"
+        priority: 2
+      - type: id
+        value: "com.google.android.apps.docs:id/upload_button"
+        priority: 3
+
+  # Navigation
+  drive_back_button:
+    description: "Back/close button in Drive picker"
+    strategies:
+      - type: content_desc
+        value: "Navigate up"
+        priority: 1
+      - type: content_desc
+        value: "Close"
+        priority: 2
+      - type: id
+        value: "com.google.android.apps.docs:id/close_button"
+        priority: 3
+
+  # File info
+  file_name_input:
+    description: "File name input field"
+    strategies:
+      - type: id
+        value: "com.google.android.apps.docs:id/edit_text"
+        priority: 1
+      - type: id
+        value: "com.google.android.apps.docs:id/title_edit_text"
+        priority: 2
+      - type: class_name
+        value: "android.widget.EditText"
+        priority: 3
+
+  folder_path_display:
+    description: "Current folder path display"
+    strategies:
+      - type: id
+        value: "com.google.android.apps.docs:id/folder_title"
+        priority: 1
+      - type: id
+        value: "com.google.android.apps.docs:id/current_folder"
+        priority: 2
+
+# Android system share sheet elements
+android_share:
+  share_sheet_container:
+    description: "Main share sheet container"
+    strategies:
+      - type: id
+        value: "com.android.intentresolver:id/chooser_scrollable_container"
+        priority: 1
+      - type: id
+        value: "android:id/resolver_list"
+        priority: 2
+
+  share_target:
+    description: "Share target item in share sheet"
+    strategies:
+      - type: class_name
+        value: "android.widget.TextView"
+        priority: 1

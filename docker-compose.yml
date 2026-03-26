@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  # USB ADB connection
+  whatsapp-export-usb:
+    build: .
+    privileged: true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./output:/output
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+    # Default entrypoint is "whatsapp --headless"; append output flags here
+    command: ["--output", "/output"]
+    profiles:
+      - usb
+
+  # Wireless ADB connection
+  whatsapp-export-wireless:
+    build: .
+    network_mode: host
+    volumes:
+      - ./output:/output
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+    command: ["--output", "/output", "--wireless-adb"]
+    profiles:
+      - wireless

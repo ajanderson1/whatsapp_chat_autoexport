@@ -5,9 +5,7 @@ High-level operations for WhatsApp chat export management.
 """
 
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Any
-from tqdm import tqdm
-
+from typing import Optional, List, Dict, Tuple, Any, Callable
 from .auth import GoogleDriveAuth
 from .drive_client import GoogleDriveClient
 from ..utils.logger import Logger
@@ -208,7 +206,8 @@ class GoogleDriveManager:
     def batch_download_exports(self,
                                 files: List[Dict],
                                 dest_dir: Path,
-                                delete_after: bool = False) -> List[Path]:
+                                delete_after: bool = False,
+                                on_progress: Optional[Callable] = None) -> List[Path]:
         """
         Download multiple WhatsApp export files.
 
@@ -216,6 +215,8 @@ class GoogleDriveManager:
             files: List of file metadata dictionaries from list_whatsapp_exports()
             dest_dir: Destination directory
             delete_after: Delete from Google Drive after successful downloads
+            on_progress: Optional callback for progress updates.
+                         Signature: on_progress(phase, message, current, total, item_name="")
 
         Returns:
             List of successfully downloaded file paths
@@ -231,25 +232,30 @@ class GoogleDriveManager:
 
         downloaded_files = []
 
-        # Download with progress bar
-        with tqdm(total=len(files), desc="Downloading", unit="file") as pbar:
-            for file in files:
-                file_id = file['id']
-                file_name = file['name']
+        # Skip tqdm entirely to avoid "bad value(s) in fds_to_keep" errors
+        # tqdm creates multiprocessing locks that can fail in threaded contexts (TUI workers)
+        # Use simple logger-based progress instead
+        for i, file in enumerate(files, 1):
+            file_id = file['id']
+            file_name = file['name']
 
-                pbar.set_description(f"Downloading {file_name}")
+            self.logger.info(f"[{i}/{len(files)}] Downloading {file_name}...")
 
-                success, dest_path = self.download_export(
-                    file_id,
-                    file_name,
-                    dest_dir,
-                    delete_after=delete_after
-                )
+            success, dest_path = self.download_export(
+                file_id,
+                file_name,
+                dest_dir,
+                delete_after=delete_after
+            )
 
-                if success and dest_path:
-                    downloaded_files.append(dest_path)
+            if success and dest_path:
+                downloaded_files.append(dest_path)
 
-                pbar.update(1)
+            if on_progress:
+                try:
+                    on_progress("download", f"Downloaded {file_name}", i, len(files), file_name)
+                except Exception:
+                    pass  # Never let callback errors crash downloads
 
         self.logger.success(f"Downloaded {len(downloaded_files)}/{len(files)} file(s)")
         return downloaded_files

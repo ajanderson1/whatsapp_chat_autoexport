@@ -1,0 +1,954 @@
+/* WhatsApp Exporter TUI Styles */
+
+/* Global styles */
+Screen {
+    background: $surface;
+}
+
+/* Header customization */
+Header {
+    background: $primary-background;
+    color: $text;
+}
+
+/* Footer customization */
+Footer {
+    background: $primary-background-darken-1;
+}
+
+/* =========================================================================
+   Pipeline Header Widget
+   ========================================================================= */
+
+PipelineHeader {
+    height: 5;
+    background: $primary-background;
+    border: solid $primary;
+    padding: 0 1;
+}
+
+PipelineHeader .title {
+    text-style: bold;
+    color: $text;
+    text-align: center;
+}
+
+PipelineHeader .stages {
+    height: auto;
+    width: 100%;
+    layout: horizontal;
+}
+
+PipelineHeader .stage {
+    width: 1fr;
+    padding: 0 2;
+}
+
+PipelineHeader .stage-active {
+    color: $success;
+    text-style: bold;
+}
+
+PipelineHeader .stage-inactive {
+    color: $text-muted;
+}
+
+PipelineHeader .stage-completed {
+    color: $primary;
+}
+
+/* =========================================================================
+   Chat List Widget
+   ========================================================================= */
+
+ChatListWidget {
+    border: solid $primary;
+    height: 100%;
+}
+
+ChatListWidget > .chat-list-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+ChatListWidget ListView {
+    height: 1fr;
+    scrollbar-gutter: stable;
+}
+
+ChatListWidget ListItem {
+    padding: 0 1;
+}
+
+ChatListWidget ListItem:hover {
+    background: $primary-background-lighten-1;
+}
+
+ChatListWidget ListItem.-selected {
+    background: $primary-background-lighten-2;
+}
+
+ChatListWidget .chat-selected {
+    color: $success;
+}
+
+ChatListWidget .chat-unselected {
+    color: $text-muted;
+}
+
+ChatListWidget .hint {
+    color: $text-muted;
+    text-style: italic;
+    padding: 0 1;
+}
+
+/* =========================================================================
+   Settings Panel Widget
+   ========================================================================= */
+
+SettingsPanel {
+    border: solid $primary;
+    padding: 1;
+    height: 100%;
+}
+
+SettingsPanel .settings-title {
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+SettingsPanel .setting-row {
+    height: auto;
+    padding: 0;
+}
+
+SettingsPanel Checkbox {
+    padding: 0;
+    height: auto;
+}
+
+SettingsPanel Checkbox:focus {
+    background: $primary-background-lighten-1;
+}
+
+/* =========================================================================
+   Activity Log Widget
+   ========================================================================= */
+
+ActivityLog {
+    border: solid $primary;
+    height: 100%;
+}
+
+ActivityLog .activity-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+ActivityLog RichLog {
+    height: 1fr;
+    padding: 0 1;
+    scrollbar-gutter: stable;
+}
+
+ActivityLog .log-success {
+    color: $success;
+}
+
+ActivityLog .log-error {
+    color: $error;
+}
+
+ActivityLog .log-warning {
+    color: $warning;
+}
+
+ActivityLog .log-info {
+    color: $primary;
+}
+
+/* =========================================================================
+   Progress Widgets
+   ========================================================================= */
+
+ProgressDisplay {
+    height: auto;
+    padding: 1;
+}
+
+ProgressDisplay .progress-title {
+    text-style: bold;
+}
+
+ProgressDisplay .progress-current {
+    color: $primary;
+}
+
+ProgressDisplay .step-completed {
+    color: $success;
+}
+
+ProgressDisplay .step-current {
+    color: $warning;
+    text-style: bold;
+}
+
+ProgressDisplay .step-pending {
+    color: $text-muted;
+}
+
+/* =========================================================================
+   Device Panel Widget
+   ========================================================================= */
+
+DevicePanel {
+    border: solid $primary;
+    padding: 1;
+    height: auto;
+}
+
+DevicePanel .device-title {
+    text-style: bold;
+}
+
+DevicePanel .device-connected {
+    color: $success;
+}
+
+DevicePanel .device-disconnected {
+    color: $error;
+}
+
+DevicePanel .device-info {
+    color: $text-muted;
+}
+
+DeviceList {
+    height: auto;
+    max-height: 15;
+    border: solid $secondary;
+    margin: 1 0;
+}
+
+DeviceList ListItem {
+    padding: 0 1;
+}
+
+DeviceList ListItem:hover {
+    background: $secondary-background;
+}
+
+DeviceList .device-available {
+    color: $success;
+}
+
+DeviceList .device-unauthorized {
+    color: $warning;
+}
+
+DeviceList .device-offline {
+    color: $error;
+}
+
+/* =========================================================================
+   Queue Panel Widget
+   ========================================================================= */
+
+QueueWidget {
+    border: solid $primary;
+    height: 100%;
+}
+
+QueueWidget .queue-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+QueueWidget DataTable {
+    height: 1fr;
+}
+
+QueueWidget .status-pending {
+    color: $text-muted;
+}
+
+QueueWidget .status-in-progress {
+    color: $warning;
+    text-style: bold;
+}
+
+QueueWidget .status-completed {
+    color: $success;
+}
+
+QueueWidget .status-failed {
+    color: $error;
+}
+
+QueueWidget .status-skipped {
+    color: $text-muted;
+    text-style: italic;
+}
+
+/* =========================================================================
+   Screen Layouts
+   ========================================================================= */
+
+/* Discovery Screen */
+DiscoveryScreen {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto 1fr auto;
+}
+
+DiscoveryScreen .content {
+    padding: 1 2;
+    height: 100%;
+}
+
+DiscoveryScreen .instructions {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+DiscoveryScreen #device-list {
+    height: 1fr;
+    min-height: 5;
+    max-height: 20;
+    border: solid $secondary;
+    margin: 1 0;
+}
+
+DiscoveryScreen #device-status {
+    height: auto;
+    margin: 1 0;
+}
+
+DiscoveryScreen #action-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
+DiscoveryScreen ActivityLog {
+    height: auto;
+    min-height: 8;
+    max-height: 15;
+}
+
+/* Wireless ADB Section */
+DiscoveryScreen .wireless-title {
+    margin-top: 1;
+    padding: 0;
+}
+
+DiscoveryScreen .wireless-hint {
+    color: $text-muted;
+    text-style: italic;
+    margin-bottom: 1;
+}
+
+DiscoveryScreen #wireless-section {
+    height: auto;
+    padding: 0;
+}
+
+DiscoveryScreen #wireless-section .field-label {
+    color: $text-muted;
+    padding: 0;
+    margin-top: 1;
+}
+
+DiscoveryScreen #wireless-section Input {
+    margin: 0;
+    width: 100%;
+}
+
+DiscoveryScreen #wireless-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
+DiscoveryScreen #wireless-status {
+    height: auto;
+    margin-top: 1;
+}
+
+/* Selection Screen - Unified Export View */
+SelectionScreen {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto 1fr auto auto;
+}
+
+SelectionScreen .main-content {
+    layout: horizontal;
+    height: 1fr;
+}
+
+SelectionScreen .left-panel {
+    width: 2fr;
+    height: 100%;
+}
+
+SelectionScreen .right-panel {
+    width: 1fr;
+    height: 100%;
+}
+
+SelectionScreen .bottom-bar {
+    height: auto;
+    padding: 1;
+    background: $primary-background;
+    border-top: solid $primary;
+}
+
+SelectionScreen .action-hint {
+    color: $text-muted;
+    text-align: center;
+}
+
+/* Progress Pane positioned between main content and bottom bar */
+SelectionScreen ProgressPane {
+    height: 30%;
+    min-height: 8;
+}
+
+/* =========================================================================
+   Progress Pane Widget (Unified Export/Processing View)
+   ========================================================================= */
+
+ProgressPane {
+    height: 30%;
+    min-height: 12;
+    border: solid $primary;
+    padding: 0;
+}
+
+ProgressPane .progress-section {
+    height: auto;
+    max-height: 6;
+    padding: 0 1;
+}
+
+ProgressPane .progress-title {
+    text-style: bold;
+    padding: 0;
+    background: $primary-background;
+}
+
+ProgressPane .progress-current {
+    color: $primary;
+    height: auto;
+}
+
+ProgressPane .progress-step {
+    color: $text;
+    height: auto;
+}
+
+ProgressPane .progress-overall {
+    color: $text-muted;
+    height: auto;
+}
+
+ProgressPane .phase-list {
+    height: auto;
+    padding: 0;
+}
+
+ProgressPane ProgressBar {
+    padding: 0;
+    margin: 0 0 1 0;
+    height: auto;
+}
+
+ProgressPane .activity-section {
+    height: 1fr;
+    min-height: 4;
+    border-top: solid $primary;
+    padding: 0;
+}
+
+ProgressPane .activity-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+ProgressPane RichLog {
+    height: 1fr;
+    min-height: 2;
+    padding: 0 1;
+    scrollbar-gutter: stable;
+}
+
+ProgressPane .summary-section {
+    padding: 1;
+    height: auto;
+}
+
+ProgressPane .summary-success {
+    color: $success;
+}
+
+ProgressPane .summary-error {
+    color: $error;
+}
+
+/* =========================================================================
+   Chat List Status Display Styles
+   ========================================================================= */
+
+ChatListWidget .chat-completed {
+    color: $success;
+}
+
+ChatListWidget .chat-in-progress {
+    color: $warning;
+    text-style: bold;
+}
+
+ChatListWidget .chat-failed {
+    color: $error;
+}
+
+ChatListWidget .chat-skipped {
+    color: $text-muted;
+    text-style: italic;
+}
+
+ChatListWidget .chat-pending {
+    color: $text-muted;
+}
+
+/* =========================================================================
+   Settings Panel Locked State
+   ========================================================================= */
+
+SettingsPanel.locked {
+    opacity: 0.7;
+}
+
+SettingsPanel.locked Checkbox {
+    color: $text-muted;
+}
+
+SettingsPanel .locked-indicator {
+    color: $warning;
+    text-style: italic;
+}
+
+/* Settings Panel Sections and Fields */
+SettingsPanel .section-title {
+    text-style: bold;
+    color: $primary;
+    padding: 0;
+    margin-top: 1;
+}
+
+SettingsPanel .section-spacer {
+    height: 1;
+}
+
+SettingsPanel .field-label {
+    color: $text-muted;
+    padding: 0;
+    margin-top: 1;
+}
+
+SettingsPanel .settings-container {
+    height: auto;
+    padding: 0;
+}
+
+SettingsPanel Input {
+    margin: 0;
+    width: 100%;
+}
+
+SettingsPanel RadioSet {
+    margin: 0;
+    width: 100%;
+    height: auto;
+}
+
+SettingsPanel RadioButton {
+    height: auto;
+    padding: 0;
+}
+
+/* API Key Row Layout */
+SettingsPanel .api-key-row {
+    height: auto;
+    width: 100%;
+    layout: horizontal;
+}
+
+SettingsPanel .api-key-input {
+    width: 1fr;
+    margin: 0;
+}
+
+SettingsPanel .api-status {
+    width: auto;
+    min-width: 14;
+    padding: 0 1;
+    text-align: right;
+}
+
+/* API Status Colors */
+SettingsPanel .api-status-valid {
+    color: $success;
+}
+
+SettingsPanel .api-status-invalid {
+    color: $error;
+}
+
+SettingsPanel .api-status-unknown {
+    color: $text-muted;
+}
+
+
+/* Export Screen */
+ExportScreen {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto auto 1fr auto;
+}
+
+ExportScreen .top-section {
+    height: auto;
+    padding: 1;
+}
+
+ExportScreen .middle-section {
+    layout: horizontal;
+    height: 1fr;
+}
+
+ExportScreen .queue-section {
+    width: 1fr;
+    height: 100%;
+}
+
+ExportScreen .activity-section {
+    width: 1fr;
+    height: 100%;
+}
+
+ExportScreen .control-bar {
+    height: auto;
+    padding: 1;
+    background: $primary-background;
+    border-top: solid $primary;
+}
+
+/* Processing Screen */
+ProcessingScreen {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto 1fr auto;
+}
+
+ProcessingScreen .progress-section {
+    height: auto;
+    padding: 1;
+}
+
+ProcessingScreen .log-section {
+    height: 1fr;
+    padding: 0 1;
+}
+
+/* =========================================================================
+   Help Screen (Modal)
+   ========================================================================= */
+
+HelpScreen {
+    align: center middle;
+}
+
+HelpScreen .help-container {
+    width: 60;
+    height: auto;
+    max-height: 80%;
+    border: solid $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+HelpScreen .help-title {
+    text-style: bold;
+    text-align: center;
+    padding-bottom: 1;
+}
+
+HelpScreen .help-section {
+    margin-bottom: 1;
+}
+
+HelpScreen .help-key {
+    color: $primary;
+    text-style: bold;
+}
+
+HelpScreen .help-description {
+    color: $text;
+}
+
+/* =========================================================================
+   Cancel Modal
+   ========================================================================= */
+
+CancelModal {
+    align: center middle;
+}
+
+CancelModal .modal-container {
+    width: 75;
+    height: auto;
+    max-height: 80%;
+    border: solid $error;
+    background: $surface;
+    padding: 1 2;
+}
+
+CancelModal .modal-title {
+    text-style: bold;
+    text-align: center;
+    color: $warning;
+    padding-bottom: 1;
+}
+
+CancelModal .modal-message {
+    color: $text;
+    padding-bottom: 1;
+}
+
+CancelModal .modal-checkbox {
+    padding: 0 0 1 0;
+}
+
+CancelModal .modal-buttons {
+    height: auto;
+    align: center middle;
+    padding-top: 1;
+}
+
+CancelModal .modal-buttons Button {
+    margin: 0 1;
+}
+
+/* =========================================================================
+   Status Indicators
+   ========================================================================= */
+
+.status-success {
+    color: $success;
+}
+
+.status-error {
+    color: $error;
+}
+
+.status-warning {
+    color: $warning;
+}
+
+.status-info {
+    color: $primary;
+}
+
+.status-muted {
+    color: $text-muted;
+}
+
+/* =========================================================================
+   Common Elements
+   ========================================================================= */
+
+.panel-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $primary-background;
+}
+
+.centered {
+    align: center middle;
+}
+
+.bold {
+    text-style: bold;
+}
+
+.italic {
+    text-style: italic;
+}
+
+.muted {
+    color: $text-muted;
+}
+
+/* Button styling */
+Button {
+    margin: 0 1;
+}
+
+Button.-primary {
+    background: $primary;
+}
+
+Button.-success {
+    background: $success;
+}
+
+Button.-warning {
+    background: $warning;
+}
+
+Button.-error {
+    background: $error;
+}
+
+/* Input styling */
+Input {
+    margin: 0 1;
+}
+
+Input:focus {
+    border: solid $primary;
+}
+
+/* Loading indicator */
+.loading {
+    color: $warning;
+    text-style: bold;
+}
+
+.spinner {
+    color: $primary;
+}
+
+/* =========================================================================
+   Secret Settings Modal
+   ========================================================================= */
+
+SecretSettingsModal {
+    align: center middle;
+}
+
+SecretSettingsModal .modal-container {
+    width: 50;
+    height: auto;
+    max-height: 80%;
+    border: solid $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+SecretSettingsModal .modal-title {
+    text-style: bold;
+    text-align: center;
+    color: $primary;
+    padding-bottom: 1;
+}
+
+SecretSettingsModal ListView {
+    height: auto;
+    max-height: 20;
+    background: $surface;
+    border: none;
+    padding: 0;
+}
+
+SecretSettingsModal ListItem {
+    padding: 0 1;
+    height: auto;
+}
+
+SecretSettingsModal ListItem:hover {
+    background: $primary-background-lighten-1;
+}
+
+SecretSettingsModal ListItem.-selected {
+    background: $primary-background-lighten-2;
+}
+
+SecretSettingsModal .option-label {
+    width: 100%;
+}
+
+SecretSettingsModal .modal-footer {
+    text-align: center;
+    color: $text-muted;
+    padding-top: 1;
+    border-top: solid $primary-background;
+    margin-top: 1;
+}
+
+/* =========================================================================
+   Color Scheme Modal
+   ========================================================================= */
+
+ColorSchemeModal {
+    align: center middle;
+}
+
+ColorSchemeModal .modal-container {
+    width: 50;
+    height: auto;
+    max-height: 80%;
+    border: solid $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+ColorSchemeModal .modal-title {
+    text-style: bold;
+    text-align: center;
+    color: $primary;
+    padding-bottom: 1;
+}
+
+ColorSchemeModal ListView {
+    height: auto;
+    max-height: 20;
+    background: $surface;
+    border: none;
+    padding: 0;
+}
+
+ColorSchemeModal ListItem {
+    padding: 0 1;
+    height: auto;
+}
+
+ColorSchemeModal ListItem:hover {
+    background: $primary-background-lighten-1;
+}
+
+ColorSchemeModal ListItem.-selected {
+    background: $primary-background-lighten-2;
+}
+
+ColorSchemeModal .theme-label {
+    width: 100%;
+}
+
+ColorSchemeModal .theme-current {
+    color: $success;
+}
+
+ColorSchemeModal .modal-footer {
+    text-align: center;
+    color: $text-muted;
+    padding-top: 1;
+    border-top: solid $primary-background;
+    margin-top: 1;
+}

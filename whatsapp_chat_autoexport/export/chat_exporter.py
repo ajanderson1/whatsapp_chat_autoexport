@@ -9,7 +9,7 @@ import subprocess
 import os
 import time
 from time import sleep
-from typing import Optional, Tuple, List, Dict, Set, Any
+from typing import Optional, Tuple, List, Dict, Set, Any, Callable
 from pathlib import Path
 
 from .whatsapp_driver import WhatsAppDriver, SESSION_ERROR_KEYWORDS
@@ -790,22 +790,35 @@ class ChatExporter:
         self.logger.warning(f"Share dialog did not appear after {max_retries} attempts")
         return False
     
-    def export_chat_to_google_drive(self, chat_name: str, include_media: bool = True) -> bool:
+    def export_chat_to_google_drive(self, chat_name: str, include_media: bool = True,
+                                      on_progress: Optional[Callable] = None) -> bool:
         """
         Export a chat to Google Drive with or without media.
-        
+
         This function assumes you're already in the conversation view for the chat.
-        
+
         Args:
             chat_name: Name of the chat being exported
             include_media: If True, export with media; if False, export without media
-        
+            on_progress: Optional callback for progress updates.
+                         Signature: on_progress(phase, message, current, total, item_name="")
+
         Returns True if export initiated successfully, False if skipped (community chat).
         """
+
+        def _fire(step_index: int, total_steps: int, message: str) -> None:
+            """Safely invoke the on_progress callback."""
+            if on_progress:
+                try:
+                    on_progress("export", message, step_index, total_steps, chat_name)
+                except Exception:
+                    pass  # Never let callback errors crash the export
+
         media_status = "with media" if include_media else "without media"
         self.logger.info(f"\n{'='*70}")
         self.logger.info(f"📤 EXPORTING CHAT: '{chat_name}' ({media_status})")
         self.logger.info(f"{'='*70}")
+        _fire(0, 6, f"Starting export for '{chat_name}'")
         
         # STEP 1: Open three-dot menu
         self.logger.step(1, "Opening menu...")
@@ -902,7 +915,8 @@ class ChatExporter:
             menu_button.click()
             sleep(0.5)  # Brief delay for menu animation
             self.logger.success("Menu opened")
-            
+            _fire(1, 6, "Menu opened")
+
         except Exception as e:
             self.logger.error(f"ERROR opening menu: {e}")
             # Clear cache on navigation errors
@@ -971,7 +985,8 @@ class ChatExporter:
             more_option.click()
             sleep(0.5)  # Brief delay for submenu to appear
             self.logger.success("'More' clicked")
-            
+            _fire(2, 6, "'More' clicked")
+
         except Exception as e:
             self.logger.error(f"ERROR clicking 'More': {e}")
             self.driver.get_page_source(f"more_error_{chat_name}.xml")
@@ -1012,7 +1027,8 @@ class ChatExporter:
             export_option.click()
             sleep(0.5)  # Brief delay for export dialog
             self.logger.success("'Export chat' clicked")
-            
+            _fire(3, 6, "'Export chat' clicked")
+
         except Exception as e:
             self.logger.error(f"ERROR clicking 'Export chat': {e}")
             self.driver.get_page_source(f"export_error_{chat_name}.xml")
@@ -1154,11 +1170,13 @@ class ChatExporter:
                     else:
                         self.logger.success("✓ Share dialog ready")
             
+            _fire(4, 6, f"Media option selected ({media_option_name})")
+
         except Exception as e:
             self.logger.error(f"ERROR selecting '{media_option_name}': {e}")
             self.driver.get_page_source(f"media_option_error_{chat_name}.xml")
             raise
-        
+
         # STEP 5: Select "Drive" (Google Drive)
         self.logger.step(5, "Selecting 'Drive' (Google Drive)...")
         try:
@@ -1292,7 +1310,8 @@ class ChatExporter:
             google_drive_option.click()
             sleep(0.5)  # Brief delay for Google Drive to open
             self.logger.success("'Drive' selected - Google Drive window should now be opening")
-            
+            _fire(5, 6, "'Drive' selected")
+
         except Exception as e:
             self.logger.error(f"ERROR selecting 'Drive': {e}")
             self.driver.get_page_source(f"google_drive_error_{chat_name}.xml")
@@ -1516,7 +1535,8 @@ class ChatExporter:
         
         self.logger.success(f"SUCCESS: Export initiated for '{chat_name}'")
         self.logger.info("📤 Google Drive should now be handling the export...")
-        
+        _fire(6, 6, "Export initiated - uploading to Google Drive")
+
         return True
     
     def format_time(self, seconds: float) -> str:

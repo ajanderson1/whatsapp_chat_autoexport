@@ -6,7 +6,7 @@ Creates organized output structure with transcripts, media, and transcriptions.
 
 import shutil
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Callable
 from datetime import datetime
 
 from ..processing.transcript_parser import TranscriptParser, Message, MediaReference
@@ -418,7 +418,8 @@ class OutputBuilder:
         transcript_files: List[Tuple[Path, Path]],
         dest_dir: Path,
         include_transcriptions: bool = True,
-        copy_media: bool = True
+        copy_media: bool = True,
+        on_progress: Optional[Callable] = None
     ) -> List[Dict]:
         """
         Build outputs for multiple chats.
@@ -428,6 +429,8 @@ class OutputBuilder:
             dest_dir: Destination directory for all outputs
             include_transcriptions: Include audio/video transcriptions
             copy_media: Copy media files
+            on_progress: Optional callback for progress updates.
+                         Signature: on_progress(phase, message, current, total, item_name="")
 
         Returns:
             List of summary dictionaries
@@ -435,9 +438,10 @@ class OutputBuilder:
         self.logger.info(f"Building outputs for {len(transcript_files)} chat(s)")
 
         results = []
+        total = len(transcript_files)
 
         for i, (transcript_path, media_dir) in enumerate(transcript_files, 1):
-            self.logger.info(f"\n[{i}/{len(transcript_files)}] Processing: {transcript_path.name}")
+            self.logger.info(f"\n[{i}/{total}] Processing: {transcript_path.name}")
 
             try:
                 summary = self.build_output(
@@ -452,6 +456,12 @@ class OutputBuilder:
                 self.logger.error(f"Failed to build output for {transcript_path.name}: {e}")
                 import traceback
                 traceback.print_exc()
+
+            if on_progress:
+                try:
+                    on_progress("build_output", f"Built output for {transcript_path.stem}", i, total, transcript_path.stem)
+                except Exception:
+                    pass  # Never let callback errors crash output building
 
         # Overall summary
         total_messages = sum(r['total_messages'] for r in results)

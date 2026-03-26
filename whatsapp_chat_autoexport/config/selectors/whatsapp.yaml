@@ -1,0 +1,153 @@
+# WhatsApp UI Selectors
+# Version should match WhatsApp version these selectors were tested with
+version: "2.24"
+app: "com.whatsapp"
+
+selectors:
+  # Main chat list screen
+  chat_list_item:
+    description: "Individual chat entry in the main list"
+    required: true
+    strategies:
+      - type: id
+        value: "com.whatsapp:id/conversations_row_contact_name"
+        priority: 1
+        timeout: 5.0
+
+  toolbar:
+    description: "Main toolbar at top of screen"
+    strategies:
+      - type: id
+        value: "com.whatsapp:id/toolbar"
+        priority: 1
+      - type: id
+        value: "com.whatsapp:id/action_bar"
+        priority: 2
+
+  search_button:
+    description: "Search/magnifier button in toolbar"
+    strategies:
+      - type: id
+        value: "com.whatsapp:id/menuitem_search"
+        priority: 1
+      - type: content_desc
+        value: "Search"
+        priority: 2
+
+  # Menu navigation
+  menu_button:
+    description: "Three-dot overflow menu button"
+    strategies:
+      - type: id
+        value: "com.whatsapp:id/menuitem_overflow"
+        priority: 1
+        timeout: 5.0
+      - type: content_desc
+        value: "More options"
+        priority: 2
+      - type: accessibility_id
+        value: "More options"
+        priority: 3
+
+  more_option:
+    description: "'More' option in dropdown menu"
+    strategies:
+      - type: text
+        value: "More"
+        priority: 1
+      - type: text_contains
+        value: "more"
+        case_sensitive: false
+        priority: 2
+
+  export_chat_option:
+    description: "'Export chat' option in More submenu"
+    fallback_behavior: skip
+    strategies:
+      - type: text
+        value: "Export chat"
+        priority: 1
+      - type: text_contains
+        value: "export"
+        case_sensitive: false
+        priority: 2
+
+  # Media selection dialog
+  include_media_button:
+    description: "'Include media' button in export dialog"
+    strategies:
+      - type: text
+        value: "Include media"
+        priority: 1
+      - type: text_contains
+        value: "include"
+        case_sensitive: false
+        priority: 2
+      - type: id
+        value: "android:id/button1"
+        priority: 3
+
+  without_media_button:
+    description: "'Without media' button in export dialog"
+    strategies:
+      - type: text
+        value: "Without media"
+        priority: 1
+      - type: text_contains
+        value: "without"
+        case_sensitive: false
+        priority: 2
+      - type: id
+        value: "android:id/button2"
+        priority: 3
+
+  # Error dialogs
+  ok_button:
+    description: "OK button for dismissing dialogs"
+    strategies:
+      - type: text
+        value: "OK"
+        priority: 1
+      - type: text
+        value: "Ok"
+        priority: 2
+      - type: id
+        value: "android:id/button1"
+        priority: 3
+
+  cancel_button:
+    description: "Cancel button for dismissing dialogs"
+    strategies:
+      - type: text
+        value: "Cancel"
+        priority: 1
+      - type: text
+        value: "CANCEL"
+        priority: 2
+      - type: id
+        value: "android:id/button2"
+        priority: 3
+
+  # Chat view elements
+  chat_header:
+    description: "Header showing chat name in conversation view"
+    strategies:
+      - type: id
+        value: "com.whatsapp:id/conversation_contact_name"
+        priority: 1
+      - type: id
+        value: "com.whatsapp:id/conversation_contact"
+        priority: 2
+
+  back_button:
+    description: "Back navigation button"
+    strategies:
+      - type: content_desc
+        value: "Navigate up"
+        priority: 1
+      - type: content_desc
+        value: "Back"
+        priority: 2
+      - type: accessibility_id
+        value: "Navigate up"
+        priority: 3
