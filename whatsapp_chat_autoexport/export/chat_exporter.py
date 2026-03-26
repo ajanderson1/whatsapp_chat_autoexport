@@ -9,11 +9,18 @@ import subprocess
 import os
 import time
 from time import sleep
-from typing import Optional, Tuple, List, Dict, Set
+from typing import Optional, Tuple, List, Dict, Set, Any
 from pathlib import Path
 
-from .whatsapp_driver import WhatsAppDriver
+from .whatsapp_driver import WhatsAppDriver, SESSION_ERROR_KEYWORDS
 from ..utils.logger import Logger
+
+# New workflow imports (for integration with refactored architecture)
+from ..whatsapp.export.export_workflow import ExportWorkflow, WorkflowResult, WorkflowStatus
+from ..automation.elements.element_cache import ElementCache
+from ..core.events import EventBus, get_event_bus
+from ..state.state_manager import StateManager
+from ..state.models import SessionStatus
 
 
 # Helper functions for resume functionality
@@ -107,14 +114,481 @@ def check_chat_exists(drive_folder: Path, chat_name: str) -> Tuple[bool, List[st
 
 class ChatExporter:
     """Handles chat export operations."""
-    
+
+    # Max consecutive recovery attempts before aborting the batch.
+    # 1 = transient, 2 = unlucky, 3 = systemic issue (phone overheating, OOM, etc.)
+    MAX_CONSECUTIVE_RECOVERIES = 3
+
     def __init__(self, driver: WhatsAppDriver, logger: Logger, pipeline: Optional['WhatsAppPipeline'] = None):
         self.driver = driver
         self.logger = logger
         self.pipeline = pipeline
         # Cache for element finding strategies: {screen_type: (locator_type, locator_value)}
         self._element_strategy_cache: Dict[str, Tuple[str, str]] = {}
-    
+
+        # New workflow components (lazy initialized)
+        self._element_cache: Optional[ElementCache] = None
+        self._event_bus: Optional[EventBus] = None
+        self._workflow: Optional[ExportWorkflow] = None
+        self._state_manager: Optional[StateManager] = None
+
+        # Session recovery tracking
+        self._consecutive_recovery_count: int = 0
+
+    def _get_state_manager(self) -> StateManager:
+        """
+        Get or create the StateManager instance.
+
+        Lazy initializes the state manager on first use, creating
+        an event bus connection for progress tracking.
+
+        Returns:
+            StateManager for session and chat state tracking
+        """
+        if self._state_manager is None:
+            if self._event_bus is None:
+                self._event_bus = get_event_bus()
+            self._state_manager = StateManager(event_bus=self._event_bus)
+        return self._state_manager
+
+    # --- Session recovery helpers ---
+
+    @staticmethod
+    def _is_session_error(error_msg: str) -> bool:
+        """Check if an error message indicates a dead/crashed Appium session."""
+        lowered = error_msg.lower()
+        return any(kw in lowered for kw in SESSION_ERROR_KEYWORDS)
+
+    def _attempt_session_recovery(self, context: str) -> bool:
+        """Attempt to recover a dead Appium session via reconnect + verify.
+
+        Args:
+            context: Human-readable description of why recovery was triggered.
+
+        Returns:
+            True if session was recovered and WhatsApp is verified, False otherwise.
+        """
+        self.logger.warning(f"Session recovery triggered: {context}")
+
+        try:
+            if not self.driver.reconnect():
+                self.logger.error("Session recovery failed: reconnect() returned False")
+                return False
+
+            if not self.driver.verify_whatsapp_is_open():
+                self.logger.error("Session recovery failed: WhatsApp not accessible after reconnect")
+                return False
+        except Exception as e:
+            self.logger.error(f"Session recovery failed with exception: {e}")
+            return False
+
+        self._consecutive_recovery_count += 1
+        self.logger.success(f"Session recovered successfully (consecutive recoveries: {self._consecutive_recovery_count})")
+        return True
+
+    def _check_consecutive_recovery_limit(self) -> bool:
+        """Check if the consecutive recovery limit has been reached.
+
+        Returns:
+            True if the limit has been reached (batch should stop), False otherwise.
+        """
+        if self._consecutive_recovery_count >= self.MAX_CONSECUTIVE_RECOVERIES:
+            self.logger.error(
+                f"Stopping batch: {self._consecutive_recovery_count} consecutive session recoveries "
+                f"reached the limit of {self.MAX_CONSECUTIVE_RECOVERIES}. "
+                f"This suggests a systemic issue (phone overheating, memory exhaustion, etc.)"
+            )
+            return True
+        return False
+
+    def create_export_session(
+        self,
+        chat_names: List[str],
+        include_media: bool = True,
+        limit: Optional[int] = None,
+    ) -> None:
+        """
+        Create a new export session with the given chats.
+
+        This initializes the StateManager with session configuration
+        and adds all chats to the queue. Call this before starting
+        batch exports with the new workflow.
+
+        Args:
+            chat_names: List of chat names to export
+            include_media: Whether to include media in exports
+            limit: Optional limit on number of chats
+        """
+        state_manager = self._get_state_manager()
+
+        # Create session
+        device_id = self.driver.device_id if hasattr(self.driver, 'device_id') else None
+        state_manager.create_session(
+            include_media=include_media,
+            limit=limit,
+            device_id=device_id,
+        )
+
+        # Add chats to session
+        state_manager.add_chats(chat_names)
+
+        # Set status to exporting
+        state_manager.set_session_status(SessionStatus.EXPORTING)
+
+        self.logger.info(f"Created export session with {len(chat_names)} chats")
+
+    def get_export_progress(self) -> Dict[str, Any]:
+        """
+        Get current export progress from StateManager.
+
+        Returns:
+            Dict with progress information including:
+            - current_chat: Name of chat being exported
+            - current_step: Current step name
+            - chats_completed: Number of completed exports
+            - chats_total: Total number of chats
+            - chats_failed: Number of failed exports
+            - chats_skipped: Number of skipped chats
+            - elapsed_seconds: Time elapsed
+        """
+        state_manager = self._get_state_manager()
+        progress = state_manager.get_progress()
+
+        return {
+            "current_chat": progress.current_chat,
+            "current_step": progress.current_step,
+            "step_index": progress.step_index,
+            "total_steps": progress.total_steps,
+            "chats_completed": progress.chats_completed,
+            "chats_total": progress.chats_total,
+            "chats_failed": progress.chats_failed,
+            "chats_skipped": progress.chats_skipped,
+            "status": progress.status,
+            "elapsed_seconds": progress.elapsed_seconds,
+        }
+
+    def _get_workflow(self) -> ExportWorkflow:
+        """
+        Get or create the ExportWorkflow instance.
+
+        Lazy initializes the new modular workflow system on first use.
+
+        Returns:
+            ExportWorkflow configured with current driver connection
+        """
+        if self._workflow is None:
+            # Initialize element cache for strategy persistence
+            if self._element_cache is None:
+                self._element_cache = ElementCache()
+
+            # Initialize event bus
+            if self._event_bus is None:
+                self._event_bus = get_event_bus()
+
+            # Create workflow from existing WhatsAppDriver
+            self._workflow = ExportWorkflow.from_whatsapp_driver(
+                whatsapp_driver=self.driver,
+                logger=self.logger,
+                event_bus=self._event_bus,
+                cache=self._element_cache,
+            )
+
+        return self._workflow
+
+    def export_with_new_workflow(
+        self,
+        chat_name: str,
+        chat_index: int = 0,
+        include_media: bool = True,
+        timeout_seconds: float = 5.0,
+        use_state_tracking: bool = True,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Export a chat using the new modular workflow system.
+
+        This method provides a bridge between the legacy export code and the
+        new refactored architecture. It uses the same underlying driver but
+        executes exports through the new step-based workflow.
+
+        Args:
+            chat_name: Name of the chat to export
+            chat_index: Index of chat in the list (for ordering/logging)
+            include_media: Whether to include media files
+            timeout_seconds: Timeout for element finding operations
+            use_state_tracking: Whether to update StateManager (default True)
+
+        Returns:
+            Tuple of (success: bool, message: Optional[str])
+            - success: True if export completed successfully
+            - message: Human-readable status message
+
+        Example:
+            >>> success, message = exporter.export_with_new_workflow("Family Group")
+            >>> if success:
+            ...     print(f"Export successful: {message}")
+            ... else:
+            ...     print(f"Export failed: {message}")
+        """
+        media_status = "with media" if include_media else "without media"
+        self.logger.info(f"\n{'='*70}")
+        self.logger.info(f"📤 EXPORTING (NEW WORKFLOW): '{chat_name}' ({media_status})")
+        self.logger.info(f"{'='*70}")
+
+        # Track state if enabled
+        state_manager = self._get_state_manager() if use_state_tracking else None
+        if state_manager and state_manager.has_session:
+            state_manager.start_chat(chat_name)
+
+        try:
+            # Get or create workflow
+            workflow = self._get_workflow()
+
+            # Execute the workflow
+            result: WorkflowResult = workflow.execute(
+                chat_name=chat_name,
+                chat_index=chat_index,
+                include_media=include_media,
+                timeout_seconds=timeout_seconds,
+            )
+
+            # Log detailed result
+            self.logger.debug_msg(f"Workflow completed with status: {result.status.name}")
+            self.logger.debug_msg(f"Steps completed: {result.steps_completed}/{result.steps_total}")
+            self.logger.debug_msg(f"Duration: {result.duration_seconds:.2f}s")
+
+            # Record step completions in state manager
+            if state_manager and state_manager.has_session:
+                for step_result in result.step_results:
+                    if step_result.success:
+                        state_manager.record_step(chat_name, step_result.step_name)
+
+            # Handle different outcomes
+            if result.success:
+                self.logger.success(f"SUCCESS: Export initiated for '{chat_name}'")
+                self.logger.info("📤 Google Drive should now be handling the export...")
+
+                # Update state manager
+                if state_manager and state_manager.has_session:
+                    state_manager.complete_chat(chat_name)
+
+                return True, result.message
+
+            elif result.skipped:
+                self.logger.warning(f"SKIPPED: {result.message}")
+
+                # Update state manager
+                if state_manager and state_manager.has_session:
+                    state_manager.skip_chat(chat_name, result.message)
+
+                return False, result.message
+
+            else:  # Failed
+                self.logger.error(f"FAILED: {result.message}")
+                if result.error:
+                    self.logger.error(f"Error details: {result.error.message}")
+                    if result.error.recovery_hint:
+                        self.logger.info(f"Recovery hint: {result.error.recovery_hint}")
+
+                # Update state manager
+                if state_manager and state_manager.has_session:
+                    error_msg = result.error.message if result.error else result.message
+                    state_manager.fail_chat(chat_name, error_msg)
+
+                return False, result.message
+
+        except Exception as e:
+            error_msg = f"Unexpected error during new workflow export: {e}"
+            self.logger.error(error_msg)
+
+            # Update state manager
+            if state_manager and state_manager.has_session:
+                state_manager.fail_chat(chat_name, error_msg)
+
+            # Invalidate workflow on error (may need to be recreated)
+            self._workflow = None
+
+            return False, error_msg
+
+    def export_chats_with_new_workflow(
+        self,
+        chat_names: List[str],
+        include_media: bool = True,
+        resume_folder: Optional[Path] = None,
+    ) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
+        """
+        Export multiple chats using the new modular workflow system.
+
+        This method provides the same interface as `export_chats()` but uses
+        the new step-based workflow with StateManager tracking.
+
+        Args:
+            chat_names: List of chat names to export
+            include_media: Whether to include media in exports
+            resume_folder: Optional path to check for existing exports
+
+        Returns:
+            Tuple of (results dict, timing dict, total_time, skipped_already_exists dict)
+            - results: Dict mapping chat_name -> success (bool)
+            - timings: Dict mapping chat_name -> elapsed_time (float seconds)
+            - total_time: Total time elapsed for batch (float seconds)
+            - skipped_already_exists: Dict mapping chat_name -> True if skipped
+
+        Example:
+            >>> results, timings, total, skipped = exporter.export_chats_with_new_workflow(
+            ...     ["Family Group", "Work Chat"],
+            ...     include_media=True,
+            ... )
+        """
+        results = {}
+        timings = {}
+        skipped_already_exists = {}
+        total = len(chat_names)
+        batch_start_time = time.time()
+
+        # Create export session for state tracking
+        self.create_export_session(
+            chat_names=chat_names,
+            include_media=include_media,
+            limit=total,
+        )
+
+        # Reset consecutive recovery counter at the start of each batch
+        self._consecutive_recovery_count = 0
+
+        for i, chat_name in enumerate(chat_names, 1):
+            self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
+
+            # CRITICAL: Verify WhatsApp is still accessible before each export.
+            # If verification fails, attempt session recovery before aborting.
+            if not self.driver.verify_whatsapp_is_open():
+                state_manager = self._get_state_manager()
+                if self._check_consecutive_recovery_limit():
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    if state_manager.has_session:
+                        state_manager.fail_chat(chat_name, "Consecutive recovery limit reached")
+                    break
+                if self._attempt_session_recovery("Pre-export verification failed"):
+                    # Recovery succeeded — mark this chat skipped and continue to next
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    if state_manager.has_session:
+                        state_manager.fail_chat(chat_name, "Session recovered - skipping to next chat")
+                    continue
+                else:
+                    self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    if state_manager.has_session:
+                        state_manager.fail_chat(chat_name, "WhatsApp became inaccessible")
+                    break
+
+            chat_start_time = time.time()
+
+            # Check if chat already exists (resume mode)
+            if resume_folder:
+                exists, matching_files = check_chat_exists(resume_folder, chat_name)
+                if exists:
+                    skipped_already_exists[chat_name] = True
+                    if self.logger.debug:
+                        self.logger.debug_msg(f"Chat '{chat_name}' already exists in resume folder")
+                        for file_name in matching_files:
+                            self.logger.debug_msg(f"  Found existing file: {file_name}")
+                    self.logger.info(f"⏭️  Skipping '{chat_name}' (already exported)")
+                    results[chat_name] = False
+                    timings[chat_name] = time.time() - chat_start_time
+
+                    # Skip in state manager
+                    state_manager = self._get_state_manager()
+                    if state_manager.has_session:
+                        state_manager.skip_chat(chat_name, "Already exported (resume mode)")
+
+                    continue
+
+            try:
+                # Navigate to main screen first
+                self.driver.navigate_to_main()
+                sleep(0.3)
+
+                # Click into chat
+                if not self.driver.click_chat(chat_name):
+                    self.logger.warning(f"Could not open chat '{chat_name}' - skipping")
+                    results[chat_name] = False
+                    timings[chat_name] = time.time() - chat_start_time
+                    continue
+
+                # Export using new workflow
+                success, message = self.export_with_new_workflow(
+                    chat_name=chat_name,
+                    chat_index=i - 1,
+                    include_media=include_media,
+                    use_state_tracking=True,  # State is tracked by the method
+                )
+
+                # Navigate back to main screen
+                self.driver.navigate_back_to_main()
+
+                results[chat_name] = success
+
+                # Post-export session health check
+                if not self.driver.is_session_active():
+                    if self._check_consecutive_recovery_limit():
+                        break
+                    if not self._attempt_session_recovery("Post-export session check failed"):
+                        self.logger.error("Failed to recover session after export - stopping batch")
+                        break
+                else:
+                    # A fully successful export resets the consecutive counter
+                    self._consecutive_recovery_count = 0
+
+            except Exception as e:
+                error_msg = str(e)
+                if "community" in error_msg.lower() or "more" in error_msg.lower():
+                    self.logger.warning(f"Skipped '{chat_name}' - community chat or no export option")
+                elif self._is_session_error(error_msg):
+                    # Session-level crash — attempt recovery before continuing
+                    self.logger.error(f"Session error during export of '{chat_name}': {e}")
+                    results[chat_name] = False
+                    state_manager = self._get_state_manager()
+                    if state_manager.has_session:
+                        state_manager.fail_chat(chat_name, f"Session crash: {error_msg[:100]}")
+                    if self._check_consecutive_recovery_limit():
+                        break
+                    if self._attempt_session_recovery(f"Session error during export of '{chat_name}'"):
+                        continue  # Skip to next chat
+                    else:
+                        break
+                else:
+                    self.logger.error(f"Error during export for '{chat_name}': {e}")
+                results[chat_name] = False
+
+                # Try to navigate back (may silently fail if session is dead)
+                try:
+                    self.driver.navigate_back_to_main()
+                except Exception:
+                    pass
+
+            # Calculate timing
+            chat_end_time = time.time()
+            chat_elapsed = chat_end_time - chat_start_time
+            timings[chat_name] = chat_elapsed
+            cumulative_time = chat_end_time - batch_start_time
+
+            # Report timing
+            status_emoji = "✅" if results.get(chat_name, False) else "⚠️"
+            status_text = "EXPORTED" if results.get(chat_name, False) else "SKIPPED"
+            self.logger.info(f"\n{status_emoji} Chat '{chat_name}' {status_text}")
+            self.logger.info(f"   ⏱️  Time for this chat: {self.format_time(chat_elapsed)}")
+            self.logger.info(f"   ⏱️  Total elapsed time: {self.format_time(cumulative_time)}")
+
+        # Complete session
+        state_manager = self._get_state_manager()
+        if state_manager.has_session:
+            state_manager.set_session_status(SessionStatus.COMPLETED)
+
+        total_time = time.time() - batch_start_time
+        return results, timings, total_time, skipped_already_exists
+
     def _is_share_dialog_visible(self) -> bool:
         """
         Check if the share dialog is currently visible.
@@ -1081,16 +1555,29 @@ class ChatExporter:
         total = len(chat_names)
         batch_start_time = time.time()
 
+        # Reset consecutive recovery counter at the start of each batch
+        self._consecutive_recovery_count = 0
+
         for i, chat_name in enumerate(chat_names, 1):
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
 
-            # CRITICAL: Verify WhatsApp is still accessible before each export
-            # This prevents accidentally interacting with system UI
+            # CRITICAL: Verify WhatsApp is still accessible before each export.
+            # If verification fails, attempt session recovery before aborting.
             if not self.driver.verify_whatsapp_is_open():
-                self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
-                results[chat_name] = False
-                timings[chat_name] = 0
-                break  # Stop the batch if WhatsApp becomes inaccessible
+                if self._check_consecutive_recovery_limit():
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    break
+                if self._attempt_session_recovery("Pre-export verification failed"):
+                    # Recovery succeeded — re-enter loop; verify will be re-checked at top
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    continue
+                else:
+                    self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    break
 
             chat_start_time = time.time()
 
@@ -1166,18 +1653,39 @@ class ChatExporter:
                 else:
                     results[chat_name] = False
 
+                # Post-export session health check
+                if not self.driver.is_session_active():
+                    if self._check_consecutive_recovery_limit():
+                        break
+                    if not self._attempt_session_recovery("Post-export session check failed"):
+                        self.logger.error("Failed to recover session after export - stopping batch")
+                        break
+                else:
+                    # A fully successful export resets the consecutive counter
+                    self._consecutive_recovery_count = 0
+
             except Exception as e:
                 error_msg = str(e)
                 if "community" in error_msg.lower() or "more" in error_msg.lower():
                     self.logger.warning(f"Skipped '{chat_name}' - community chat or no export option")
+                elif self._is_session_error(error_msg):
+                    # Session-level crash — attempt recovery before continuing
+                    self.logger.error(f"Session error during export of '{chat_name}': {e}")
+                    results[chat_name] = False
+                    if self._check_consecutive_recovery_limit():
+                        break
+                    if self._attempt_session_recovery(f"Session error during export of '{chat_name}'"):
+                        continue  # Skip to next chat
+                    else:
+                        break
                 else:
                     self.logger.error(f"Error during export for '{chat_name}': {e}")
                 results[chat_name] = False
 
-                # Try to navigate back
+                # Try to navigate back (may silently fail if session is dead)
                 try:
                     self.driver.navigate_back_to_main()
-                except:
+                except Exception:
                     pass
 
             # Calculate and report timing for this chat

@@ -21,6 +21,18 @@ from selenium.webdriver.common.by import By
 from ..utils.logger import Logger
 
 
+# Precise Appium/WebDriver error signatures indicating a dead or crashed session.
+# Used by safe_driver_call() and ChatExporter's session recovery logic.
+SESSION_ERROR_KEYWORDS = (
+    "session is either terminated",
+    "nosuchdrivererror",
+    "invalidsessionid",
+    "instrumentation process is not running",
+    "cannot be proxied",
+    "socket hang up",
+)
+
+
 # Helper functions for device connection
 
 def validate_pairing_code(code: str) -> bool:
@@ -79,7 +91,8 @@ def check_existing_devices(logger: Logger) -> List[str]:
         result = subprocess.run(
             ["adb", "devices"],
             capture_output=True,
-            text=True
+            text=True,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
 
         if result.returncode != 0:
@@ -195,7 +208,8 @@ def wireless_adb_pair(pairing_address: str, pairing_code: str, logger: Logger) -
             ["adb", "pair", pairing_address, pairing_code],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
 
         logger.debug_msg(f"Pairing output: {result.stdout}")
@@ -242,7 +256,8 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
             ["adb", "connect", connect_address],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
 
         logger.debug_msg(f"Connect output: {result.stdout}")
@@ -271,7 +286,8 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
         result = subprocess.run(
             ["adb", "devices"],
             capture_output=True,
-            text=True
+            text=True,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
 
         logger.debug_msg(f"Verification output: {result.stdout}")
@@ -295,12 +311,17 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
 class WhatsAppDriver:
     """Manages WhatsApp connection and navigation."""
 
-    def __init__(self, logger: Logger, wireless_adb: Optional[List[str]] = None):
+    def __init__(
+        self,
+        logger: Logger,
+        wireless_adb: Optional[List[str]] = None,
+        device_id: Optional[str] = None,
+    ):
         self.logger = logger
         self.driver: Optional[webdriver.Remote] = None
         self.default_wait_timeout = 10  # Default timeout for explicit waits
         self.wireless_adb = wireless_adb
-        self.device_id: Optional[str] = None  # Store selected device ID for device-specific commands
+        self.device_id = device_id  # Store selected device ID for device-specific commands
         self.is_wireless = wireless_adb is not None  # Track if using wireless ADB
         # Store original device settings for restoration on cleanup
         self._original_stay_awake_setting: Optional[str] = None
@@ -322,7 +343,7 @@ class WhatsAppDriver:
             # === Setting 1: stay_on_while_plugged_in (for plugged-in scenarios) ===
             # Save original value
             get_cmd = adb_cmd + ["shell", "settings", "get", "global", "stay_on_while_plugged_in"]
-            result = subprocess.run(get_cmd, capture_output=True, text=True)
+            result = subprocess.run(get_cmd, capture_output=True, text=True, close_fds=True)
             if result.returncode == 0:
                 original_value = result.stdout.strip()
                 if original_value and original_value.lower() != "null":
@@ -333,14 +354,14 @@ class WhatsAppDriver:
 
             # Set to stay awake on all power sources (1=AC + 2=USB + 4=Wireless = 7)
             set_cmd = adb_cmd + ["shell", "settings", "put", "global", "stay_on_while_plugged_in", "7"]
-            result = subprocess.run(set_cmd, capture_output=True, text=True)
+            result = subprocess.run(set_cmd, capture_output=True, text=True, close_fds=True)
             if result.returncode == 0:
                 self.logger.debug_msg("stay_on_while_plugged_in set to 7")
 
             # === Setting 2: screen_off_timeout (for unplugged scenarios) ===
             # Save original value
             get_cmd = adb_cmd + ["shell", "settings", "get", "system", "screen_off_timeout"]
-            result = subprocess.run(get_cmd, capture_output=True, text=True)
+            result = subprocess.run(get_cmd, capture_output=True, text=True, close_fds=True)
             if result.returncode == 0:
                 original_timeout = result.stdout.strip()
                 if original_timeout and original_timeout.lower() != "null":
@@ -352,7 +373,7 @@ class WhatsAppDriver:
             # Set to 30 minutes (1800000ms) - long enough for most exports
             # Max varies by device, but 30 mins is commonly supported
             set_cmd = adb_cmd + ["shell", "settings", "put", "system", "screen_off_timeout", "1800000"]
-            result = subprocess.run(set_cmd, capture_output=True, text=True)
+            result = subprocess.run(set_cmd, capture_output=True, text=True, close_fds=True)
             if result.returncode == 0:
                 self.logger.debug_msg("screen_off_timeout set to 30 minutes")
 
@@ -382,7 +403,7 @@ class WhatsAppDriver:
             # Restore stay_on_while_plugged_in
             if self._original_stay_awake_setting is not None:
                 restore_cmd = adb_cmd + ["shell", "settings", "put", "global", "stay_on_while_plugged_in", self._original_stay_awake_setting]
-                result = subprocess.run(restore_cmd, capture_output=True, text=True)
+                result = subprocess.run(restore_cmd, capture_output=True, text=True, close_fds=True)
                 if result.returncode == 0:
                     self.logger.debug_msg(f"Restored stay_on_while_plugged_in to: {self._original_stay_awake_setting}")
                     restored_count += 1
@@ -390,7 +411,7 @@ class WhatsAppDriver:
             # Restore screen_off_timeout
             if self._original_screen_timeout is not None:
                 restore_cmd = adb_cmd + ["shell", "settings", "put", "system", "screen_off_timeout", self._original_screen_timeout]
-                result = subprocess.run(restore_cmd, capture_output=True, text=True)
+                result = subprocess.run(restore_cmd, capture_output=True, text=True, close_fds=True)
                 if result.returncode == 0:
                     try:
                         timeout_sec = int(self._original_screen_timeout) // 1000
@@ -473,9 +494,10 @@ class WhatsAppDriver:
                 ["adb", "-s", self.device_id, "get-state"],
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=2,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
-            
+
             if result.returncode == 0 and "device" in result.stdout:
                 return True, ""
             else:
@@ -515,14 +537,7 @@ class WhatsAppDriver:
                 error_msg = str(e).lower()
                 
                 # Check if it's a session termination error
-                is_session_error = any(keyword in error_msg for keyword in [
-                    "session is either terminated",
-                    "nosuchdrivererror",
-                    "invalidsessionid",
-                    "session",
-                    "terminated",
-                    "not started"
-                ])
+                is_session_error = any(keyword in error_msg for keyword in SESSION_ERROR_KEYWORDS)
                 
                 if is_session_error:
                     self.logger.warning(
@@ -841,7 +856,7 @@ class WhatsAppDriver:
         if self.device_id:
             adb_cmd.extend(["-s", self.device_id])
         adb_cmd.extend(["shell", "am", "force-stop", "com.whatsapp"])
-        subprocess.run(adb_cmd, capture_output=True)
+        subprocess.run(adb_cmd, capture_output=True, close_fds=True)
         sleep(0.5)  # Brief delay for app to stop (system command, not UI)
         self.logger.success("WhatsApp stopped")
 
@@ -917,7 +932,7 @@ class WhatsAppDriver:
                 if self.device_id:
                     adb_cmd.extend(["-s", self.device_id])
                 adb_cmd.extend(["shell", "am", "start", "-n", "com.whatsapp/.Main"])
-                result = subprocess.run(adb_cmd, capture_output=True, text=True)
+                result = subprocess.run(adb_cmd, capture_output=True, text=True, close_fds=True)
                 self.logger.debug_msg(f"ADB launch: {result.stdout.strip() if result.stdout else 'success'}")
 
                 sleep(5 if self.is_wireless else 3)  # Wait for app to launch
@@ -1287,7 +1302,7 @@ class WhatsAppDriver:
             # Step 1: Force stop WhatsApp (preserves all data, just closes the app)
             self.logger.debug_msg("Force stopping WhatsApp...")
             stop_cmd = adb_prefix + ["shell", "am", "force-stop", "com.whatsapp"]
-            result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=10, close_fds=True)
 
             if result.returncode != 0:
                 self.logger.warning(f"Force stop returned non-zero: {result.returncode}")
@@ -1298,7 +1313,7 @@ class WhatsAppDriver:
             # Step 2: Launch WhatsApp (it will open at top of chat list)
             self.logger.debug_msg("Launching WhatsApp...")
             start_cmd = adb_prefix + ["shell", "am", "start", "-n", "com.whatsapp/.Main"]
-            result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=10, close_fds=True)
 
             if result.returncode != 0:
                 self.logger.error(f"Failed to launch WhatsApp: {result.stderr}")
@@ -1380,7 +1395,7 @@ class WhatsAppDriver:
             self.logger.error(f"Error listing chats: {e}")
             return []
 
-    def collect_all_chats(self, limit: Optional[int] = None, sort_alphabetical: bool = True) -> List[str]:
+    def collect_all_chats(self, limit: Optional[int] = None, sort_alphabetical: bool = False) -> List[str]:
         """Scroll through entire chat list to collect all chats.
 
         Args:
