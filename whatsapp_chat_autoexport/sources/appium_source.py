@@ -35,6 +35,7 @@ class AppiumSource(MessageSource):
         self,
         export_dir: Path,
         logger: Optional[Logger] = None,
+        user_display_name: str = "AJ Anderson",
     ):
         """
         Initialize the Appium source.
@@ -42,9 +43,11 @@ class AppiumSource(MessageSource):
         Args:
             export_dir: Root directory of the Appium export output
             logger: Optional logger for output
+            user_display_name: Name to substitute for "Me" sender (for dedup consistency)
         """
         super().__init__(logger=logger or Logger())
         self.export_dir = export_dir
+        self.user_display_name = user_display_name
         self._parser = TranscriptParser(logger=self.logger)
         # Cache: chat_name -> (messages, media_refs)
         self._cache: Dict[str, Tuple[List[Message], List[MediaReference]]] = {}
@@ -102,9 +105,11 @@ class AppiumSource(MessageSource):
         """
         messages, _ = self._parse_chat(chat_id)
 
-        # Tag every message with the appium source
+        # Tag every message with the appium source and normalize "Me" sender
         for msg in messages:
             msg.source = "appium"
+            if msg.sender == "Me":
+                msg.sender = self.user_display_name
 
         if after is not None:
             messages = [m for m in messages if m.timestamp > after]

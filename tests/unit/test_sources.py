@@ -281,7 +281,9 @@ class TestAppiumSource:
         assert len(source_messages) == len(parser_messages)
         for sm, pm in zip(source_messages, parser_messages):
             assert sm.timestamp == pm.timestamp
-            assert sm.sender == pm.sender
+            # AppiumSource normalises "Me" to user_display_name
+            expected_sender = pm.sender if pm.sender != "Me" else "AJ Anderson"
+            assert sm.sender == expected_sender
             assert sm.content == pm.content
             assert sm.is_media == pm.is_media
 
