@@ -138,6 +138,28 @@ Examples:
         help='Enable debug mode (verbose output)'
     )
 
+    # Logging options
+    logging_group = parser.add_argument_group('Logging Options', 'Configure file logging')
+    logging_group.add_argument(
+        '--log-dir',
+        type=str,
+        metavar='DIR',
+        help='Directory for log files (default: .logs/)'
+    )
+    logging_group.add_argument(
+        '--no-log-file',
+        action='store_true',
+        help='Disable file logging (console only)'
+    )
+    logging_group.add_argument(
+        '--log-level',
+        type=str,
+        choices=['debug', 'info', 'warning', 'error'],
+        default='info',
+        metavar='LEVEL',
+        help='File log level: debug|info|warning|error (default: info)'
+    )
+
     # Debug/testing options
     debug_group = parser.add_argument_group('Debug/Testing Options')
     debug_group.add_argument(
@@ -154,8 +176,19 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    # Create logger
-    logger = Logger(debug=args.debug)
+    # Create logger with file logging options
+    log_dir = Path(args.log_dir).expanduser() if args.log_dir else None
+    logger = Logger(
+        debug=args.debug,
+        log_dir=log_dir,
+        log_file_enabled=not args.no_log_file,
+        log_level=args.log_level,
+        logger_name="whatsapp_pipeline"
+    )
+
+    # Show log file location
+    if logger.get_log_file_path():
+        logger.info(f"Log file: {logger.get_log_file_path()}")
 
     # Validate arguments
     if not args.skip_download and not args.source:
@@ -230,11 +263,11 @@ def main():
         results = pipeline.run(source_dir=source_dir)
 
         if results['success']:
-            logger.success("\n✓ Pipeline completed successfully!")
+            logger.success("\nPipeline completed successfully!")
             logger.info(f"\nOutputs created in: {config.output_dir}")
             return 0
         else:
-            logger.error("\n✗ Pipeline failed")
+            logger.error("\nPipeline failed")
             return 1
 
     except KeyboardInterrupt:
@@ -245,6 +278,11 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
+    finally:
+        # Show log file location and close logger
+        if logger.get_log_file_path():
+            logger.info(f"Log file saved to: {logger.get_log_file_path()}")
+        logger.close()
 
 
 if __name__ == "__main__":

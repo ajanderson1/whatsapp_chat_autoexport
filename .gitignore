@@ -21,3 +21,19 @@ build/
 whatsapp_chat_autoexport.code-workspace
 
 .DS_Store
+.env
+
+# Log files
+.logs/
+.claude/
+.mcp.json
+
+# Scratch / one-off scripts
+run_full_export.py
+test_tui_flow.py
+
+# Worktrees
+.worktrees/
+
+# PRPs (code review artifacts)
+PRPs/

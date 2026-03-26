@@ -205,16 +205,46 @@ For more information, visit: https://github.com/yourusername/whatsapp_chat_autoe
         help='Exclude media files from final output (transcriptions still created if media exported)'
     )
 
+    # Logging options
+    logging_group = parser.add_argument_group('Logging Options', 'Configure file logging')
+    logging_group.add_argument(
+        '--log-dir',
+        type=str,
+        metavar='DIR',
+        help='Directory for log files (default: .logs/)'
+    )
+    logging_group.add_argument(
+        '--no-log-file',
+        action='store_true',
+        help='Disable file logging (console only)'
+    )
+    logging_group.add_argument(
+        '--log-level',
+        type=str,
+        choices=['debug', 'info', 'warning', 'error'],
+        default='info',
+        metavar='LEVEL',
+        help='File log level: debug|info|warning|error (default: info)'
+    )
+
     return parser
 
 
 def main():
     """Main entry point for the export CLI."""
+    from pathlib import Path as PathLib
+
     parser = create_parser()
     args = parser.parse_args()
-    
-    # Create logger
-    logger = Logger(debug=args.debug)
+
+    # Create logger with file logging options
+    log_dir = PathLib(args.log_dir).expanduser() if args.log_dir else None
+    logger = Logger(
+        debug=args.debug,
+        log_dir=log_dir,
+        log_file_enabled=not args.no_log_file,
+        log_level=args.log_level
+    )
 
     # Determine sort order
     # Pipeline mode: use original order (most recent chats first) for automation
@@ -269,9 +299,13 @@ def main():
 
     # Welcome message
     logger.info("=" * 70)
-    logger.info("🚀 WhatsApp Chat Auto-Export")
+    logger.info("WhatsApp Chat Auto-Export")
     logger.info("=" * 70)
-    
+
+    # Show log file location if file logging is enabled
+    if logger.get_log_file_path():
+        logger.info(f"Log file: {logger.get_log_file_path()}")
+
     appium_manager = None
     driver = None
 
@@ -382,10 +416,17 @@ def main():
             driver.quit()
         if appium_manager:
             appium_manager.stop_appium()
-        
+
         logger.info("=" * 70)
-        logger.info("✅ SCRIPT COMPLETE")
+        logger.info("SCRIPT COMPLETE")
         logger.info("=" * 70)
+
+        # Show log file location again at the end
+        if logger.get_log_file_path():
+            logger.info(f"Log file saved to: {logger.get_log_file_path()}")
+
+        # Close the logger
+        logger.close()
 
 
 if __name__ == "__main__":

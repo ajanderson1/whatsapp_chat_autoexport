@@ -29,6 +29,7 @@ pytest-cov = "^4.1.0"
 pytest-mock = "^3.11.1"
 pytest-timeout = "^2.1.0"
 pytest-asyncio = "^0.23"
+ruff = "^0.11"
 
 [tool.poetry.scripts]
 # New unified CLI (recommended)
@@ -91,3 +92,24 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["whatsapp_chat_autoexport"]

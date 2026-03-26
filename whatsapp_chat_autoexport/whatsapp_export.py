@@ -123,13 +123,15 @@ if '--help' in sys.argv or '-h' in sys.argv:
     parser = create_parser()
     parser.parse_args()  # This will print help and exit if --help was provided
 
+# Import Logger from utils module (avoids duplicate code)
+from whatsapp_chat_autoexport.utils.logger import Logger
+
 try:
     from colorama import init, Fore, Style
     init(autoreset=True)
     COLORAMA_AVAILABLE = True
 except ImportError:
     COLORAMA_AVAILABLE = False
-    # Create dummy color classes
     class Fore:
         GREEN = ""
         YELLOW = ""
@@ -147,45 +149,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.by import By
-
-
-class Logger:
-    """Simple logger with debug mode support and colored output."""
-    
-    def __init__(self, debug: bool = False):
-        self.debug = debug
-    
-    def _print(self, message: str, color: str = "", emoji: str = ""):
-        """Print with color and emoji support."""
-        if COLORAMA_AVAILABLE:
-            print(f"{color}{emoji}{message}{Style.RESET_ALL}")
-        else:
-            print(f"{emoji}{message}")
-    
-    def info(self, message: str, emoji: str = ""):
-        """Print info message."""
-        self._print(message, Fore.CYAN, emoji)
-    
-    def success(self, message: str):
-        """Print success message."""
-        self._print(message, Fore.GREEN, "✅ ")
-    
-    def warning(self, message: str):
-        """Print warning message."""
-        self._print(message, Fore.YELLOW, "⚠️ ")
-    
-    def error(self, message: str):
-        """Print error message."""
-        self._print(message, Fore.RED, "❌ ")
-    
-    def debug_msg(self, message: str):
-        """Print debug message (only if debug mode enabled)."""
-        if self.debug:
-            self._print(message, Fore.MAGENTA, "🔍 ")
-    
-    def step(self, step_num: int, message: str):
-        """Print step message."""
-        self.info(f"STEP {step_num}: {message}", "🔍 ")
 
 
 def validate_resume_directory(directory_path: str, logger: Logger) -> Optional[Path]:
@@ -325,9 +288,10 @@ def check_existing_devices(logger: Logger) -> List[str]:
         result = subprocess.run(
             ["adb", "devices"],
             capture_output=True,
-            text=True
+            text=True,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
-        
+
         if result.returncode != 0:
             logger.debug_msg(f"adb devices failed: {result.stderr}")
             return []
@@ -437,9 +401,10 @@ def wireless_adb_pair(pairing_address: str, pairing_code: str, logger: Logger) -
             ["adb", "pair", pairing_address, pairing_code],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
-        
+
         logger.debug_msg(f"Pairing output: {result.stdout}")
         
         if result.returncode != 0:
@@ -484,9 +449,10 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
             ["adb", "connect", connect_address],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
-        
+
         logger.debug_msg(f"Connect output: {result.stdout}")
         
         if result.returncode != 0:
@@ -513,11 +479,12 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
         result = subprocess.run(
             ["adb", "devices"],
             capture_output=True,
-            text=True
+            text=True,
+            close_fds=True  # Prevent fd inheritance issues in threaded contexts
         )
-        
+
         logger.debug_msg(f"Verification output: {result.stdout}")
-        
+
         # Check if our device is in the list
         if connect_address in result.stdout and "device" in result.stdout:
             logger.success(f"Device {connect_address} verified in device list!")
@@ -548,8 +515,9 @@ class AppiumManager:
         self.logger.debug_msg(f"Set ANDROID_HOME to: {self.android_home}")
         
         self.logger.info("Stopping any existing Appium instances...")
-        subprocess.run("pkill -f appium || true", shell=True)
-        
+        # Use array syntax to avoid shell=True fd inheritance issues
+        subprocess.run(["pkill", "-f", "appium"], capture_output=True, close_fds=True)
+
         self.logger.info("Starting Appium server...")
         appium_env = os.environ.copy()
         try:
@@ -557,15 +525,17 @@ class AppiumManager:
                 ["appium", "-a", "127.0.0.1", "-p", "4723"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=appium_env
+                env=appium_env,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
             time.sleep(5)  # Wait for Appium to start
-            
+
             # Verify it's running
             result = subprocess.run(
                 ["curl", "-s", "http://127.0.0.1:4723/wd/hub/status"],
                 capture_output=True,
-                text=True
+                text=True,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
             if result.returncode == 0:
                 self.logger.success("Appium server started successfully")
@@ -589,7 +559,8 @@ class AppiumManager:
             self.appium_proc = None
         else:
             # Try to kill any Appium process
-            subprocess.run("pkill -f appium || true", shell=True)
+            # Use array syntax to avoid shell=True fd inheritance issues
+            subprocess.run(["pkill", "-f", "appium"], capture_output=True, close_fds=True)
 
 
 class WhatsAppDriver:
@@ -827,7 +798,7 @@ class WhatsAppDriver:
         if self.device_id:
             adb_cmd.extend(["-s", self.device_id])
         adb_cmd.extend(["shell", "am", "force-stop", "com.whatsapp"])
-        subprocess.run(adb_cmd, capture_output=True)
+        subprocess.run(adb_cmd, capture_output=True, close_fds=True)
         sleep(0.5)  # Brief delay for app to stop (system command, not UI)
         self.logger.success("WhatsApp stopped")
         

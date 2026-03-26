@@ -1,7 +1,7 @@
 ---
 title: "refactor: Consolidate to single Textual TUI with unified entry point"
 type: refactor
-status: active
+status: completed
 date: 2026-03-26
 origin: docs/brainstorms/2026-03-26-textual-tui-consolidation-requirements.md
 deepened: 2026-03-26

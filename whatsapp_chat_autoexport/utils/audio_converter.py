@@ -191,7 +191,8 @@ class AudioConverter:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60  # 60 second timeout
+                timeout=60,  # 60 second timeout
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode != 0:
@@ -286,7 +287,8 @@ class AudioConverter:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=10  # 10 second timeout
+                timeout=10,  # 10 second timeout
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
 
             # If ffprobe returns "audio" for any stream, the video has audio
@@ -328,7 +330,8 @@ class AudioConverter:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode != 0:
@@ -493,7 +496,8 @@ class AudioConverter:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=120  # 2 minute timeout for video processing
+                timeout=120,  # 2 minute timeout for video processing
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
 
             if proc_result.returncode != 0:
@@ -608,7 +612,8 @@ class AudioConverter:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
+                close_fds=True  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode != 0:
