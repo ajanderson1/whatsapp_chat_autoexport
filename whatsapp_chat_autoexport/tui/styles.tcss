@@ -307,6 +307,7 @@ DiscoveryScreen {
 DiscoveryScreen .content {
     padding: 1 2;
     height: 100%;
+    width: 100%;
 }
 
 DiscoveryScreen .instructions {
@@ -388,6 +389,7 @@ SelectionScreen {
 SelectionScreen .main-content {
     layout: horizontal;
     height: 1fr;
+    width: 100%;
 }
 
 SelectionScreen .left-panel {
