@@ -22,174 +22,155 @@ npm install -g appium
 adb devices
 ```
 
-### Export WhatsApp Chats
+### Unified `whatsapp` Command (Recommended)
+
+There is a single entry point: `whatsapp`. It runs in three modes.
+
+#### TUI Mode (Default) — Interactive Textual interface
 ```bash
-# Basic export (interactive mode)
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py
+# Launch the Textual TUI — full wizard flow
+poetry run whatsapp
 
-# With debug output
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --debug
-
-# Limit number of chats
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --limit 5
-
-# Export without media
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --without-media
-
-# Resume mode (skip already exported chats)
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --resume /path/to/google/drive/folder
-
-# Wireless ADB connection
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --wireless-adb 192.168.1.100:5555
+# With options passed at launch
+poetry run whatsapp --output ~/whatsapp_exports --limit 5 --debug
 ```
 
-### Process Exported Files (Basic)
+#### Headless Mode — Non-interactive, structured logging
 ```bash
-# Process downloaded exports
-poetry run python whatsapp_chat_autoexport/whatsapp_process.py /path/to/downloads
+# Full export + pipeline, no TUI
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select
 
-# With debug output
-poetry run python whatsapp_chat_autoexport/whatsapp_process.py --debug /path/to/downloads
-```
+# With transcriptions but no media in output (RECOMMENDED)
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
 
-### Unified Export + Pipeline (Recommended) ⭐
-```bash
-# Complete workflow: export → download → transcribe → organize
-poetry run whatsapp-export --output ~/whatsapp_exports
+# Resume from previous session
+poetry run whatsapp --headless --output ~/whatsapp_exports --resume /path/to/drive/folder
 
-# With transcriptions but WITHOUT media in final output (RECOMMENDED)
-poetry run whatsapp-export --output ~/whatsapp_exports --no-output-media
-
-# Force re-transcribe all audio/video (ignores existing transcriptions)
-poetry run whatsapp-export --output ~/whatsapp_exports --force-transcribe
-
-# Without transcription (faster)
-poetry run whatsapp-export --output ~/whatsapp_exports --no-transcribe
-
-# Delete from Drive after processing
-poetry run whatsapp-export --output ~/whatsapp_exports --delete-from-drive
+# Wireless ADB
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --wireless-adb 192.168.1.100:37453
 
 # Limit to 5 chats
-poetry run whatsapp-export --output ~/whatsapp_exports --limit 5
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --limit 5
+
+# Without transcription
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-transcribe
+
+# Force re-transcribe
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --force-transcribe
+
+# Delete from Drive after processing
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --delete-from-drive
 ```
 
-### Standalone Pipeline (For Already-Exported Files)
+**Exit codes:** 0 = success, 1 = partial failure, 2 = fatal error
+
+#### Pipeline-Only Mode — Process already-exported files
 ```bash
 # Complete pipeline: download → extract → transcribe → build output
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output
+poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output
 
-# Pipeline with transcriptions but WITHOUT media in final output
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output --no-media
+# Without media in output
+poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-output-media
 
-# Pipeline without transcription
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output --no-transcribe
+# Without transcription
+poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-transcribe
 
-# Pipeline with minimal output (no media, no transcriptions)
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output --no-media --no-transcribe
-
-# Skip Google Drive download (process local files only)
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output --skip-drive-download
+# Skip Drive download (local files only)
+poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-drive-download
 ```
+
+#### All Available Flags
+```
+--output DIR              Output directory (required for --headless)
+--headless                Run without TUI (structured logging to stderr)
+--pipeline-only SRC OUT   Run pipeline only (no device connection)
+--limit N                 Limit number of chats to export
+--without-media           Export without media from WhatsApp
+--no-output-media         Exclude media from final output (transcriptions still work)
+--force-transcribe        Re-transcribe even if transcriptions exist
+--no-transcribe           Skip transcription phase
+--wireless-adb [ADDR]     Use wireless ADB (TUI prompts for details if no address given)
+--debug                   Enable debug output
+--resume PATH             Skip already-exported chats (scans Drive folder)
+--delete-from-drive       Delete exports from Drive after processing
+--transcription-provider  Choose whisper (default) or elevenlabs
+--skip-drive-download     Process local files without Drive download
+--auto-select             Export all chats (required for --headless without --resume)
+```
+
+### Deprecated Commands
+
+The following commands are **deprecated** and will print a migration notice:
+
+| Old Command | Replacement |
+|---|---|
+| `whatsapp-export` | `whatsapp --headless --output DIR` |
+| `whatsapp-pipeline` | `whatsapp --pipeline-only SOURCE OUTPUT` |
+| `whatsapp-process` | `whatsapp --pipeline-only SOURCE OUTPUT` |
+| `whatsapp-drive` | `whatsapp --headless --output DIR` |
+| `whatsapp-logs` | `whatsapp --debug` |
 
 ### Docker (Containerized Execution) 🐳
 
-The entire workflow can be run in a Docker container for easier setup and portability. This eliminates the need to install Python, Node.js, Appium, and ADB on your host machine.
+The entire workflow can be run in a Docker container. The default entrypoint is `whatsapp --headless`, so Docker runs in headless mode automatically. For the interactive TUI, override the entrypoint.
 
 #### Build the Docker Image
 ```bash
-# Build the image
 docker build -t whatsapp-export .
-
-# Or use docker-compose
-docker-compose build
 ```
 
 #### USB ADB Connection (Recommended)
 
-**Interactive mode** (add `-it` for prompts and confirmations):
+**Headless mode (default):**
 ```bash
-# Basic export with USB connection (interactive)
-docker run -it --rm --privileged \
-  -v /dev/bus/usb:/dev/bus/usb \
-  -v ./output:/output \
-  -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output
-
-# With transcriptions but no media in output (RECOMMENDED)
-docker run -it --rm --privileged \
-  -v /dev/bus/usb:/dev/bus/usb \
-  -v ./output:/output \
-  -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --no-output-media
-
-# Limit to 5 chats for testing
-docker run -it --rm --privileged \
-  -v /dev/bus/usb:/dev/bus/usb \
-  -v ./output:/output \
-  -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --limit 5
-```
-
-**Non-interactive mode** (for automation - no prompts):
-```bash
-# Automated export with auto-selection
+# Basic export (headless is automatic in Docker)
 docker run --rm --privileged \
   -v /dev/bus/usb:/dev/bus/usb \
   -v ./output:/output \
   -e OPENAI_API_KEY='your-key-here' \
   whatsapp-export --output /output --auto-select
+
+# With transcriptions but no media in output (RECOMMENDED)
+docker run --rm --privileged \
+  -v /dev/bus/usb:/dev/bus/usb \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --auto-select --no-output-media
+
+# Limit to 5 chats for testing
+docker run --rm --privileged \
+  -v /dev/bus/usb:/dev/bus/usb \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  whatsapp-export --output /output --auto-select --limit 5
 ```
 
-**Using docker-compose:**
+**Interactive TUI mode** (override entrypoint with `-it`):
 ```bash
-# Edit docker-compose.yml first to add -it flags if you want interactive mode
-docker-compose --profile usb run --rm whatsapp-export-usb --output /output --limit 5
+docker run -it --rm --privileged \
+  -v /dev/bus/usb:/dev/bus/usb \
+  -v ./output:/output \
+  -e OPENAI_API_KEY='your-key-here' \
+  --entrypoint whatsapp \
+  whatsapp-export
 ```
 
 #### Wireless ADB Connection
 
-You can use wireless ADB in Docker in **two modes**:
-
-**Option 1: Interactive Mode (RECOMMENDED)** - Get prompts for pairing details
-
-Add `-it` flags for full interactive experience (just like running outside Docker):
-
 ```bash
-# Interactive wireless ADB - script will prompt for pairing details
-docker run -it --rm --network=host \
-  -v ./output:/output \
-  -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --wireless-adb
-
-# Interactive with some details pre-filled
-docker run -it --rm --network=host \
-  -v ./output:/output \
-  -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --wireless-adb 192.168.1.100:37453
-
-# Interactive with limit for testing
-docker run -it --rm --network=host \
-  -v ./output:/output \
-  -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --wireless-adb --limit 5
-```
-
-**Option 2: Non-Interactive Mode** - Provide all arguments upfront
-
-Useful for automation/scripts where you can't answer prompts:
-
-```bash
-# All pairing details provided (no prompts)
+# Headless with wireless ADB (all details provided)
 docker run --rm --network=host \
   -v ./output:/output \
   -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --wireless-adb 192.168.1.100:37453 123456
+  whatsapp-export --output /output --auto-select \
+  --wireless-adb 192.168.1.100:37453
 
-# With limit for testing
-docker run --rm --network=host \
+# Interactive TUI with wireless ADB
+docker run -it --rm --network=host \
   -v ./output:/output \
   -e OPENAI_API_KEY='your-key-here' \
-  whatsapp-export --output /output --wireless-adb 192.168.1.100:37453 123456 --limit 5
+  --entrypoint whatsapp \
+  whatsapp-export
 ```
 
 **Setup steps for wireless debugging:**
@@ -197,129 +178,80 @@ docker run --rm --network=host \
 2. Tap "Pair device with pairing code"
 3. Note the **Pairing IP:PORT** (e.g., `192.168.1.100:37453`) and **6-digit code** (e.g., `123456`)
 
-**⚠️ Common issues:**
-- Pairing codes expire after a few minutes - get a fresh code if pairing fails
+**Common issues:**
+- Pairing codes expire after a few minutes
 - Use the **pairing port** (shown in "Pair device" dialog), NOT port 5555
 - Device must remain on the wireless debugging screen during pairing
-- After pairing succeeds, connection uses standard port 5555 automatically
-
-**Note:** The container's ADB server connects directly to the device - no need to run 'adb connect' on the host beforehand.
 
 #### Docker Environment Variables
 
-**API keys are optional at build time but required at runtime for transcription.**
-
-The tool will validate API keys if they're set, or skip validation with a warning if they're not. Pass API keys at runtime:
+Pass API keys at runtime:
 
 ```bash
 # OpenAI Whisper (default)
-docker run --rm --privileged \
-  -v /dev/bus/usb:/dev/bus/usb \
-  -v ./output:/output \
-  -e OPENAI_API_KEY=your_key_here \
-  whatsapp-export --output /output
+-e OPENAI_API_KEY=your_key_here
 
 # ElevenLabs Scribe
-docker run --rm --privileged \
-  -v /dev/bus/usb:/dev/bus/usb \
-  -v ./output:/output \
-  -e ELEVENLABS_API_KEY=your_key_here \
-  whatsapp-export --output /output --transcription-provider elevenlabs
+-e ELEVENLABS_API_KEY=your_key_here
 ```
 
 #### Important Docker Notes
 
-**Device Access:**
-- USB connection requires `--privileged` and mounting `/dev/bus/usb`
-- Wireless ADB requires `--network=host` for container to reach device
-- Phone must be unlocked before running and remain unlocked throughout
-
-**Volume Mounts:**
-- `-v ./output:/output` - Maps local output directory to container
-- `-v ./downloads:/downloads` - Optional: for intermediate downloads
-- Use absolute paths or `./` relative paths for volume mounts
-
-**Container Lifecycle:**
-- Container runs the export and stops automatically (`--rm` flag removes it)
-- Appium server starts/stops automatically inside container
-- All temporary files are cleaned up on exit
-
-**Troubleshooting:**
-```bash
-# Check if device is visible to Docker
-docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb whatsapp-export adb devices
-
-# View help inside container
-docker run --rm whatsapp-export --help
-
-# Run with debug output
-docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb -v ./output:/output \
-  whatsapp-export --output /output --debug
-```
+- **USB**: requires `--privileged` and `-v /dev/bus/usb:/dev/bus/usb`
+- **Wireless**: requires `--network=host`
+- **TUI**: requires `-it` and `--entrypoint whatsapp` (overrides default headless mode)
+- Phone must be unlocked and remain unlocked throughout
+- Container auto-cleans up with `--rm` flag
 
 ## Common Workflows
 
-### Workflow 1: Full Export (Media + Transcriptions)
+### Workflow 1: Interactive TUI (Recommended)
 ```bash
-# Step 1: Export WITH media (default - required for transcription)
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py
-
-# Step 2: Process with full pipeline
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output
+# Launch the TUI — walks you through connect, select, export, process
+poetry run whatsapp
 ```
-**Result**: Final output includes chat transcripts, media files, and transcriptions.
+The TUI guides you through device connection, chat selection, export, and pipeline processing in a single interface.
 
-### Workflow 2: Transcriptions Only (No Media in Final Output) ⭐ RECOMMENDED
-
-**Option A: Using unified export command (simpler)**
+### Workflow 2: Headless — Full Export with Transcriptions (No Media in Output) ⭐
 ```bash
-# Single command: export → download → transcribe → organize (no output media)
-poetry run whatsapp-export --output ~/whatsapp_exports --no-output-media
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
 ```
+**Result**: Chat transcripts + audio/video transcriptions. Media used for transcription but not kept in output.
 
-**Option B: Using separate commands**
+### Workflow 3: Headless — Full Export (Media + Transcriptions)
 ```bash
-# Step 1: Export WITH media (default - required for transcription)
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py
-
-# Step 2: Process with --no-media flag
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output --no-media
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select
 ```
+**Result**: Chat transcripts, media files, and transcriptions.
 
-**Result**: Final output includes chat transcripts and transcriptions, but NO media files.
-**Why this works**: Media files are temporarily extracted and used for transcription (Phase 3), but are not copied to the final output (Phase 4).
-
-### Workflow 3: Minimal Export (No Transcriptions, No Media)
+### Workflow 4: Pipeline-Only (Process Already-Exported Files)
 ```bash
-# Step 1: Export WITHOUT media (faster, smaller files)
-poetry run python whatsapp_chat_autoexport/whatsapp_export.py --without-media
-
-# Step 2: Process without transcription
-poetry run whatsapp-pipeline /path/to/downloads /path/to/output --no-transcribe --no-media
+poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output
 ```
-**Result**: Final output includes only chat transcripts (text only).
+**Result**: Processes existing WhatsApp export zips through extract → transcribe → organize.
+
+### Workflow 5: Minimal Export (No Transcriptions, No Media)
+```bash
+poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --without-media --no-transcribe
+```
+**Result**: Chat transcripts only (text).
 
 ## Understanding Media Flags
 
 **IMPORTANT**: There are THREE different media flags that serve different purposes:
 
-### Export Flag: `--without-media` (whatsapp-export command)
+### Export Flag: `--without-media`
 - **Purpose**: Controls what WhatsApp exports to Google Drive
 - **When to use**: Only use if you want minimal exports and don't need transcriptions
-- **⚠️ WARNING**: If you use this flag, voice message transcription will NOT work (no audio files to transcribe)
+- **WARNING**: If you use this flag, voice message transcription will NOT work (no audio files to transcribe)
 - **Default**: Exports WITH media (recommended for transcription support)
 
-### Unified Command Flag: `--no-output-media` (whatsapp-export with --output) ⭐ NEW
-- **Purpose**: Controls what gets copied to the FINAL output folder when using integrated pipeline
+### Output Flag: `--no-output-media`
+- **Purpose**: Controls what gets copied to the FINAL output folder
 - **When to use**: When you want transcriptions but don't want to keep large media files
-- **✅ BENEFIT**: Transcriptions still work (media exists during processing, just not in final output)
+- **Benefit**: Transcriptions still work (media exists during processing, just not in final output)
 - **Default**: Copies media to final output
-- **Example**: `whatsapp-export --output ~/exports --no-output-media`
-
-### Standalone Pipeline Flag: `--no-media` (whatsapp-pipeline command)
-- **Purpose**: Same as `--no-output-media` but for standalone pipeline command
-- **When to use**: When processing already-exported files separately
-- **Example**: `whatsapp-pipeline /downloads /output --no-media`
+- **Example**: `whatsapp --headless --output ~/exports --auto-select --no-output-media`
 
 **Key Insight**: Always export WITH media (default), then use `--no-output-media` or `--no-media` to exclude media from final output while preserving transcription functionality.
 
@@ -363,11 +295,11 @@ Skipped files (existing transcriptions found):
 Use `--force-transcribe` to re-transcribe ALL audio/video files, even if transcriptions exist:
 
 ```bash
-# Unified command
-poetry run whatsapp-export --output ~/exports --force-transcribe
+# Headless mode
+poetry run whatsapp --headless --output ~/exports --auto-select --force-transcribe
 
-# Standalone pipeline
-poetry run whatsapp-pipeline /downloads /output --force-transcribe
+# Pipeline-only mode
+poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
 ```
 
 **When to use:**
@@ -447,12 +379,19 @@ poetry run whatsapp-pipeline /downloads /output --force-transcribe
   - **Key behavior**: Media copying can be disabled while preserving transcriptions
 - **Phase 5**: Cleanup temporary files
 
-**CLI Entry Point**: `pipeline_cli/cli.py` provides `whatsapp-pipeline` command with flags:
-- `--transcription-provider {whisper,elevenlabs}`: Choose transcription service (default: whisper)
-- `--no-media`: Skip copying media to final output (transcriptions still work!)
-- `--no-transcribe`: Skip transcription phase entirely
-- `--force-transcribe`: Re-transcribe even if transcriptions exist
-- `--skip-drive-download`: Process local files only
+**CLI Entry Point**: `cli_entry.py` provides the unified `whatsapp` command with three modes:
+- **TUI mode** (default): Launches `WhatsAppExporterApp` Textual TUI
+- **Headless mode** (`--headless`): Runs full export+pipeline with structured stderr logging
+- **Pipeline-only mode** (`--pipeline-only`): Runs pipeline without device connection
+
+**headless.py** - Non-interactive orchestrator for `--headless` and `--pipeline-only` modes:
+- `run_headless(args)`: AppiumManager → WhatsAppDriver → ChatExporter → Pipeline, with structured logging and exit codes (0/1/2)
+- `run_pipeline_only(args)`: Pipeline-only with upfront API key validation
+
+**Progress Callbacks**: Pipeline and export classes accept optional `on_progress` callbacks:
+- Signature: `on_progress(phase, message, current, total, item_name)`
+- TUI callbacks use `call_from_thread()` for thread-safe UI updates
+- Headless callbacks log to stderr
 
 ### Key Design Patterns
 
@@ -516,29 +455,53 @@ poetry run whatsapp-pipeline /downloads /output --force-transcribe
 
 ```
 whatsapp_chat_autoexport/
+├── cli_entry.py                  # Unified CLI entry point (whatsapp command)
+├── headless.py                   # Headless + pipeline-only orchestrators
+├── deprecated_entry.py           # Deprecation wrappers for old commands
+├── pipeline.py                   # Main pipeline orchestrator (with progress callbacks)
+├── tui/
+│   ├── textual_app.py            # WhatsAppExporterApp (Textual)
+│   ├── textual_screens/
+│   │   ├── discovery_screen.py   # Device connection (USB + wireless ADB)
+│   │   ├── selection_screen.py   # Chat selection + export + processing + summary
+│   │   └── help_screen.py        # Help overlay
+│   ├── textual_widgets/          # 10 Textual widgets (progress, chat list, settings, etc.)
+│   └── styles.tcss               # Textual stylesheet
 ├── export/
-│   ├── cli.py                    # Export CLI entry point
-│   ├── whatsapp_driver.py        # WhatsApp UI automation
-│   └── chat_exporter.py          # Export workflow
+│   ├── whatsapp_driver.py        # WhatsApp UI automation (Appium)
+│   ├── chat_exporter.py          # Export workflow (with progress callbacks)
+│   └── appium_manager.py         # Appium server lifecycle
+├── google_drive/
+│   └── drive_manager.py          # Google Drive operations (with progress callbacks)
 ├── transcription/
-│   ├── base_transcriber.py       # Abstract transcriber interface
-│   ├── whisper_transcriber.py    # OpenAI Whisper implementation
-│   ├── elevenlabs_transcriber.py # ElevenLabs Scribe implementation
-│   ├── transcriber_factory.py    # Factory for provider selection
-│   └── transcription_manager.py  # Batch transcription orchestration
+│   ├── transcription_manager.py  # Batch transcription (with progress callbacks)
+│   ├── whisper_transcriber.py    # OpenAI Whisper
+│   └── elevenlabs_transcriber.py # ElevenLabs Scribe
 ├── output/
-│   └── output_builder.py         # Final output structure builder
-├── pipeline_cli/
-│   └── cli.py                    # Pipeline CLI entry point
-├── pipeline.py                   # Main pipeline orchestrator
+│   └── output_builder.py         # Final output builder (with progress callbacks)
+├── state/
+│   ├── state_manager.py          # Session/chat state tracking
+│   ├── models.py                 # Pydantic state models
+│   └── checkpoint.py             # Checkpoint save/restore
+├── core/
+│   ├── events.py                 # EventBus (sync pub/sub)
+│   ├── errors.py                 # Structured error hierarchy
+│   └── interfaces.py             # Protocol definitions
+├── config/                       # Settings, themes, API key management
+├── legacy/                       # Deprecated Rich TUI + Typer CLI (reference only)
 └── __init__.py
 
 Project root:
-├── README.md             # Full documentation
-├── QUICKSTART.md         # Quick start guide with important warnings
+├── Dockerfile            # Docker config (entrypoint: whatsapp --headless)
+├── docker-compose.yml    # Docker Compose profiles
 ├── CLAUDE.md             # Developer documentation (this file)
 ├── pyproject.toml        # Poetry dependencies and scripts
-└── poetry.lock           # Locked dependencies
+├── docs/
+│   ├── brainstorms/      # Requirements documents
+│   └── plans/            # Implementation plans
+└── tests/
+    ├── unit/             # 622 unit tests
+    └── integration/      # 28 Textual pilot integration tests
 ```
 
 ## Testing Strategy
@@ -549,16 +512,31 @@ This project uses **pytest** for all testing. Tests are organized in the `tests/
 
 ```
 tests/
-├── conftest.py                    # Shared fixtures and configuration
-├── unit/                          # Unit tests (fast, isolated)
-│   ├── test_transcription.py      # Transcription system tests
-│   ├── test_transcript_parser.py  # Message parsing tests
-│   ├── test_output_builder.py     # Output generation tests
-│   └── test_archive_extractor.py  # Archive processing tests
-├── integration/                   # Integration tests (slower, end-to-end)
-│   └── test_cli.py                # CLI argument parsing tests
-└── fixtures/                      # Test data and sample files
-    └── sample_export/             # Real WhatsApp export for testing
+├── conftest.py                         # Shared fixtures (includes tui_app fixture)
+├── unit/                               # Unit tests (fast, isolated) — 622 tests
+│   ├── test_cli_entry.py               # CLI entry point mode dispatch (42 tests)
+│   ├── test_deprecated_entry.py        # Deprecation wrappers (11 tests)
+│   ├── test_pipeline_progress.py       # Pipeline progress callbacks (13 tests)
+│   ├── test_export_progress.py         # Export progress callbacks (4 tests)
+│   ├── test_discovery_screen.py        # Wireless ADB + device scanning (37 tests)
+│   ├── test_selection_screen_export.py # Export progress wiring (24 tests)
+│   ├── test_selection_screen_processing.py # Pipeline progress wiring (25 tests)
+│   ├── test_headless.py               # Headless mode orchestrator (20 tests)
+│   ├── test_pipeline_only.py          # Pipeline-only mode (9 tests)
+│   ├── test_legacy_migration.py       # Legacy code migration (12 tests)
+│   ├── test_state.py                  # State manager + models
+│   ├── test_core.py                   # Events, interfaces, result types
+│   ├── test_config.py                 # Settings, themes, API keys
+│   ├── test_tui.py                    # Legacy Rich TUI tests
+│   ├── test_transcription.py          # Transcription system
+│   ├── test_transcript_parser.py      # Message parsing
+│   ├── test_output_builder.py         # Output generation
+│   └── test_archive_extractor.py      # Archive processing
+├── integration/                        # Integration tests — 28 tests
+│   ├── test_textual_tui.py            # Textual pilot tests (28 tests)
+│   └── test_cli.py                    # CLI argument parsing
+└── fixtures/                           # Test data and sample files
+    └── sample_export/                  # Real WhatsApp export
 ```
 
 ### Running Tests
@@ -634,6 +612,7 @@ Common fixtures available in all tests (defined in `conftest.py`):
 - `sample_messages`: Sample message data for parser testing
 - `sample_media_files`: Sample media files in temp directory
 - `mock_api_key`: Sets mock API keys for testing
+- `tui_app`: WhatsAppExporterApp in dry-run mode with StateManager and temp output (for Textual pilot tests)
 
 ### Coverage
 
@@ -700,27 +679,27 @@ When adding new tests:
    assert "expected text" in output
    ```
 
-### Testing Export Script (Manual Testing)
+### Testing TUI (Manual Testing)
 
-For the WhatsApp export automation script (requires device):
+1. `poetry run whatsapp` — verify TUI launches with DiscoveryScreen
+2. Test dry-run mode (press 'd' on DiscoveryScreen) to verify screen flow without device
+3. Test wireless ADB input fields on DiscoveryScreen
+4. With device: verify full flow through connect → select → export → process → summary
 
-1. Use `--limit 5` to limit to 5 chats
-2. Enable `--debug` to see detailed navigation steps
-3. Use `--skip-appium` if manually managing Appium server
-4. Test with both `--with-media` (default) and `--without-media`
-5. Verify `--resume` functionality by running twice on same folder
-6. Test wireless ADB if making connection-related changes
+### Testing Headless Mode (Manual Testing)
 
-### Testing Pipeline (Manual Testing)
+1. `poetry run whatsapp --headless --output /tmp/test --auto-select --limit 2` — verify 2 chats export
+2. Verify structured log output to stderr
+3. Verify exit codes: 0 for success, 1 for partial failure, 2 for fatal error
+4. Test `--resume` functionality by running twice on same folder
+5. Test without `--auto-select` or `--resume` — should exit code 2 with guidance
 
-For the complete pipeline workflow:
+### Testing Pipeline-Only (Manual Testing)
 
-1. Test default behavior (full pipeline with media + transcriptions)
-2. Test `--no-media` flag (verify transcriptions still created)
-3. Test `--no-transcribe` flag (verify media still copied)
-4. Test `--no-media --no-transcribe` (minimal output)
-5. Verify output structure matches expectations
-6. Check that temporary files are cleaned up properly
+1. `poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output` — full pipeline
+2. Test `--no-output-media` flag (verify transcriptions still created)
+3. Test `--no-transcribe` flag
+4. Verify output structure matches expectations
 
 ### CI/CD Integration
 
@@ -787,3 +766,8 @@ poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 # Focus on specific module
 poetry run pytest --cov=whatsapp_chat_autoexport.transcription tests/unit/test_transcription.py
 ```
+
+**Project note:** `/Users/ajanderson/Journal/Atlas/Whatsapp Chat AutoExport.md`
+This is the human's project notebook. Refer to it for project context, conventions, and working notes.
+
+<!-- Run `claude-tui-settings` to reconfigure. -->
