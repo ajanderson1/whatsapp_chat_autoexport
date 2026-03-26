@@ -257,9 +257,9 @@ class TestAppiumSource:
         msgs_1 = source.get_messages("Alice")
         msgs_2 = source.get_messages("Alice")
 
-        # Same underlying list (cached)
-        assert msgs_1 is not msgs_2  # get_messages doesn't return the cache list directly
+        # Cached — same content
         assert len(msgs_1) == len(msgs_2)
+        assert all(m1.content == m2.content for m1, m2 in zip(msgs_1, msgs_2))
 
     def test_missing_export_dir(self, tmp_path):
         """get_chats returns empty list when export_dir doesn't exist."""
