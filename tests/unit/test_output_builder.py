@@ -22,7 +22,7 @@ def test_import_module():
 def test_extract_contact_name():
     """Test contact name extraction from filename."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Test with "WhatsApp Chat with" prefix
     path1 = Path("WhatsApp Chat with Alice.txt")
@@ -44,7 +44,7 @@ def test_extract_contact_name():
 def test_build_simple_output(sample_transcript_file, temp_output_dir):
     """Test building output with sample transcript."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create fake media directory
     media_dir = temp_output_dir / "media"
@@ -78,7 +78,7 @@ def test_build_simple_output(sample_transcript_file, temp_output_dir):
 def test_build_output_with_media(temp_working_dir, temp_output_dir):
     """Test building output with media files."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create test transcript
     transcript_path = temp_working_dir / "chat.txt"
@@ -119,7 +119,7 @@ def test_build_output_with_media(temp_working_dir, temp_output_dir):
 def test_verify_output(temp_working_dir):
     """Test output verification."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create a valid output structure
     contact_dir = temp_working_dir / "Alice"
@@ -153,7 +153,7 @@ def test_verify_output(temp_working_dir):
 def test_batch_build(temp_working_dir, temp_output_dir):
     """Test batch building of multiple outputs."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create multiple transcripts
     transcripts = []
@@ -182,7 +182,7 @@ def test_batch_build(temp_working_dir, temp_output_dir):
 def test_with_real_whatsapp_export(sample_export_dir, temp_output_dir):
     """Test with real WhatsApp export."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     transcript = sample_export_dir / "WhatsApp Chat with Example.txt"
 
@@ -209,7 +209,7 @@ def test_with_real_whatsapp_export(sample_export_dir, temp_output_dir):
 def test_merged_transcript_format(temp_working_dir, temp_output_dir):
     """Test merged transcript format."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create test transcript
     transcript_path = temp_working_dir / "chat.txt"
@@ -245,7 +245,7 @@ def test_merged_transcript_format(temp_working_dir, temp_output_dir):
 def test_output_with_transcriptions(temp_working_dir, temp_output_dir):
     """Test output building with transcription files."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create test transcript
     transcript_path = temp_working_dir / "chat.txt"
@@ -283,7 +283,7 @@ def test_output_with_transcriptions(temp_working_dir, temp_output_dir):
 def test_output_without_transcriptions(temp_working_dir, temp_output_dir):
     """Test output building without transcription files."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create test transcript
     transcript_path = temp_working_dir / "chat.txt"
@@ -314,7 +314,7 @@ def test_output_without_transcriptions(temp_working_dir, temp_output_dir):
 def test_empty_transcript(temp_working_dir, temp_output_dir):
     """Test handling of empty transcript."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     # Create empty transcript
     transcript_path = temp_working_dir / "empty.txt"
@@ -482,7 +482,7 @@ def test_v2_index_has_correct_frontmatter(temp_working_dir, temp_output_dir):
 def test_legacy_format_unchanged_regression(temp_working_dir, temp_output_dir):
     """Regression: legacy format must produce transcript.txt, no index.md."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)  # default = legacy
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     transcript_path = temp_working_dir / "chat.txt"
     transcript_path.write_text(
@@ -544,7 +544,7 @@ def test_v2_atomic_write_no_leftover_tmp_on_success(temp_output_dir):
 def test_batch_build_outputs_with_v2(temp_working_dir, temp_output_dir):
     """Test batch_build_outputs passes format_version='v2' through."""
     logger = Logger()
-    builder = OutputBuilder(logger=logger)
+    builder = OutputBuilder(logger=logger, format_version="legacy")
 
     transcripts = []
     for i, name in enumerate(["Alice", "Bob"], 1):

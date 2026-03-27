@@ -39,7 +39,7 @@ class OutputBuilder:
     def __init__(
         self,
         logger: Optional[Logger] = None,
-        format_version: str = "legacy",
+        format_version: str = "v2",
     ):
         """
         Initialize output builder.
