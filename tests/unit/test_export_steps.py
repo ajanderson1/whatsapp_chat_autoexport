@@ -25,6 +25,12 @@ from whatsapp_chat_autoexport.config.selectors import (
     SelectorStrategy,
     ElementSelectors,
 )
+from whatsapp_chat_autoexport.config.timeouts import (
+    TimeoutConfig,
+    TimeoutProfile,
+    get_timeout_config,
+    reset_timeout_config,
+)
 from whatsapp_chat_autoexport.core.result import Ok, Err
 
 
@@ -67,6 +73,7 @@ def create_test_context(
     element_finder=None,
     chat_name="Test Chat",
     include_media=True,
+    timeout_config=None,
 ):
     """Create a StepContext for testing."""
     mock_driver = Mock()
@@ -74,12 +81,16 @@ def create_test_context(
     mock_driver.find_elements.return_value = []
     mock_driver.get_window_size.return_value = {"width": 1080, "height": 1920}
 
-    return StepContext(
+    kwargs = dict(
         driver=mock_driver,
         element_finder=element_finder or MockElementFinder(),
         chat_name=chat_name,
         include_media=include_media,
     )
+    if timeout_config is not None:
+        kwargs["timeout_config"] = timeout_config
+
+    return StepContext(**kwargs)
 
 
 class TestStepResult:
@@ -126,6 +137,40 @@ class TestStepContext:
         context = create_test_context()
         context.step_data["menu_open"] = True
         assert context.step_data["menu_open"] is True
+
+    def test_default_timeout_config_has_normal_profile_values(self):
+        """Test that StepContext created with default TimeoutConfig has NORMAL profile values."""
+        reset_timeout_config()
+        context = create_test_context()
+        normal = TimeoutConfig()
+        assert context.timeout_config.animation_complete_wait == normal.animation_complete_wait
+        assert context.timeout_config.screen_transition_wait == normal.screen_transition_wait
+        assert context.timeout_config.step_delay == normal.step_delay
+
+    def test_explicit_fast_profile_has_reduced_values(self):
+        """Test that StepContext created with explicit FAST profile has reduced values."""
+        fast_config = TimeoutConfig.for_profile(TimeoutProfile.FAST)
+        context = create_test_context(timeout_config=fast_config)
+        normal = TimeoutConfig()
+        assert context.timeout_config.animation_complete_wait < normal.animation_complete_wait
+        assert context.timeout_config.screen_transition_wait < normal.screen_transition_wait
+        assert context.timeout_config.step_delay < normal.step_delay
+
+    def test_without_explicit_timeout_config_falls_back_to_global(self):
+        """Test that StepContext without explicit timeout_config falls back to global default."""
+        reset_timeout_config()
+        context = create_test_context()
+        global_config = get_timeout_config()
+        assert context.timeout_config is global_config
+
+    def test_steps_can_access_timeout_config_fields(self):
+        """Test that steps can access timeout_config fields through context."""
+        fast_config = TimeoutConfig.for_profile(TimeoutProfile.FAST)
+        context = create_test_context(timeout_config=fast_config)
+        assert context.timeout_config.animation_complete_wait == 0.3
+        assert context.timeout_config.screen_transition_wait == 0.5
+        assert context.timeout_config.step_delay == 0.3
+        assert context.timeout_config.element_find_timeout == 3.0
 
 
 class TestOpenMenuStep:
@@ -446,3 +491,36 @@ class TestExportWorkflow:
         )
         assert skipped_result.success is False
         assert skipped_result.skipped is True
+
+    def test_workflow_passes_timeout_config_to_context(self):
+        """Test that ExportWorkflow passes its timeout_config to the StepContext."""
+        mock_driver = Mock()
+        mock_driver.current_package = "com.whatsapp"
+        mock_driver.find_elements.return_value = []
+        mock_driver.get_window_size.return_value = {"width": 1080, "height": 1920}
+
+        mock_element = Mock()
+        finder = MockElementFinder(return_element=mock_element)
+        fast_config = TimeoutConfig.for_profile(TimeoutProfile.FAST)
+
+        workflow = ExportWorkflow(
+            driver=mock_driver,
+            element_finder=finder,
+            timeout_config=fast_config,
+        )
+
+        assert workflow.timeout_config is fast_config
+
+        result = workflow.execute(chat_name="Test Chat")
+        assert result.status == WorkflowStatus.COMPLETED
+
+    def test_workflow_defaults_to_global_timeout_config(self):
+        """Test that ExportWorkflow uses global timeout config when none provided."""
+        reset_timeout_config()
+        mock_driver = Mock()
+        finder = MockElementFinder()
+
+        workflow = ExportWorkflow(driver=mock_driver, element_finder=finder)
+
+        global_config = get_timeout_config()
+        assert workflow.timeout_config is global_config

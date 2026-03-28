@@ -13,6 +13,7 @@ import time
 from ....core.result import Result, Ok, Err
 from ....core.errors import ExportError, ExportWorkflowError, ErrorCategory
 from ....automation.elements import ElementFinder
+from ....config.timeouts import TimeoutConfig, get_timeout_config
 
 
 class StepStatus(Enum):
@@ -81,6 +82,9 @@ class StepContext:
 
     # Additional data from previous steps
     step_data: Dict[str, Any] = field(default_factory=dict)
+
+    # Timeout configuration
+    timeout_config: TimeoutConfig = field(default_factory=get_timeout_config)
 
     # Logger
     logger: Any = None
