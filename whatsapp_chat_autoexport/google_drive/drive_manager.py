@@ -57,31 +57,46 @@ class GoogleDriveManager:
         return self.client.list_whatsapp_exports(folder_id=folder_id)
 
     def wait_for_new_export(self,
-                           poll_interval: int = 8,
+                           initial_interval: int = 2,
+                           max_interval: int = 8,
                            timeout: int = 300,
-                           created_within_seconds: int = 300) -> Optional[Dict[str, Any]]:
+                           created_within_seconds: int = 300,
+                           chat_name: Optional[str] = None,
+                           include_media: bool = False,
+                           # Legacy parameter — ignored, use initial_interval instead
+                           poll_interval: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Wait for a new WhatsApp export to appear in Google Drive root.
-        
+
         Continuously polls Google Drive looking for a WhatsApp export file
         created recently. Designed to wait for phone upload to complete after
         triggering an export.
-        
+
+        Uses progressive backoff: starts at initial_interval, doubles every
+        2 polls, caps at max_interval.
+
         Args:
-            poll_interval: Seconds between polls (default: 8)
+            initial_interval: Starting seconds between polls (default: 2)
+            max_interval: Maximum seconds between polls (default: 8)
             timeout: Maximum seconds to wait (default: 300 / 5 minutes)
             created_within_seconds: Only consider files created within this window (default: 300 / 5 minutes)
-            
+            chat_name: Optional chat name to filter for specific export
+            include_media: Whether export includes media; affects default timeout
+            poll_interval: Deprecated — ignored. Use initial_interval instead.
+
         Returns:
             File metadata dict if found, None on timeout
-            
+
         Raises:
             RuntimeError: If timeout occurs
         """
         file = self.client.poll_for_new_export(
-            poll_interval=poll_interval,
+            initial_interval=initial_interval,
+            max_interval=max_interval,
             timeout=timeout,
-            created_within_seconds=created_within_seconds
+            created_within_seconds=created_within_seconds,
+            chat_name=chat_name,
+            include_media=include_media,
         )
         
         if not file:

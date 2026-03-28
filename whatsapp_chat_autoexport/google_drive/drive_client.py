@@ -320,82 +320,113 @@ class GoogleDriveClient:
         return files
 
     def poll_for_new_export(self,
-                           poll_interval: int = 8,
+                           initial_interval: int = 2,
+                           max_interval: int = 8,
                            timeout: int = 300,
-                           created_within_seconds: int = 300) -> Optional[Dict[str, Any]]:
+                           created_within_seconds: int = 300,
+                           chat_name: Optional[str] = None,
+                           include_media: bool = False,
+                           # Legacy parameter — ignored, use initial_interval instead
+                           poll_interval: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Poll Google Drive root for newly created WhatsApp export.
-        
+
         This method continuously polls the root of Google Drive looking for
         a WhatsApp export file that was created recently. It's designed to wait
         for the phone to finish uploading after triggering an export.
-        
+
+        Uses progressive backoff: starts at initial_interval, doubles every
+        2 polls, caps at max_interval. Schedule example (defaults):
+        Poll 1: 2s, Poll 2: 2s, Poll 3: 4s, Poll 4: 4s, Poll 5+: 8s
+
         Args:
-            poll_interval: Seconds between polls (default: 8)
-            timeout: Maximum seconds to wait before giving up (default: 300 / 5 min)
+            initial_interval: Starting seconds between polls (default: 2)
+            max_interval: Maximum seconds between polls (default: 8)
+            timeout: Maximum seconds to wait before giving up.
+                     When not explicitly provided, defaults to 120s if include_media
+                     is False, or 300s if include_media is True.
             created_within_seconds: Only consider files created within this many seconds (default: 300 / 5 min)
-            
+            chat_name: Optional chat name to filter for specific export
+            include_media: Whether export includes media; affects default timeout
+            poll_interval: Deprecated — ignored. Use initial_interval instead.
+
         Returns:
             File metadata dict if found, None if timeout
         """
         if not self.service:
             self.logger.error("Not connected to Google Drive API")
             return None
-            
+
+        # Apply include_media-aware default timeout:
+        # If caller passed the class default of 300 and include_media is False,
+        # use the shorter 120s timeout for text-only exports.
+        if not include_media and timeout == 300:
+            timeout = 120
+
         start_time = time.time()
         cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=created_within_seconds)
         poll_count = 0
-        
-        self.logger.info(f"Polling for new WhatsApp export in Drive root...")
-        self.logger.info(f"Poll interval: {poll_interval}s, Timeout: {timeout}s")
+        current_interval = initial_interval
+
+        filter_desc = f" for '{chat_name}'" if chat_name else ""
+        self.logger.info(f"Polling for new WhatsApp export{filter_desc} in Drive root...")
+        self.logger.info(f"Initial interval: {initial_interval}s, Max interval: {max_interval}s, Timeout: {timeout}s")
         self.logger.info(f"Looking for files created after: {cutoff_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        
+
         while True:
             elapsed = time.time() - start_time
             poll_count += 1
-            
+
             # Check timeout
             if elapsed > timeout:
-                self.logger.error(f"Timeout after {timeout}s ({poll_count} polls)")
+                self.logger.error(f"Timeout after {timeout}s ({poll_count} polls){filter_desc}")
                 return None
-            
+
             try:
                 # Query for WhatsApp exports in root (no folder_id filter)
                 # NOTE: Files may not have .zip extension when first uploaded
                 query = "name contains 'WhatsApp Chat with' and 'root' in parents"
-                
+                if chat_name:
+                    # Escape single quotes in chat name for Drive API query
+                    safe_name = chat_name.replace("'", "\\'")
+                    query += f" and name contains '{safe_name}'"
+
                 results = self.service.files().list(
                     q=query,
                     pageSize=100,
                     fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
                     orderBy="createdTime desc"
                 ).execute()
-                
+
                 files = results.get('files', [])
-                
+
                 # Filter by creation time
                 for file in files:
                     created_time_str = file.get('createdTime')
                     if not created_time_str:
                         continue
-                        
+
                     # Parse ISO 8601 timestamp
                     created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
-                    
+
                     if created_time > cutoff_time:
                         size_mb = int(file.get('size', 0)) / (1024 * 1024)
                         self.logger.success(f"Found new export: {file['name']} ({size_mb:.2f} MB)")
                         self.logger.success(f"Created: {created_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
                         return file
-                
-                # Not found yet - log progress and wait
+
+                # Not found yet - log progress and wait with adaptive backoff
                 remaining = timeout - elapsed
-                self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {poll_interval}s... ({remaining:.0f}s remaining)")
-                time.sleep(poll_interval)
-                
+                self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)")
+                time.sleep(current_interval)
+
+                # Progressive backoff: double interval every 2 polls, cap at max_interval
+                if poll_count % 2 == 0:
+                    current_interval = min(current_interval * 2, max_interval)
+
             except HttpError as error:
                 self.logger.error(f"HTTP error during polling: {error}")
-                time.sleep(poll_interval)  # Wait before retrying
+                time.sleep(current_interval)  # Wait before retrying
             except Exception as e:
                 self.logger.error(f"Error during polling: {e}")
-                time.sleep(poll_interval)  # Wait before retrying
+                time.sleep(current_interval)  # Wait before retrying

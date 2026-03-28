@@ -35,9 +35,14 @@ class PipelineConfig:
     skip_download: bool = False
     
     # Google Drive polling settings (for waiting after phone export)
-    poll_interval: int = 8  # Seconds between polls
+    initial_interval: int = 2  # Starting seconds between polls (adaptive backoff)
+    max_interval: int = 8  # Maximum seconds between polls (adaptive backoff cap)
+    poll_interval: Optional[int] = None  # Deprecated — ignored, use initial_interval
     poll_timeout: int = 300  # Maximum wait time (5 minutes)
     created_within_seconds: int = 300  # Only consider files created within last 5 minutes
+
+    # Concurrency settings
+    max_concurrent: int = 2  # Maximum parallel pipeline tasks
 
     # Processing settings
     download_dir: Optional[Path] = None
@@ -164,9 +169,12 @@ class WhatsAppPipeline:
             self.logger.info(f"Waiting for '{chat_name}' export to appear on Google Drive...")
             
             matching_file = self.drive_manager.wait_for_new_export(
-                poll_interval=getattr(self.config, 'poll_interval', 8),
-                timeout=getattr(self.config, 'poll_timeout', 300),
-                created_within_seconds=getattr(self.config, 'created_within_seconds', 300)
+                initial_interval=self.config.initial_interval,
+                max_interval=self.config.max_interval,
+                timeout=self.config.poll_timeout,
+                created_within_seconds=self.config.created_within_seconds,
+                chat_name=chat_name,
+                include_media=self.config.include_media,
             )
             
             # Download the file
