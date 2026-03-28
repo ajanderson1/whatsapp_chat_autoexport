@@ -223,6 +223,11 @@ def _make_exporter(pipeline=None):
     mock_logger = MagicMock()
     mock_logger.debug = False
 
+    # Ensure mock pipeline has max_concurrent for ParallelPipeline
+    if pipeline is not None:
+        if not hasattr(pipeline.config, '_mock_name') or True:
+            pipeline.config.max_concurrent = 2
+
     exporter = ChatExporter(mock_driver, mock_logger, pipeline=pipeline)
     exporter.export_chat_to_google_drive = MagicMock(return_value=True)
 

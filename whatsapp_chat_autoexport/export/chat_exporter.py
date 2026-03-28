@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .whatsapp_driver import WhatsAppDriver, SESSION_ERROR_KEYWORDS
 from .timing import ChatTiming, ChatStatus, PhaseTimer, print_timing_summary
+from .parallel_pipeline import ParallelPipeline, PipelineTaskResult
 from ..utils.logger import Logger
 
 # New workflow imports (for integration with refactored architecture)
@@ -1588,6 +1589,17 @@ class ChatExporter:
         # Reset consecutive recovery counter at the start of each batch
         self._consecutive_recovery_count = 0
 
+        # Set up parallel pipeline if pipeline is configured
+        parallel: Optional[ParallelPipeline] = None
+        if self.pipeline:
+            max_workers = getattr(self.pipeline.config, 'max_concurrent', 2)
+            parallel = ParallelPipeline(
+                pipeline=self.pipeline,
+                logger=self.logger,
+                max_workers=max_workers,
+            )
+            self.logger.info(f"Parallel pipeline enabled (max_workers={max_workers})")
+
         for i, chat_name in enumerate(chat_names, 1):
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
 
@@ -1672,47 +1684,18 @@ class ChatExporter:
                 # --- End UI phase ---
 
                 if export_success:
-                    # If export succeeded and pipeline is configured, process the chat
-                    if self.pipeline:
-                        self.logger.info(f"\n🔄 Starting pipeline processing for '{chat_name}'...")
-
-                        # Give Google Drive a moment to finish uploading
-                        sleep(2.0)
-
-                        # --- Pipeline phase (poll + download + process) ---
-                        process_timer = PhaseTimer().start()
-
-                        # Process the pipeline
-                        try:
-                            pipeline_result = self.pipeline.process_single_export(
-                                chat_name=chat_name,
-                                google_drive_folder=google_drive_folder
-                            )
-
-                            process_timer.stop()
-                            ct.process_time_s = process_timer.elapsed
-
-                            if pipeline_result['success']:
-                                self.logger.success(f"✅ Pipeline completed for '{chat_name}'")
-                                if pipeline_result.get('output_path'):
-                                    self.logger.info(f"   📁 Output: {pipeline_result['output_path']}")
-                                results[chat_name] = True
-                                ct.status = ChatStatus.SUCCESS
-                            else:
-                                self.logger.warning(f"⚠️  Pipeline failed for '{chat_name}'")
-                                if pipeline_result.get('errors'):
-                                    for error in pipeline_result['errors']:
-                                        self.logger.error(f"   Error: {error}")
-                                results[chat_name] = False
-                                ct.status = ChatStatus.FAILED
-
-                        except Exception as e:
-                            process_timer.stop()
-                            ct.process_time_s = process_timer.elapsed
-                            self.logger.error(f"Pipeline processing failed for '{chat_name}': {e}")
-                            results[chat_name] = False
-                            ct.status = ChatStatus.FAILED
-                        # --- End pipeline phase ---
+                    # If export succeeded and parallel pipeline is running,
+                    # submit the pipeline task to the background pool and
+                    # continue to the next chat immediately.
+                    if parallel is not None:
+                        self.logger.info(
+                            f"Queuing background pipeline for '{chat_name}'"
+                        )
+                        parallel.submit(chat_name, google_drive_folder)
+                        # Optimistically mark as True; collect_results() will
+                        # update to False if the background task fails.
+                        results[chat_name] = True
+                        ct.status = ChatStatus.SUCCESS
                     else:
                         # No pipeline configured, just mark export as successful
                         results[chat_name] = True
@@ -1782,6 +1765,39 @@ class ChatExporter:
             self.logger.info(f"\n{status_emoji} Chat '{chat_name}' {status_text}")
             self.logger.info(f"   ⏱️  Time for this chat: {self.format_time(chat_elapsed)}")
             self.logger.info(f"   ⏱️  Total elapsed time: {self.format_time(cumulative_time)}")
+
+        # Collect parallel pipeline results (if any)
+        if parallel is not None:
+            self.logger.info(
+                f"\nWaiting for {parallel.pending_count} background pipeline task(s)..."
+            )
+            pipeline_results = parallel.collect_results()
+
+            # Reconcile pipeline outcomes with the optimistic results set above
+            for pr in pipeline_results:
+                if pr.success:
+                    self.logger.success(f"Pipeline completed for '{pr.chat_name}'")
+                    if pr.output_path:
+                        self.logger.info(f"   Output: {pr.output_path}")
+                    results[pr.chat_name] = True
+                else:
+                    self.logger.warning(
+                        f"Pipeline failed for '{pr.chat_name}': {pr.errors}"
+                    )
+                    results[pr.chat_name] = False
+
+                # Update structured timing with pipeline breakdown
+                for ct in self.chat_timings:
+                    if ct.chat_name == pr.chat_name:
+                        ct.process_time_s = pr.process_time_s
+                        ct.poll_time_s = pr.poll_time_s
+                        ct.download_time_s = pr.download_time_s
+                        if not pr.success:
+                            ct.status = ChatStatus.FAILED
+                        ct.compute_total()
+                        break
+
+            parallel.shutdown(wait=True)
 
         total_time = time.time() - batch_start_time
 
