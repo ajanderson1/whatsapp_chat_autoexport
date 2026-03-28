@@ -2,7 +2,6 @@
 Step 5: Select Google Drive from the share sheet.
 """
 
-import time
 from typing import Any, Dict, Optional
 
 from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
@@ -37,18 +36,12 @@ class SelectDriveStep(BaseExportStep):
         """
         context.log_debug("Selecting Google Drive from share sheet")
 
-        # Wait for share sheet to load
-        time.sleep(0.5)
-
-        # Step 1: Find and click Google Drive in share sheet
+        # Step 1: Find and click Google Drive in share sheet (element_finder.find() already waits)
         drive_result = self._select_drive_app(context)
         if drive_result.status != StepStatus.COMPLETED:
             return drive_result
 
-        # Wait for Drive picker to load
-        time.sleep(1.0)
-
-        # Step 2: Select My Drive folder
+        # Step 2: Select My Drive folder (element_finder.find() in _select_my_drive waits for picker)
         folder_result = self._select_my_drive(context)
         if folder_result.status != StepStatus.COMPLETED:
             return folder_result
@@ -176,7 +169,17 @@ class SelectDriveStep(BaseExportStep):
         try:
             folder_option.click()
             context.log_debug("'My Drive' folder selected")
-            time.sleep(0.5)
+
+            # Wait for upload button to appear instead of hardcoded sleep
+            upload_selectors = create_default_selectors().get("upload_button")
+            if upload_selectors:
+                context.element_finder.find(
+                    upload_selectors,
+                    timeout=context.timeout_config.screen_transition_wait,
+                    context=f"drive_folder_wait_{self.name}",
+                )
+                # Result intentionally ignored — just need the wait.
+
             return StepResult.success("'My Drive' folder selected")
         except Exception as e:
             return StepResult.failed(
@@ -199,7 +202,6 @@ class SelectDriveStep(BaseExportStep):
             end_y = int(size["height"] * 0.3)
 
             context.driver.swipe(start_x, start_y, end_x, end_y, 300)
-            time.sleep(0.3)
             return True
         except Exception:
             return False

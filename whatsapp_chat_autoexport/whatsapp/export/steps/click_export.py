@@ -2,7 +2,6 @@
 Step 3: Click the 'Export chat' option.
 """
 
-import time
 from typing import Any, Dict, Optional
 
 from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
@@ -38,10 +37,7 @@ class ClickExportStep(BaseExportStep):
         """
         context.log_debug("Looking for 'Export chat' option")
 
-        # Wait for submenu animation
-        time.sleep(0.3)
-
-        # Get 'Export chat' selectors
+        # Get 'Export chat' selectors (element_finder.find() already waits for element)
         selectors = create_default_selectors().get("export_chat_option")
         if not selectors:
             return StepResult.failed(
@@ -83,8 +79,19 @@ class ClickExportStep(BaseExportStep):
             export_option.click()
             context.log_debug("'Export chat' clicked successfully")
 
-            # Wait for export dialog to appear
-            time.sleep(0.5)
+            # Wait for export dialog by looking for expected next-state elements
+            # instead of a hardcoded sleep. The media selection buttons or privacy
+            # dialog should appear after the click.
+            media_selectors = create_default_selectors().get("include_media_button")
+            if media_selectors:
+                context.element_finder.find(
+                    media_selectors,
+                    timeout=context.timeout_config.screen_transition_wait,
+                    context=f"export_dialog_wait_{self.name}",
+                )
+                # Result is intentionally ignored — we just need the wait.
+                # If the element is not found, the privacy check or subsequent
+                # steps will handle it.
 
             # Check for privacy error dialog
             if self._check_privacy_error(context):

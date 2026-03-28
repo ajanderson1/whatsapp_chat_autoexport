@@ -2,7 +2,6 @@
 Step 2: Click the 'More' option in the menu.
 """
 
-import time
 from typing import Any, Dict, Optional
 
 from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
@@ -37,10 +36,7 @@ class ClickMoreStep(BaseExportStep):
         """
         context.log_debug("Looking for 'More' option")
 
-        # Wait for menu animation
-        time.sleep(0.3)
-
-        # Get 'More' option selectors
+        # Get 'More' option selectors (element_finder.find() already waits for element)
         selectors = create_default_selectors().get("more_option")
         if not selectors:
             return StepResult.failed(

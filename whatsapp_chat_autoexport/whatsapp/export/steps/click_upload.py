@@ -37,10 +37,7 @@ class ClickUploadStep(BaseExportStep):
         """
         context.log_debug("Looking for upload/save button")
 
-        # Wait for UI to stabilize
-        time.sleep(0.5)
-
-        # Get upload button selectors
+        # Get upload button selectors (element_finder.find() already waits for element)
         selectors = create_default_selectors().get("upload_button")
         if not selectors:
             selectors = ElementSelectors(
@@ -94,11 +91,8 @@ class ClickUploadStep(BaseExportStep):
             upload_button.click()
             context.log_debug("Upload button clicked")
 
-            # Wait for upload confirmation
-            time.sleep(1.0)
-
-            # Verify upload started/completed
-            if self._verify_upload_started(context):
+            # Poll for upload confirmation instead of hardcoded sleep
+            if self._poll_upload_started(context):
                 context.step_data["upload_started"] = True
                 return StepResult.success(
                     f"Export initiated for {context.chat_name}",
@@ -147,9 +141,8 @@ class ClickUploadStep(BaseExportStep):
                         for word in ["save", "upload", "done", "ok"]
                     ):
                         button.click()
-                        time.sleep(1.0)
 
-                        if self._verify_upload_started(context):
+                        if self._poll_upload_started(context):
                             context.step_data["upload_started"] = True
                             return StepResult.success(
                                 f"Export initiated via alternate strategy",
@@ -168,6 +161,22 @@ class ClickUploadStep(BaseExportStep):
                 chat_name=context.chat_name,
             )
         )
+
+    def _poll_upload_started(self, context: StepContext) -> bool:
+        """
+        Poll for upload confirmation with timeout ceiling.
+
+        Uses step_delay as the timeout ceiling instead of a hardcoded sleep.
+        Polls _verify_upload_started() at short intervals.
+        """
+        deadline = time.time() + context.timeout_config.step_delay
+        poll_interval = 0.1
+        while time.time() < deadline:
+            if self._verify_upload_started(context):
+                return True
+            time.sleep(poll_interval)
+        # Final check after deadline
+        return self._verify_upload_started(context)
 
     def _verify_upload_started(self, context: StepContext) -> bool:
         """
