@@ -13,6 +13,7 @@ from typing import Optional, Tuple, List, Dict, Set, Any, Callable
 from pathlib import Path
 
 from .whatsapp_driver import WhatsAppDriver, SESSION_ERROR_KEYWORDS
+from .timing import ChatTiming, ChatStatus, PhaseTimer, print_timing_summary
 from ..utils.logger import Logger
 
 # New workflow imports (for integration with refactored architecture)
@@ -134,6 +135,9 @@ class ChatExporter:
 
         # Session recovery tracking
         self._consecutive_recovery_count: int = 0
+
+        # Per-chat structured timing (populated by export_chats)
+        self.chat_timings: List[ChatTiming] = []
 
     def _get_state_manager(self) -> StateManager:
         """
@@ -1555,19 +1559,22 @@ class ChatExporter:
     
     def export_chats(self, chat_names: List[str], include_media: bool = True, resume_folder: Optional[Path] = None, google_drive_folder: Optional[str] = None) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
         """Export multiple chats.
-        
+
         Args:
             chat_names: List of chat names to export
             include_media: If True, export with media; if False, export without media
             resume_folder: Optional path to Google Drive folder to check for existing exports
             google_drive_folder: Optional Google Drive folder name for pipeline processing
-        
+
         Returns:
             Tuple of (results dict, timing dict, total_time, skipped_already_exists dict)
             - results: Dict mapping chat_name -> success (bool)
             - timings: Dict mapping chat_name -> elapsed_time (float seconds)
             - total_time: Total time elapsed for batch (float seconds)
             - skipped_already_exists: Dict mapping chat_name -> True if skipped because already exists
+
+        After this method returns, structured per-chat timing data is
+        available via ``self.chat_timings`` (a list of :class:`ChatTiming`).
         """
         results = {}
         timings = {}
@@ -1575,11 +1582,17 @@ class ChatExporter:
         total = len(chat_names)
         batch_start_time = time.time()
 
+        # Reset structured timing list for this batch
+        self.chat_timings = []
+
         # Reset consecutive recovery counter at the start of each batch
         self._consecutive_recovery_count = 0
 
         for i, chat_name in enumerate(chat_names, 1):
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
+
+            # Per-chat structured timing
+            ct = ChatTiming(chat_name=chat_name)
 
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
@@ -1587,16 +1600,22 @@ class ChatExporter:
                 if self._check_consecutive_recovery_limit():
                     results[chat_name] = False
                     timings[chat_name] = 0
+                    ct.status = ChatStatus.FAILED
+                    self.chat_timings.append(ct)
                     break
                 if self._attempt_session_recovery("Pre-export verification failed"):
                     # Recovery succeeded — re-enter loop; verify will be re-checked at top
                     results[chat_name] = False
                     timings[chat_name] = 0
+                    ct.status = ChatStatus.FAILED
+                    self.chat_timings.append(ct)
                     continue
                 else:
                     self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
                     results[chat_name] = False
                     timings[chat_name] = 0
+                    ct.status = ChatStatus.FAILED
+                    self.chat_timings.append(ct)
                     break
 
             chat_start_time = time.time()
@@ -1616,19 +1635,30 @@ class ChatExporter:
                     results[chat_name] = False
                     chat_end_time = time.time()
                     timings[chat_name] = chat_end_time - chat_start_time
+                    ct.status = ChatStatus.SKIPPED
+                    ct.compute_total()
+                    self.chat_timings.append(ct)
                     continue
 
             try:
+                # --- UI phase: navigate, open chat, trigger export ---
+                ui_timer = PhaseTimer().start()
+
                 # Navigate to main screen first
                 self.driver.navigate_to_main()
                 sleep(0.3)  # Brief delay after navigation
 
                 # Click into chat
                 if not self.driver.click_chat(chat_name):
+                    ui_timer.stop()
+                    ct.ui_time_s = ui_timer.elapsed
                     self.logger.warning(f"Could not open chat '{chat_name}' - skipping")
                     results[chat_name] = False
                     chat_end_time = time.time()
                     timings[chat_name] = chat_end_time - chat_start_time
+                    ct.status = ChatStatus.FAILED
+                    ct.compute_total()
+                    self.chat_timings.append(ct)
                     continue
 
                 # Export the chat to Google Drive
@@ -1636,6 +1666,10 @@ class ChatExporter:
 
                 # Navigate back to main screen
                 self.driver.navigate_back_to_main()
+
+                ui_timer.stop()
+                ct.ui_time_s = ui_timer.elapsed
+                # --- End UI phase ---
 
                 if export_success:
                     # If export succeeded and pipeline is configured, process the chat
@@ -1645,6 +1679,9 @@ class ChatExporter:
                         # Give Google Drive a moment to finish uploading
                         sleep(2.0)
 
+                        # --- Pipeline phase (poll + download + process) ---
+                        process_timer = PhaseTimer().start()
+
                         # Process the pipeline
                         try:
                             pipeline_result = self.pipeline.process_single_export(
@@ -1652,33 +1689,48 @@ class ChatExporter:
                                 google_drive_folder=google_drive_folder
                             )
 
+                            process_timer.stop()
+                            ct.process_time_s = process_timer.elapsed
+
                             if pipeline_result['success']:
                                 self.logger.success(f"✅ Pipeline completed for '{chat_name}'")
                                 if pipeline_result.get('output_path'):
                                     self.logger.info(f"   📁 Output: {pipeline_result['output_path']}")
                                 results[chat_name] = True
+                                ct.status = ChatStatus.SUCCESS
                             else:
                                 self.logger.warning(f"⚠️  Pipeline failed for '{chat_name}'")
                                 if pipeline_result.get('errors'):
                                     for error in pipeline_result['errors']:
                                         self.logger.error(f"   Error: {error}")
                                 results[chat_name] = False
+                                ct.status = ChatStatus.FAILED
 
                         except Exception as e:
+                            process_timer.stop()
+                            ct.process_time_s = process_timer.elapsed
                             self.logger.error(f"Pipeline processing failed for '{chat_name}': {e}")
                             results[chat_name] = False
+                            ct.status = ChatStatus.FAILED
+                        # --- End pipeline phase ---
                     else:
                         # No pipeline configured, just mark export as successful
                         results[chat_name] = True
+                        ct.status = ChatStatus.SUCCESS
                 else:
                     results[chat_name] = False
+                    ct.status = ChatStatus.FAILED
 
                 # Post-export session health check
                 if not self.driver.is_session_active():
                     if self._check_consecutive_recovery_limit():
+                        ct.compute_total()
+                        self.chat_timings.append(ct)
                         break
                     if not self._attempt_session_recovery("Post-export session check failed"):
                         self.logger.error("Failed to recover session after export - stopping batch")
+                        ct.compute_total()
+                        self.chat_timings.append(ct)
                         break
                 else:
                     # A fully successful export resets the consecutive counter
@@ -1692,6 +1744,9 @@ class ChatExporter:
                     # Session-level crash — attempt recovery before continuing
                     self.logger.error(f"Session error during export of '{chat_name}': {e}")
                     results[chat_name] = False
+                    ct.status = ChatStatus.FAILED
+                    ct.compute_total()
+                    self.chat_timings.append(ct)
                     if self._check_consecutive_recovery_limit():
                         break
                     if self._attempt_session_recovery(f"Session error during export of '{chat_name}'"):
@@ -1701,6 +1756,7 @@ class ChatExporter:
                 else:
                     self.logger.error(f"Error during export for '{chat_name}': {e}")
                 results[chat_name] = False
+                ct.status = ChatStatus.FAILED
 
                 # Try to navigate back (may silently fail if session is dead)
                 try:
@@ -1713,6 +1769,10 @@ class ChatExporter:
             chat_elapsed = chat_end_time - chat_start_time
             timings[chat_name] = chat_elapsed
 
+            # Finalize structured timing for this chat
+            ct.total_time_s = chat_elapsed
+            self.chat_timings.append(ct)
+
             # Calculate cumulative time so far
             cumulative_time = chat_end_time - batch_start_time
 
@@ -1724,5 +1784,9 @@ class ChatExporter:
             self.logger.info(f"   ⏱️  Total elapsed time: {self.format_time(cumulative_time)}")
 
         total_time = time.time() - batch_start_time
+
+        # Print structured timing summary
+        print_timing_summary(self.chat_timings, self.logger)
+
         return results, timings, total_time, skipped_already_exists
 
