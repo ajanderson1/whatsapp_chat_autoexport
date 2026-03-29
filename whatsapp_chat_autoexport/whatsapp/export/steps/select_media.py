@@ -2,7 +2,6 @@
 Step 4: Select media option (Include/Without media).
 """
 
-import time
 from typing import Any, Dict, Optional
 
 from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
@@ -42,10 +41,7 @@ class SelectMediaStep(BaseExportStep):
 
         context.log_debug(f"Selecting '{option_name}'")
 
-        # Wait for dialog animation
-        time.sleep(0.3)
-
-        # Check if this is a text-only chat (share dialog appeared directly)
+        # Check if this is a text-only chat (element_finder.find() already waits) (share dialog appeared directly)
         if self._is_share_dialog_visible(context):
             context.log_debug(
                 "Share dialog visible - chat may have no media, skipping media selection"
@@ -101,8 +97,18 @@ class SelectMediaStep(BaseExportStep):
             media_option.click()
             context.log_debug(f"'{option_name}' selected successfully")
 
-            # Wait for share dialog to appear
-            time.sleep(0.5)
+            # Wait for share dialog by looking for the Drive option
+            # instead of a hardcoded sleep
+            drive_selectors = create_default_selectors().get("google_drive_option")
+            if drive_selectors:
+                context.element_finder.find(
+                    drive_selectors,
+                    timeout=context.timeout_config.screen_transition_wait,
+                    context=f"share_dialog_wait_{self.name}",
+                )
+                # Result intentionally ignored — just need the wait.
+                # The share dialog check or subsequent steps handle failures.
+
             context.step_data["share_dialog_open"] = True
 
             return StepResult.success(

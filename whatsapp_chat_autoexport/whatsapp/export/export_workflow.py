@@ -30,6 +30,7 @@ from ...core.events import (
     emit,
 )
 from ...automation.elements import ElementFinder
+from ...config.timeouts import TimeoutConfig, get_timeout_config
 
 
 class WorkflowStatus(Enum):
@@ -80,6 +81,7 @@ class ExportWorkflow:
         element_finder: ElementFinder,
         logger: Optional[Any] = None,
         event_bus: Optional[EventBus] = None,
+        timeout_config: Optional[TimeoutConfig] = None,
     ):
         """
         Initialize the workflow.
@@ -89,11 +91,13 @@ class ExportWorkflow:
             element_finder: Element finder instance
             logger: Optional logger
             event_bus: Optional event bus for progress updates
+            timeout_config: Optional timeout configuration (defaults to global config)
         """
         self.driver = driver
         self.element_finder = element_finder
         self.logger = logger
         self.event_bus = event_bus
+        self.timeout_config = timeout_config or get_timeout_config()
 
         # Initialize steps
         self.steps: List[BaseExportStep] = [
@@ -192,6 +196,7 @@ class ExportWorkflow:
             include_media=include_media,
             timeout_seconds=timeout_seconds,
             total_steps=len(self.steps),
+            timeout_config=self.timeout_config,
             logger=self.logger,
         )
 
