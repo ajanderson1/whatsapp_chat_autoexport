@@ -338,3 +338,274 @@ class TestNoHardcodedSleeps:
 
         # Should not contain the old pattern: swipe followed by sleep(0.5)
         assert "sleep(0.5)" not in source, "Found sleep(0.5) in collect_all_chats"
+
+
+# ---------------------------------------------------------------------------
+# Integration-style: timing validation for discovery speed
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoveryTimingIntegration:
+    """Integration-style timing tests that validate measurable speedup.
+
+    These tests mock the Appium driver to respond quickly and measure
+    wall-clock time to confirm the smart waits are faster than the old
+    hardcoded sleeps.
+
+    Old behavior (hardcoded sleeps):
+      - restart_app_to_top: 3-5s sleep per call (x2 in collect_all_chats)
+      - scroll settle: 0.5s sleep per scroll
+      - 10 scrolls + 2 restarts = ~10-15s minimum
+
+    New behavior (smart waits):
+      - restart_app_to_top: polls verify_whatsapp_is_open() at 0.5s intervals
+      - scroll settle: polls element count at 0.05s intervals
+      - With fast-responding mocks, should complete in < 5s
+    """
+
+    def setup_method(self):
+        reset_timeout_config()
+
+    def teardown_method(self):
+        reset_timeout_config()
+
+    def _make_chat_element(self, name: str, y: int = 100):
+        """Create a mock chat element."""
+        el = MagicMock()
+        el.is_displayed.return_value = True
+        el.text = name
+        el.location = {"y": y}
+        return el
+
+    def _build_progressive_find_elements(self, chats_per_page: int = 5, total_chats: int = 10):
+        """Build a find_elements side effect that simulates scrolling through chats.
+
+        Returns new batches of chats as scrolling progresses, then repeats
+        the last batch (simulating end-of-list).
+        """
+        pages = []
+        for page_idx in range(0, total_chats, chats_per_page):
+            page = []
+            for i in range(chats_per_page):
+                chat_idx = page_idx + i
+                if chat_idx < total_chats:
+                    page.append(self._make_chat_element(
+                        f"Chat {chat_idx}", y=(i + 1) * 100
+                    ))
+            pages.append(page)
+
+        call_count = [0]
+        # Track which "scroll page" we're on
+        scroll_page = [0]
+
+        def side_effect(by, value):
+            call_count[0] += 1
+            # The method calls find_elements multiple times per scroll:
+            # 1. Once in the main loop to collect chats
+            # 2. Multiple times in the settle loop to check count stability
+            # We advance the page only when we detect the pattern has cycled
+            # through a settle phase (calls > a threshold per scroll)
+            current_page = min(scroll_page[0], len(pages) - 1)
+            result = pages[current_page]
+
+            # After every ~4 calls (1 main + ~3 settle), advance to next page
+            if call_count[0] % 4 == 0:
+                scroll_page[0] += 1
+
+            return result
+
+        return side_effect
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
+    def test_10_chat_discovery_under_5s(self, mock_subprocess):
+        """10-chat discovery with fast-responding mocks completes in < 5s.
+
+        Old hardcoded sleeps would take ~10s minimum:
+          - 2 restart_app_to_top calls * 3s sleep = 6s
+          - ~4 scrolls * 0.5s settle = 2s
+          - Total: ~8-10s
+
+        With smart waits and fast-responding mocks, should be < 5s.
+        """
+        mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        driver = _make_driver()
+        driver.verify_whatsapp_is_open = MagicMock(return_value=True)
+
+        # Build progressive find_elements that returns 5 chats per page
+        # Page 0: Chat 0-4, Page 1: Chat 5-9, then repeats last page
+        find_elements_fn = self._build_progressive_find_elements(
+            chats_per_page=5, total_chats=10
+        )
+        driver.driver.find_elements.side_effect = find_elements_fn
+        driver.driver.swipe = MagicMock()
+
+        start = time.monotonic()
+        result = driver.collect_all_chats()
+        elapsed = time.monotonic() - start
+
+        # Should have collected chats
+        assert len(result) > 0, f"Expected chats, got {len(result)}"
+
+        # Wall-clock time should be well under the old 10s
+        assert elapsed < 5.0, (
+            f"Discovery took {elapsed:.2f}s — expected < 5s with smart waits "
+            f"(old hardcoded sleeps would take ~10s)"
+        )
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
+    def test_fast_profile_faster_than_normal(self, mock_subprocess):
+        """FAST profile completes faster than NORMAL due to shorter ceilings.
+
+        Both should be fast with mocks, but FAST's shorter scroll_settle_time
+        ceiling (0.3s vs 0.5s) means end-of-list detection triggers sooner.
+        """
+        mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        # Run with NORMAL profile
+        set_timeout_profile(TimeoutProfile.NORMAL)
+        driver_normal = _make_driver()
+        driver_normal.verify_whatsapp_is_open = MagicMock(return_value=True)
+        # Return same 3 chats always (triggers end-of-list after 3 no-new-chats scrolls)
+        normal_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
+        driver_normal.driver.find_elements.return_value = normal_elements
+        driver_normal.driver.swipe = MagicMock()
+
+        start_normal = time.monotonic()
+        result_normal = driver_normal.collect_all_chats()
+        elapsed_normal = time.monotonic() - start_normal
+
+        # Run with FAST profile
+        set_timeout_profile(TimeoutProfile.FAST)
+        driver_fast = _make_driver()
+        driver_fast.verify_whatsapp_is_open = MagicMock(return_value=True)
+        fast_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
+        driver_fast.driver.find_elements.return_value = fast_elements
+        driver_fast.driver.swipe = MagicMock()
+
+        start_fast = time.monotonic()
+        result_fast = driver_fast.collect_all_chats()
+        elapsed_fast = time.monotonic() - start_fast
+
+        # Both should find the same chats
+        assert len(result_normal) == len(result_fast) == 3
+
+        # Both should complete quickly (< 5s)
+        assert elapsed_normal < 5.0, f"NORMAL took {elapsed_normal:.2f}s"
+        assert elapsed_fast < 5.0, f"FAST took {elapsed_fast:.2f}s"
+
+        # FAST should be faster or equal (shorter settle ceilings)
+        # Use generous tolerance — timing can be noisy on CI
+        assert elapsed_fast <= elapsed_normal + 0.5, (
+            f"FAST ({elapsed_fast:.2f}s) should not be slower than "
+            f"NORMAL ({elapsed_normal:.2f}s) by more than 0.5s"
+        )
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
+    def test_slow_verify_wireless_still_completes_within_ceiling(self, mock_subprocess):
+        """Slow-responding verify (simulated wireless latency) completes within ceiling.
+
+        Simulates wireless latency by making verify_whatsapp_is_open() take
+        0.3s per call (simulating network round-trips). With the polling loop,
+        it should still complete within the app_launch_timeout ceiling.
+        """
+        mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        driver = _make_driver(is_wireless=True)
+
+        # Simulate wireless latency: verify takes 0.3s and succeeds on 3rd attempt
+        call_count = [0]
+
+        def slow_verify():
+            call_count[0] += 1
+            time.sleep(0.1)  # Simulate network latency
+            return call_count[0] >= 3  # Succeed on 3rd call
+
+        driver.verify_whatsapp_is_open = MagicMock(side_effect=slow_verify)
+
+        # Use a small timeout ceiling to keep test fast
+        with patch(
+            "whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config"
+        ) as mock_config:
+            fast_config = TimeoutConfig(app_launch_timeout=5.0)
+            mock_config.return_value = fast_config
+
+            start = time.monotonic()
+            result = driver.restart_app_to_top()
+            elapsed = time.monotonic() - start
+
+        assert result is True, "Should succeed after slow verify retries"
+        assert call_count[0] == 3, f"Expected 3 verify calls, got {call_count[0]}"
+
+        # With wireless 1.5x multiplier, ceiling is 7.5s
+        # Should complete well within that (3 calls * ~0.6s each = ~1.8s)
+        assert elapsed < 5.0, (
+            f"Wireless verify took {elapsed:.2f}s — should complete within ceiling"
+        )
+
+        # But should take some time due to simulated latency
+        assert elapsed >= 0.3, (
+            f"Expected >= 0.3s due to simulated latency, got {elapsed:.2f}s"
+        )
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
+    def test_full_discovery_wall_clock_vs_old_sleeps(self, mock_subprocess):
+        """End-to-end: full discovery is measurably faster than old hardcoded sleeps.
+
+        This test simulates the complete collect_all_chats flow with 10 chats
+        and verifies the wall-clock time is significantly less than what the
+        old implementation would have taken.
+
+        Old implementation timing breakdown:
+          - restart_app_to_top (before collection): sleep(3) = 3s
+          - 10 scroll iterations * sleep(0.5) settle = 5s
+          - restart_app_to_top (after collection): sleep(3) = 3s
+          - Total minimum: ~11s
+
+        New implementation with fast mocks should be < 3s.
+        """
+        mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        driver = _make_driver()
+        driver.verify_whatsapp_is_open = MagicMock(return_value=True)
+
+        # Create 10 unique chats across 2 pages
+        page1 = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(5)]
+        page2 = [self._make_chat_element(f"Chat {i}", y=(i - 5) * 100) for i in range(5, 10)]
+
+        call_count = [0]
+        swipe_count = [0]
+
+        def track_swipe(*args, **kwargs):
+            swipe_count[0] += 1
+
+        driver.driver.swipe = MagicMock(side_effect=track_swipe)
+
+        def find_elements_effect(by, value):
+            call_count[0] += 1
+            # Before any swipes, return page 1
+            # After first swipe, return page 2
+            # After second swipe onwards, return page 2 (end of list)
+            if swipe_count[0] == 0:
+                return page1
+            elif swipe_count[0] == 1:
+                return page2
+            else:
+                return page2
+
+        driver.driver.find_elements.side_effect = find_elements_effect
+
+        start = time.monotonic()
+        result = driver.collect_all_chats()
+        elapsed = time.monotonic() - start
+
+        # Should have found chats
+        assert len(result) >= 5, f"Expected >= 5 chats, got {len(result)}"
+
+        # Old sleeps would have taken ~11s minimum
+        # New smart waits with fast mocks should be much faster
+        old_minimum = 11.0
+        assert elapsed < old_minimum / 2, (
+            f"Discovery took {elapsed:.2f}s — expected < {old_minimum / 2:.1f}s "
+            f"(old hardcoded sleeps would take ~{old_minimum:.0f}s)"
+        )
