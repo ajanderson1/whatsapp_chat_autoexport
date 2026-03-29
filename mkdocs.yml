@@ -1,0 +1,144 @@
+site_name: WhatsApp Chat AutoExport
+site_description: Automated WhatsApp chat export from Android devices using Appium UI automation
+site_author: AJ Anderson
+repo_url: https://github.com/ajanderson1/whatsapp-chat-autoexport
+repo_name: ajanderson1/whatsapp-chat-autoexport
+
+strict: true
+validation:
+  omitted_files: info
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+  not_found: warn
+exclude_docs: |
+  PHASE*.md
+  PROJECT_COMPLETE.md
+  brainstorms/
+  plans/
+  tests_old/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - autorefs:
+      resolve_closest: true
+  - mkdocstrings:
+      enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
+      default_handler: python
+      handlers:
+        python:
+          paths: [.]
+          options:
+            show_root_heading: true
+            show_source: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            heading_level: 2
+            separate_signature: true
+            line_length: 80
+            docstring_style: google
+            docstring_section_style: list
+            merge_init_into_class: true
+            show_if_no_docstring: false
+            members_order: source
+            inherited_members: false
+            filters: ["!^_"]
+            relative_crossrefs: true
+            scoped_crossrefs: true
+
+markdown_extensions:
+  # Python Markdown (stdlib)
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+
+  # PyMdown Extensions
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: getting-started/quickstart.md
+    - Docker: getting-started/docker.md
+  - User Guide:
+    - CLI Reference: guide/cli-reference.md
+    - Media & Transcription: guide/media-and-transcription.md
+    - Wireless ADB: guide/wireless-adb.md
+    - Troubleshooting: guide/troubleshooting.md
+  - Reference:
+    - Google Drive Setup: GOOGLE_DRIVE_SETUP.md
+    - Transcript Format Spec: specs/transcript-format-spec.md
+  - API Reference:
+    - api/index.md
+  - Changelog: changelog.md
+
+dev_addr: "localhost:8400"
