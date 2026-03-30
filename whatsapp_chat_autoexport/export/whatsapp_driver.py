@@ -18,6 +18,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.by import By
 
+from ..config.timeouts import get_timeout_config
 from ..utils.logger import Logger
 
 
@@ -1308,7 +1309,7 @@ class WhatsAppDriver:
                 self.logger.warning(f"Force stop returned non-zero: {result.returncode}")
                 self.logger.debug_msg(f"stderr: {result.stderr}")
 
-            sleep(0.5)  # Brief delay for app to fully stop
+            sleep(0.2)  # Brief delay for app to fully stop
 
             # Step 2: Launch WhatsApp (it will open at top of chat list)
             self.logger.debug_msg("Launching WhatsApp...")
@@ -1321,18 +1322,26 @@ class WhatsAppDriver:
 
             self.logger.debug_msg(f"Launch result: {result.stdout.strip() if result.stdout else 'success'}")
 
-            # Step 3: Wait for app to be ready (longer for wireless ADB due to latency)
-            wait_time = 5 if self.is_wireless else 3
-            self.logger.debug_msg(f"Waiting {wait_time}s for WhatsApp to initialize...")
-            sleep(wait_time)
+            # Step 3: Poll for app readiness (replaces hardcoded sleep + verify)
+            timeout_config = get_timeout_config()
+            ceiling = timeout_config.app_launch_timeout
+            if self.is_wireless:
+                ceiling *= 1.5
+            poll_interval = 0.5
+            self.logger.debug_msg(f"Polling for WhatsApp readiness (ceiling={ceiling:.1f}s)...")
 
-            # Step 4: Verify WhatsApp is open and accessible
-            if not self.verify_whatsapp_is_open():
-                self.logger.error("WhatsApp restart failed - app not accessible after restart")
-                return False
+            start = time.time()
+            while time.time() - start < ceiling:
+                if self.verify_whatsapp_is_open():
+                    elapsed = time.time() - start
+                    self.logger.success(f"WhatsApp restarted - now at top of chat list ({elapsed:.1f}s)")
+                    return True
+                sleep(poll_interval)
 
-            self.logger.success("WhatsApp restarted - now at top of chat list")
-            return True
+            self.logger.error(
+                f"WhatsApp restart failed - app not accessible after {ceiling:.1f}s"
+            )
+            return False
 
         except subprocess.TimeoutExpired:
             self.logger.error("ADB command timed out during app restart")
@@ -1469,7 +1478,31 @@ class WhatsAppDriver:
 
                 # Scroll down
                 self.driver.swipe(500, 1500, 500, 500, duration=300)
-                sleep(0.5)
+
+                # Smart wait: poll until element count stabilizes or ceiling reached
+                timeout_config = get_timeout_config()
+                settle_ceiling = timeout_config.scroll_settle_time
+                poll_interval = 0.05
+                stable_count = 0
+                last_count = None
+                settle_start = time.time()
+                while time.time() - settle_start < settle_ceiling:
+                    try:
+                        elements = self.driver.find_elements(
+                            "id", "com.whatsapp:id/conversations_row_contact_name"
+                        )
+                        current_el_count = len(elements)
+                    except Exception:
+                        break
+                    if current_el_count == last_count:
+                        stable_count += 1
+                        if stable_count >= 2:
+                            break
+                    else:
+                        stable_count = 0
+                        last_count = current_el_count
+                    sleep(poll_interval)
+
                 scroll_attempts += 1
             except Exception as e:
                 self.logger.error(f"Error during scroll {scroll_attempts + 1}: {e}")
