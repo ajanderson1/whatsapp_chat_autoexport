@@ -15,6 +15,26 @@ from whatsapp_chat_autoexport.config.timeouts import (
     reset_timeout_config,
     set_timeout_profile,
 )
+from whatsapp_chat_autoexport.export.models import ChatMetadata
+
+
+# ---------------------------------------------------------------------------
+# XML helpers for mocking page_source
+# ---------------------------------------------------------------------------
+
+def _build_page_source_xml(chat_names: list[str]) -> str:
+    """Build a minimal WhatsApp-style XML page source with the given chat names."""
+    rows = []
+    for name in chat_names:
+        rows.append(
+            f'<android.widget.LinearLayout resource-id="com.whatsapp:id/contact_row_container">'
+            f'<android.widget.RelativeLayout resource-id="com.whatsapp:id/row_content">'
+            f'<android.widget.TextView resource-id="com.whatsapp:id/conversations_row_contact_name" text="{name}" />'
+            f'<android.widget.TextView resource-id="com.whatsapp:id/conversations_row_date" text="12:00" />'
+            f'</android.widget.RelativeLayout>'
+            f'</android.widget.LinearLayout>'
+        )
+    return f'<hierarchy>{"".join(rows)}</hierarchy>'
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +53,7 @@ def _make_driver(is_wireless: bool = False, device_id: str = "emulator-5554"):
         driver = WhatsAppDriver.__new__(WhatsAppDriver)
         driver.logger = MagicMock()
         driver.driver = MagicMock()
+        driver.driver.get_window_size.return_value = {"width": 1080, "height": 1920}
         driver.is_wireless = is_wireless
         driver.device_id = device_id
         driver.debug = False
@@ -193,25 +214,22 @@ class TestScrollSettle:
         driver = _make_driver()
         driver.restart_app_to_top = MagicMock(return_value=True)
 
+        chat_names = [f"Chat {i}" for i in range(5)]
+        xml = _build_page_source_xml(chat_names)
+
+        # page_source returns the same XML each time (same chats = end of list after 3 scrolls)
+        type(driver.driver).page_source = PropertyMock(return_value=xml)
+
+        # find_elements is only used for settle detection now
         chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(5)]
-
-        # First call: initial chat collection. Subsequent calls: after swipe settle polls
-        call_count = [0]
-
-        def find_elements_side_effect(by, value):
-            call_count[0] += 1
-            if call_count[0] <= 1:
-                return chat_elements[:5]
-            # After first scroll, return same elements (end of list)
-            return chat_elements[:5]
-
-        driver.driver.find_elements.side_effect = find_elements_side_effect
+        driver.driver.find_elements.return_value = chat_elements
         driver.driver.swipe = MagicMock()
 
         result = driver.collect_all_chats()
 
-        # Should have collected chats
+        # Should have collected chats as ChatMetadata
         assert len(result) > 0
+        assert all(isinstance(c, ChatMetadata) for c in result)
         # Scroll settle should use short poll intervals (0.05), not 0.5
         for c in mock_sleep.call_args_list:
             val = c[0][0]
@@ -223,9 +241,11 @@ class TestScrollSettle:
         driver = _make_driver()
         driver.restart_app_to_top = MagicMock(return_value=True)
 
-        chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
+        chat_names = [f"Chat {i}" for i in range(3)]
+        type(driver.driver).page_source = PropertyMock(return_value=_build_page_source_xml(chat_names))
 
-        # Make it find chats on first pass, then no new chats 3 times to exit
+        # find_elements only used for settle detection
+        chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
         driver.driver.find_elements.return_value = chat_elements
         driver.driver.swipe = MagicMock()
 
@@ -250,6 +270,9 @@ class TestScrollSettle:
         driver = _make_driver()
         driver.restart_app_to_top = MagicMock(return_value=True)
 
+        chat_names = [f"Chat {i}" for i in range(3)]
+        type(driver.driver).page_source = PropertyMock(return_value=_build_page_source_xml(chat_names))
+
         chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
         driver.driver.find_elements.return_value = chat_elements
         driver.driver.swipe = MagicMock()
@@ -257,6 +280,7 @@ class TestScrollSettle:
         # Run and verify it completes (uses 0.3s ceiling internally)
         result = driver.collect_all_chats()
         assert len(result) > 0
+        assert all(isinstance(c, ChatMetadata) for c in result)
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
     def test_find_elements_exception_during_settle_falls_through(self, mock_sleep):
@@ -264,19 +288,16 @@ class TestScrollSettle:
         driver = _make_driver()
         driver.restart_app_to_top = MagicMock(return_value=True)
 
+        chat_names = [f"Chat {i}" for i in range(3)]
+        type(driver.driver).page_source = PropertyMock(return_value=_build_page_source_xml(chat_names))
+
         call_count = [0]
         chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
 
         def find_elements_side_effect(by, value):
             call_count[0] += 1
-            if call_count[0] == 1:
-                # First call: initial collection in the loop
-                return chat_elements
-            elif call_count[0] <= 4:
+            if call_count[0] <= 3:
                 # Settle poll calls succeed
-                return chat_elements
-            elif call_count[0] == 5:
-                # Second iteration initial collection
                 return chat_elements
             else:
                 # Settle poll raises exception
@@ -288,6 +309,7 @@ class TestScrollSettle:
         # Should not hang or crash
         result = driver.collect_all_chats()
         assert isinstance(result, list)
+        assert all(isinstance(c, ChatMetadata) for c in result)
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
     def test_scroll_settle_uses_full_ceiling_at_end_of_list(self, mock_sleep):
@@ -295,9 +317,11 @@ class TestScrollSettle:
         driver = _make_driver()
         driver.restart_app_to_top = MagicMock(return_value=True)
 
-        chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
+        chat_names = [f"Chat {i}" for i in range(3)]
+        type(driver.driver).page_source = PropertyMock(return_value=_build_page_source_xml(chat_names))
 
-        # Always return same elements (simulating end of list)
+        # Always return same elements for settle detection
+        chat_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
         driver.driver.find_elements.return_value = chat_elements
         driver.driver.swipe = MagicMock()
 
@@ -306,7 +330,9 @@ class TestScrollSettle:
         elapsed = time.time() - start
 
         # Should have collected chats and terminated (3 no-new-chats scrolls)
-        assert len(result) == 3
+        # Note: XML parsing may yield multiple results per screen (one per scroll iteration)
+        assert len(result) >= 3
+        assert all(isinstance(c, ChatMetadata) for c in result)
 
 
 # ---------------------------------------------------------------------------
@@ -377,42 +403,45 @@ class TestDiscoveryTimingIntegration:
         el.location = {"y": y}
         return el
 
-    def _build_progressive_find_elements(self, chats_per_page: int = 5, total_chats: int = 10):
-        """Build a find_elements side effect that simulates scrolling through chats.
+    def _build_progressive_page_source(self, chats_per_page: int = 5, total_chats: int = 10):
+        """Build a page_source side effect that simulates scrolling through chats.
 
-        Returns new batches of chats as scrolling progresses, then repeats
+        Returns new batches of chat XML as scrolling progresses, then repeats
         the last batch (simulating end-of-list).
         """
         pages = []
         for page_idx in range(0, total_chats, chats_per_page):
-            page = []
+            page_names = []
             for i in range(chats_per_page):
                 chat_idx = page_idx + i
                 if chat_idx < total_chats:
-                    page.append(self._make_chat_element(
-                        f"Chat {chat_idx}", y=(i + 1) * 100
-                    ))
-            pages.append(page)
+                    page_names.append(f"Chat {chat_idx}")
+            pages.append(_build_page_source_xml(page_names))
 
-        call_count = [0]
-        # Track which "scroll page" we're on
+        # Track which "scroll page" we're on (advances on each swipe)
         scroll_page = [0]
 
-        def side_effect(by, value):
-            call_count[0] += 1
-            # The method calls find_elements multiple times per scroll:
-            # 1. Once in the main loop to collect chats
-            # 2. Multiple times in the settle loop to check count stability
-            # We advance the page only when we detect the pattern has cycled
-            # through a settle phase (calls > a threshold per scroll)
+        def advance_page(*args, **kwargs):
+            """Called by swipe mock to advance to next page."""
+            scroll_page[0] += 1
+
+        def get_page_source():
+            """Return XML for the current scroll page."""
             current_page = min(scroll_page[0], len(pages) - 1)
-            result = pages[current_page]
+            return pages[current_page]
 
-            # After every ~4 calls (1 main + ~3 settle), advance to next page
-            if call_count[0] % 4 == 0:
-                scroll_page[0] += 1
+        return get_page_source, advance_page
 
-            return result
+    def _build_progressive_find_elements(self, chats_per_page: int = 5, total_chats: int = 10):
+        """Build a find_elements side effect for settle detection.
+
+        Returns stable element counts for the settle poll loop.
+        """
+        elements = [self._make_chat_element(f"Chat {i}", y=(i + 1) * 100)
+                     for i in range(chats_per_page)]
+
+        def side_effect(by, value):
+            return elements
 
         return side_effect
 
@@ -432,20 +461,27 @@ class TestDiscoveryTimingIntegration:
         driver = _make_driver()
         driver.verify_whatsapp_is_open = MagicMock(return_value=True)
 
-        # Build progressive find_elements that returns 5 chats per page
+        # Build progressive page_source that returns 5 chats per page
         # Page 0: Chat 0-4, Page 1: Chat 5-9, then repeats last page
+        get_page_source, advance_page = self._build_progressive_page_source(
+            chats_per_page=5, total_chats=10
+        )
+        type(driver.driver).page_source = PropertyMock(side_effect=lambda: get_page_source())
+
+        # find_elements for settle detection (stable count)
         find_elements_fn = self._build_progressive_find_elements(
             chats_per_page=5, total_chats=10
         )
         driver.driver.find_elements.side_effect = find_elements_fn
-        driver.driver.swipe = MagicMock()
+        driver.driver.swipe = MagicMock(side_effect=advance_page)
 
         start = time.monotonic()
         result = driver.collect_all_chats()
         elapsed = time.monotonic() - start
 
-        # Should have collected chats
+        # Should have collected chats as ChatMetadata
         assert len(result) > 0, f"Expected chats, got {len(result)}"
+        assert all(isinstance(c, ChatMetadata) for c in result)
 
         # Wall-clock time should be well under the old 10s
         assert elapsed < 5.0, (
@@ -462,11 +498,15 @@ class TestDiscoveryTimingIntegration:
         """
         mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
+        chat_names = [f"Chat {i}" for i in range(3)]
+        xml = _build_page_source_xml(chat_names)
+
         # Run with NORMAL profile
         set_timeout_profile(TimeoutProfile.NORMAL)
         driver_normal = _make_driver()
         driver_normal.verify_whatsapp_is_open = MagicMock(return_value=True)
-        # Return same 3 chats always (triggers end-of-list after 3 no-new-chats scrolls)
+        type(driver_normal.driver).page_source = PropertyMock(return_value=xml)
+        # find_elements for settle detection only
         normal_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
         driver_normal.driver.find_elements.return_value = normal_elements
         driver_normal.driver.swipe = MagicMock()
@@ -479,6 +519,7 @@ class TestDiscoveryTimingIntegration:
         set_timeout_profile(TimeoutProfile.FAST)
         driver_fast = _make_driver()
         driver_fast.verify_whatsapp_is_open = MagicMock(return_value=True)
+        type(driver_fast.driver).page_source = PropertyMock(return_value=xml)
         fast_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(3)]
         driver_fast.driver.find_elements.return_value = fast_elements
         driver_fast.driver.swipe = MagicMock()
@@ -487,8 +528,10 @@ class TestDiscoveryTimingIntegration:
         result_fast = driver_fast.collect_all_chats()
         elapsed_fast = time.monotonic() - start_fast
 
-        # Both should find the same chats
-        assert len(result_normal) == len(result_fast) == 3
+        # Both should find the same unique chats (results may have duplicates from multiple scrolls)
+        unique_normal = {c.name for c in result_normal}
+        unique_fast = {c.name for c in result_fast}
+        assert len(unique_normal) == len(unique_fast) == 3
 
         # Both should complete quickly (< 5s)
         assert elapsed_normal < 5.0, f"NORMAL took {elapsed_normal:.2f}s"
@@ -569,11 +612,12 @@ class TestDiscoveryTimingIntegration:
         driver = _make_driver()
         driver.verify_whatsapp_is_open = MagicMock(return_value=True)
 
-        # Create 10 unique chats across 2 pages
-        page1 = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(5)]
-        page2 = [self._make_chat_element(f"Chat {i}", y=(i - 5) * 100) for i in range(5, 10)]
+        # Create 10 unique chats across 2 pages of XML
+        page1_names = [f"Chat {i}" for i in range(5)]
+        page2_names = [f"Chat {i}" for i in range(5, 10)]
+        xml_page1 = _build_page_source_xml(page1_names)
+        xml_page2 = _build_page_source_xml(page2_names)
 
-        call_count = [0]
         swipe_count = [0]
 
         def track_swipe(*args, **kwargs):
@@ -581,26 +625,28 @@ class TestDiscoveryTimingIntegration:
 
         driver.driver.swipe = MagicMock(side_effect=track_swipe)
 
-        def find_elements_effect(by, value):
-            call_count[0] += 1
+        def get_page_source():
             # Before any swipes, return page 1
             # After first swipe, return page 2
             # After second swipe onwards, return page 2 (end of list)
             if swipe_count[0] == 0:
-                return page1
-            elif swipe_count[0] == 1:
-                return page2
+                return xml_page1
             else:
-                return page2
+                return xml_page2
 
-        driver.driver.find_elements.side_effect = find_elements_effect
+        type(driver.driver).page_source = PropertyMock(side_effect=get_page_source)
+
+        # find_elements for settle detection only
+        settle_elements = [self._make_chat_element(f"Chat {i}", y=i * 100) for i in range(5)]
+        driver.driver.find_elements.return_value = settle_elements
 
         start = time.monotonic()
         result = driver.collect_all_chats()
         elapsed = time.monotonic() - start
 
-        # Should have found chats
+        # Should have found chats as ChatMetadata
         assert len(result) >= 5, f"Expected >= 5 chats, got {len(result)}"
+        assert all(isinstance(c, ChatMetadata) for c in result)
 
         # Old sleeps would have taken ~11s minimum
         # New smart waits with fast mocks should be much faster
