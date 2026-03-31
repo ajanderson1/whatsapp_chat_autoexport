@@ -19,6 +19,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header
 from textual.reactive import reactive, var
 
+from ..export.models import ChatMetadata
 from ..state.models import SessionState, ChatState, SessionStatus
 from ..state.state_manager import StateManager
 from ..core.events import EventBus, EventType, Event, get_event_bus
@@ -122,7 +123,7 @@ class WhatsAppExporterApp(App):
         self._appium_manager: Optional["AppiumManager"] = None
 
         # Chat data
-        self._discovered_chats: List[str] = []
+        self._discovered_chats: List[ChatMetadata] = []
         self._selected_chats: List[str] = []
 
         # Selection state (locked after export starts)
@@ -294,7 +295,7 @@ class WhatsAppExporterApp(App):
     async def transition_to_selection(
         self,
         driver: "WhatsAppDriver",
-        chats: List[str],
+        chats: List[ChatMetadata],
     ) -> None:
         """
         Transition from Discovery to Selection stage.
@@ -307,11 +308,11 @@ class WhatsAppExporterApp(App):
 
         Args:
             driver: Connected WhatsApp driver
-            chats: List of discovered chat names
+            chats: List of discovered ChatMetadata objects
         """
         self._whatsapp_driver = driver
         self._discovered_chats = chats
-        self._selected_chats = chats.copy()  # Select all by default
+        self._selected_chats = [c.name for c in chats]  # Select all by default
         self.current_stage = PipelineStage.PROCESS
 
         from .textual_screens.selection_screen import SelectionScreen
@@ -358,7 +359,7 @@ class WhatsAppExporterApp(App):
         return self._whatsapp_driver
 
     @property
-    def discovered_chats(self) -> List[str]:
+    def discovered_chats(self) -> List[ChatMetadata]:
         """Get list of discovered chats."""
         return self._discovered_chats
 

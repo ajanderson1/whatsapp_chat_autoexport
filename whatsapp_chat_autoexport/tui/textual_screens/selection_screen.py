@@ -93,7 +93,7 @@ class SelectionScreen(Screen):
         with Container(classes="main-content"):
             with Vertical(classes="left-panel"):
                 yield ChatListWidget(
-                    chats=self.app.discovered_chats,
+                    chats=[c.name for c in self.app.discovered_chats],
                     title="CHAT INVENTORY",
                     id="chat-list",
                 )

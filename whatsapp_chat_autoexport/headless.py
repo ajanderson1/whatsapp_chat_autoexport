@@ -221,8 +221,9 @@ def run_headless(args: Namespace) -> int:
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
 
+        chat_names = [c.name for c in all_chats]
         results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=all_chats,
+            chat_names=chat_names,
             include_media=include_media,
             resume_folder=resume_folder,
             google_drive_folder=google_drive_folder,

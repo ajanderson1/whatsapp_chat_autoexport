@@ -220,10 +220,11 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         logger.warning("No selection entered. Exiting...")
         return
     
-    # Parse selection
-    chats_to_export = []
+    # Parse selection — all_chats contains ChatMetadata objects;
+    # extract .name at the export boundary.
+    selected = []
     if selection == 'all':
-        chats_to_export = all_chats
+        selected = list(all_chats)
     else:
         try:
             indices = []
@@ -244,7 +245,7 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
                 else:
                     # Single number
                     indices.append(int(part))
-            
+
             # Remove duplicates while preserving order
             seen = set()
             unique_indices = []
@@ -252,20 +253,23 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
                 if idx not in seen:
                     seen.add(idx)
                     unique_indices.append(idx)
-            
+
             for idx in unique_indices:
                 if 1 <= idx <= len(all_chats):
-                    chats_to_export.append(all_chats[idx - 1])
+                    selected.append(all_chats[idx - 1])
                 else:
                     logger.warning(f"Invalid index: {idx}")
         except ValueError as e:
             logger.error(f"Invalid input: {e}. Please enter numbers separated by commas, ranges with hyphens (e.g., 100-200), 'all', or 'q' to quit.")
             return
-    
-    if not chats_to_export:
+
+    if not selected:
         logger.warning("No chats selected for export.")
         return
-    
+
+    # Extract names for the export layer (which expects List[str])
+    chats_to_export = [c.name for c in selected]
+
     media_status = "with media" if include_media else "without media"
     logger.info(f"\n📤 Exporting {len(chats_to_export)} chat(s) {media_status}...")
     
