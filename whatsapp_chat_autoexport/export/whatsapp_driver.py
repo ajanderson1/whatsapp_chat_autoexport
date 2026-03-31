@@ -193,6 +193,71 @@ def parse_ip_from_address(address: str) -> str:
     return address.split(':')[0] if ':' in address else address
 
 
+def discover_wireless_connect_port(ip: str, logger: Logger) -> str:
+    """
+    Discover the wireless debugging connect port for a given IP.
+
+    After pairing, the device advertises a _adb-tls-connect mDNS service
+    on the actual connect port. This avoids hardcoding port 5555 which
+    doesn't work with modern Android wireless debugging.
+
+    Falls back to checking 'adb devices' for an already-connected entry,
+    then to port 5555 as a last resort.
+
+    Args:
+        ip: Device IP address
+        logger: Logger instance
+
+    Returns:
+        Connect port as string (e.g., "39765")
+    """
+    # Try mdns services to find the connect port
+    try:
+        result = subprocess.run(
+            ["adb", "mdns", "services"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            close_fds=True,
+        )
+        if result.returncode == 0 and result.stdout:
+            for line in result.stdout.strip().splitlines():
+                if "_adb-tls-connect" in line and ip in line:
+                    # Lines look like: "adb-XXXX  _adb-tls-connect._tcp.  192.168.1.100:39765"
+                    parts = line.strip().split()
+                    for part in parts:
+                        if ip in part and ":" in part:
+                            port = part.split(":")[-1]
+                            logger.info(f"Discovered wireless connect port {port} via mDNS")
+                            return port
+    except Exception as e:
+        logger.debug_msg(f"mDNS discovery failed: {e}")
+
+    # Fallback: check if device already appeared in adb devices after pairing
+    try:
+        result = subprocess.run(
+            ["adb", "devices"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            close_fds=True,
+        )
+        if result.returncode == 0 and result.stdout:
+            for line in result.stdout.strip().splitlines():
+                if ip in line and "device" in line:
+                    device_id = line.split()[0]
+                    if ":" in device_id:
+                        port = device_id.split(":")[-1]
+                        logger.info(f"Found device port {port} from adb devices")
+                        return port
+    except Exception as e:
+        logger.debug_msg(f"adb devices check failed: {e}")
+
+    # Last resort fallback
+    logger.warning("Could not discover connect port, falling back to 5555")
+    return "5555"
+
+
 def wireless_adb_pair(pairing_address: str, pairing_code: str, logger: Logger) -> bool:
     """
     Pair with wireless ADB device.
@@ -813,13 +878,14 @@ class WhatsAppDriver:
                         return False
 
                 # Pairing successful! Now determine connect port
+                pairing_ip = parse_ip_from_address(pairing_address)
                 if is_interactive:
-                    # Interactive mode - prompt for connect port
-                    connect_port = prompt_for_connect_port()
+                    # Interactive mode - discover port then prompt with it as default
+                    discovered = discover_wireless_connect_port(pairing_ip, self.logger)
+                    connect_port = prompt_for_connect_port(default=discovered)
                 else:
-                    # Non-interactive mode - use standard port 5555
-                    self.logger.info("Using standard wireless ADB port 5555 for connection")
-                    connect_port = "5555"
+                    # Non-interactive mode - discover port via mDNS/devices
+                    connect_port = discover_wireless_connect_port(pairing_ip, self.logger)
 
                 # Attempt connection
                 connect_success, device_id = wireless_adb_connect(pairing_address, connect_port, self.logger)

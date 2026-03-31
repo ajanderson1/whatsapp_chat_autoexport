@@ -52,11 +52,13 @@ class TestDiscoveryScreenInit:
         """Test that wireless ADB methods exist on DiscoveryScreen."""
         screen = DiscoveryScreen()
         assert hasattr(screen, "_start_wireless_connect")
-        assert hasattr(screen, "_wireless_pair_and_connect")
+        assert hasattr(screen, "_wireless_pair")
+        assert hasattr(screen, "_wireless_connect")
+        assert hasattr(screen, "_handle_wireless_pair_result")
         assert hasattr(screen, "_handle_wireless_connect_result")
         assert callable(screen._start_wireless_connect)
-        assert callable(screen._wireless_pair_and_connect)
-        assert callable(screen._handle_wireless_connect_result)
+        assert callable(screen._wireless_pair)
+        assert callable(screen._wireless_connect)
 
     def test_has_discovery_methods(self):
         """Test that live discovery inventory methods exist on DiscoveryScreen."""
@@ -75,32 +77,42 @@ class TestDiscoveryScreenInit:
 
 
 class TestWirelessPairAndConnect:
-    """Tests for the _wireless_pair_and_connect worker method."""
+    """Tests for the _wireless_pair and _wireless_connect worker methods."""
 
     @pytest.fixture
     def screen(self):
         """Create a DiscoveryScreen instance for testing."""
         return DiscoveryScreen()
 
-    def test_successful_pair_and_connect(self, screen):
-        """Test successful wireless pairing and connection."""
+    def test_successful_pair(self, screen):
+        """Test successful wireless pairing returns paired status."""
         mock_pair = MagicMock()
         mock_pair.returncode = 0
         mock_pair.stdout = "Successfully paired to 192.168.1.100:37453"
         mock_pair.stderr = ""
 
-        mock_connect = MagicMock()
-        mock_connect.returncode = 0
-        mock_connect.stdout = "connected to 192.168.1.100:5555"
-        mock_connect.stderr = ""
-
-        with patch("subprocess.run", side_effect=[mock_pair, mock_connect]):
+        with patch("subprocess.run", return_value=mock_pair):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_pair("192.168.1.100:37453", "123456")
             )
 
         assert result["success"] is True
-        assert result["device_id"] == "192.168.1.100:5555"
+        assert result["paired"] is True
+
+    def test_successful_connect(self, screen):
+        """Test successful wireless connection after pairing."""
+        mock_connect = MagicMock()
+        mock_connect.returncode = 0
+        mock_connect.stdout = "connected to 192.168.1.100:39765"
+        mock_connect.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_connect):
+            result = asyncio.run(
+                screen._wireless_connect("192.168.1.100", "39765")
+            )
+
+        assert result["success"] is True
+        assert result["device_id"] == "192.168.1.100:39765"
         assert "Connected" in result["message"]
 
     def test_pair_failure(self, screen):
@@ -112,7 +124,7 @@ class TestWirelessPairAndConnect:
 
         with patch("subprocess.run", return_value=mock_pair):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "999999")
+                screen._wireless_pair("192.168.1.100:37453", "999999")
             )
 
         assert result["success"] is False
@@ -127,7 +139,7 @@ class TestWirelessPairAndConnect:
             side_effect=subprocess.TimeoutExpired(cmd="adb", timeout=15),
         ):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_pair("192.168.1.100:37453", "123456")
             )
 
         assert result["success"] is False
@@ -139,48 +151,35 @@ class TestWirelessPairAndConnect:
             "subprocess.run", side_effect=FileNotFoundError("adb not found")
         ):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_pair("192.168.1.100:37453", "123456")
             )
 
         assert result["success"] is False
         assert "adb not found" in result["error"]
 
-    def test_connect_failure_after_successful_pair(self, screen):
-        """Test handling of connection failure after successful pairing."""
-        mock_pair = MagicMock()
-        mock_pair.returncode = 0
-        mock_pair.stdout = "Successfully paired"
-        mock_pair.stderr = ""
-
+    def test_connect_failure(self, screen):
+        """Test handling of connection failure."""
         mock_connect = MagicMock()
         mock_connect.returncode = 1
         mock_connect.stdout = ""
         mock_connect.stderr = "failed to connect"
 
-        with patch("subprocess.run", side_effect=[mock_pair, mock_connect]):
+        with patch("subprocess.run", return_value=mock_connect):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_connect("192.168.1.100", "39765")
             )
 
         assert result["success"] is False
         assert "Connection failed" in result["error"]
 
-    def test_connect_timeout_after_successful_pair(self, screen):
-        """Test handling of connection timeout after successful pairing."""
-        mock_pair = MagicMock()
-        mock_pair.returncode = 0
-        mock_pair.stdout = "Successfully paired"
-        mock_pair.stderr = ""
-
-        def side_effect(*args, **kwargs):
-            cmd = args[0] if args else kwargs.get("args", [])
-            if "pair" in cmd:
-                return mock_pair
-            raise subprocess.TimeoutExpired(cmd="adb", timeout=15)
-
-        with patch("subprocess.run", side_effect=side_effect):
+    def test_connect_timeout(self, screen):
+        """Test handling of connection timeout."""
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="adb", timeout=15),
+        ):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_connect("192.168.1.100", "39765")
             )
 
         assert result["success"] is False
@@ -188,47 +187,18 @@ class TestWirelessPairAndConnect:
 
     def test_already_connected_is_success(self, screen):
         """Test that 'already connected' response is treated as success."""
-        mock_pair = MagicMock()
-        mock_pair.returncode = 0
-        mock_pair.stdout = "Successfully paired"
-        mock_pair.stderr = ""
-
         mock_connect = MagicMock()
         mock_connect.returncode = 0
-        mock_connect.stdout = "already connected to 192.168.1.100:5555"
+        mock_connect.stdout = "already connected to 192.168.1.100:39765"
         mock_connect.stderr = ""
 
-        with patch("subprocess.run", side_effect=[mock_pair, mock_connect]):
+        with patch("subprocess.run", return_value=mock_connect):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_connect("192.168.1.100", "39765")
             )
 
         assert result["success"] is True
-        assert result["device_id"] == "192.168.1.100:5555"
-
-    def test_ip_extraction_from_ip_port(self, screen):
-        """Test that IP is correctly extracted from ip:port for connect."""
-        mock_pair = MagicMock()
-        mock_pair.returncode = 0
-        mock_pair.stdout = "Successfully paired"
-        mock_pair.stderr = ""
-
-        mock_connect = MagicMock()
-        mock_connect.returncode = 0
-        mock_connect.stdout = "connected to 10.0.0.5:5555"
-        mock_connect.stderr = ""
-
-        with patch("subprocess.run", side_effect=[mock_pair, mock_connect]) as mock_run:
-            result = asyncio.run(
-                screen._wireless_pair_and_connect("10.0.0.5:41234", "654321")
-            )
-
-        assert result["success"] is True
-        assert result["device_id"] == "10.0.0.5:5555"
-
-        # Verify the connect command used the right address
-        connect_call = mock_run.call_args_list[1]
-        assert connect_call[0][0] == ["adb", "connect", "10.0.0.5:5555"]
+        assert result["device_id"] == "192.168.1.100:39765"
 
     def test_pair_error_in_stdout(self, screen):
         """Test pairing failure detected via error keyword in stdout."""
@@ -239,7 +209,7 @@ class TestWirelessPairAndConnect:
 
         with patch("subprocess.run", return_value=mock_pair):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_pair("192.168.1.100:37453", "123456")
             )
 
         assert result["success"] is False
@@ -254,7 +224,7 @@ class TestWirelessPairAndConnect:
 
         with patch("subprocess.run", return_value=mock_pair):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_pair("192.168.1.100:37453", "123456")
             )
 
         assert result["success"] is False
@@ -264,31 +234,17 @@ class TestWirelessPairAndConnect:
         """Test handling of unexpected exceptions during pairing."""
         with patch("subprocess.run", side_effect=OSError("Unexpected error")):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_pair("192.168.1.100:37453", "123456")
             )
 
         assert result["success"] is False
         assert "Pairing failed" in result["error"]
 
     def test_generic_exception_during_connect(self, screen):
-        """Test handling of unexpected exceptions during connect step."""
-        mock_pair = MagicMock()
-        mock_pair.returncode = 0
-        mock_pair.stdout = "Successfully paired"
-        mock_pair.stderr = ""
-
-        call_count = 0
-
-        def side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return mock_pair
-            raise OSError("Unexpected connect error")
-
-        with patch("subprocess.run", side_effect=side_effect):
+        """Test handling of unexpected exceptions during connect."""
+        with patch("subprocess.run", side_effect=OSError("Unexpected error")):
             result = asyncio.run(
-                screen._wireless_pair_and_connect("192.168.1.100:37453", "123456")
+                screen._wireless_connect("192.168.1.100", "39765")
             )
 
         assert result["success"] is False
