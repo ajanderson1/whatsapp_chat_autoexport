@@ -26,6 +26,7 @@ from ..textual_app import PipelineStage
 
 # Import AppiumManager for server lifecycle management
 from ...export.appium_manager import AppiumManager
+from ...export.models import ChatMetadata
 
 
 class DiscoveryScreen(Screen):
@@ -43,6 +44,8 @@ class DiscoveryScreen(Screen):
         Binding("r", "refresh_devices", "Refresh", show=True),
         Binding("enter", "connect_device", "Connect", show=True),
         Binding("d", "use_dry_run", "Dry Run", show=False),
+        Binding("c", "continue", "Continue", show=False),
+        Binding("f", "refresh_chats", "Re-scan Chats", show=False),
     ]
 
     def __init__(self, **kwargs) -> None:
@@ -58,6 +61,11 @@ class DiscoveryScreen(Screen):
 
         # Appium server management (managed at app level for persistence)
         self._appium_started = False
+
+        # Discovery inventory state
+        self._discovered_chats: List[ChatMetadata] = []
+        self._discovery_generation: int = 0
+        self._connected_driver = None
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -77,6 +85,32 @@ class DiscoveryScreen(Screen):
             with Horizontal(id="action-buttons"):
                 yield Button("Refresh", id="btn-refresh", variant="default")
                 yield Button("Connect", id="btn-connect", variant="primary", disabled=True)
+
+            # Discovery inventory section (hidden until connected)
+            with Vertical(id="discovery-section", classes="hidden"):
+                yield Rule(line_style="heavy")
+                yield Static(
+                    "[bold]Discovered Chats[/bold]",
+                    classes="discovery-title",
+                )
+                yield Static(
+                    "Discovered 0 chats",
+                    id="discovery-count",
+                )
+                yield ListView(id="discovery-inventory")
+                with Horizontal(id="discovery-buttons"):
+                    yield Button(
+                        "Refresh Chats",
+                        id="btn-refresh-chats",
+                        variant="default",
+                        disabled=True,
+                    )
+                    yield Button(
+                        "Continue",
+                        id="btn-continue",
+                        variant="primary",
+                        disabled=True,
+                    )
 
             # Wireless ADB section
             yield Rule(line_style="heavy")
@@ -539,6 +573,7 @@ class DiscoveryScreen(Screen):
 
         if result.get("success"):
             driver = result["driver"]
+            self._connected_driver = driver
 
             # Clear stage transition messaging
             activity.log_success("✓ Connected to device")
@@ -551,6 +586,10 @@ class DiscoveryScreen(Screen):
             # Switch to DISCOVERY stage when chat scanning starts
             header = self.query_one(PipelineHeader)
             header.set_stage(PipelineStage.DISCOVER)
+
+            # Show the discovery section
+            discovery_section = self.query_one("#discovery-section")
+            discovery_section.remove_class("hidden")
 
             # Start chat collection
             self._scanning_chats = True
@@ -581,8 +620,16 @@ class DiscoveryScreen(Screen):
             # Get limit from app settings
             limit = getattr(self.app, "limit", None)
 
-            # Collect chats (with optional limit)
-            chats = await asyncio.to_thread(driver.collect_all_chats, limit)
+            # Capture generation by value to detect stale callbacks
+            gen = self._discovery_generation
+
+            def on_found(metadata: ChatMetadata) -> None:
+                self.call_from_thread(self._add_discovered_chat, metadata, gen)
+
+            # Collect chats (with optional limit and live callback)
+            chats = await asyncio.to_thread(
+                driver.collect_all_chats, limit, False, on_found
+            )
             return {"success": True, "chats": chats, "driver": driver}
 
         except Exception as e:
@@ -596,17 +643,33 @@ class DiscoveryScreen(Screen):
 
         driver = result.get("driver")
 
+        # Always enable refresh button after collection
+        try:
+            self.query_one("#btn-refresh-chats", Button).disabled = False
+        except Exception:
+            pass
+
         if result.get("success"):
             chats = result["chats"]
-            activity.log_success(f"Found {len(chats)} chats")
-            status.update(f"[green]Found {len(chats)} chats. Proceeding to selection...[/green]")
 
-            # Transition to selection screen
-            self.app.call_later(
-                self.app.transition_to_selection,
-                driver,
-                chats,
-            )
+            # Sync the authoritative list from the driver result
+            self._discovered_chats = list(chats)
+
+            activity.log_success(f"Found {len(chats)} chats")
+
+            if len(chats) == 0:
+                status.update("[yellow]No chats found. Try Refresh Chats to re-scan.[/yellow]")
+                activity.log_warning("No chats found in WhatsApp")
+            else:
+                status.update(
+                    f"[green]Found {len(chats)} chats. "
+                    f"Press Continue to proceed to selection.[/green]"
+                )
+                # Enable Continue button
+                try:
+                    self.query_one("#btn-continue", Button).disabled = False
+                except Exception:
+                    pass
         else:
             error = result.get("error", "Unknown error")
             activity.log_error(f"Chat collection failed: {error}")
@@ -617,8 +680,8 @@ class DiscoveryScreen(Screen):
         activity = self.query_one(ActivityLog)
         activity.log_warning("Using DRY RUN mode with mock data")
 
-        # Mock chats for testing
-        mock_chats = [
+        # Mock chats for testing using ChatMetadata
+        mock_names = [
             "John Doe",
             "Family Group",
             "Work Chat",
@@ -630,19 +693,105 @@ class DiscoveryScreen(Screen):
             "College Friends",
             "Team Project",
         ]
+        mock_chats = [ChatMetadata(name=name) for name in mock_names]
 
         status = self.query_one("#device-status", Static)
         status.update("[yellow]DRY RUN MODE - Using mock data[/yellow]")
 
-        # Set DISCOVERY stage before transitioning (skip CONNECT in dry run)
+        # Set DISCOVERY stage (skip CONNECT in dry run)
         header = self.query_one(PipelineHeader)
         header.set_stage(PipelineStage.DISCOVER)
 
-        # Transition with mock data (no driver)
+        # Populate the discovery inventory
+        self._discovered_chats = mock_chats
+        self._connected_driver = None  # No driver in dry run
+
+        # Show discovery section and populate inventory
+        discovery_section = self.query_one("#discovery-section")
+        discovery_section.remove_class("hidden")
+
+        count_label = self.query_one("#discovery-count", Static)
+        count_label.update(f"Discovered {len(mock_chats)} chats")
+
+        inventory = self.query_one("#discovery-inventory", ListView)
+        for chat in mock_chats:
+            inventory.append(ListItem(Label(str(chat))))
+
+        activity.log_success(f"Found {len(mock_chats)} chats (dry run)")
+
+        # Enable Continue and Refresh buttons
+        self.query_one("#btn-continue", Button).disabled = False
+        self.query_one("#btn-refresh-chats", Button).disabled = False
+
+    def _add_discovered_chat(self, metadata: ChatMetadata, generation: int) -> None:
+        """Add a newly discovered chat to the inventory (called from thread via call_from_thread)."""
+        # Ignore stale callbacks from a previous generation
+        if generation != self._discovery_generation:
+            return
+
+        self._discovered_chats.append(metadata)
+
+        # Update UI
+        try:
+            inventory = self.query_one("#discovery-inventory", ListView)
+            inventory.append(ListItem(Label(str(metadata))))
+
+            count_label = self.query_one("#discovery-count", Static)
+            count_label.update(f"Discovered {len(self._discovered_chats)} chats")
+        except Exception:
+            pass
+
+    def action_continue(self) -> None:
+        """Transition to selection screen with discovered chats."""
+        if self._scanning_chats:
+            return
+        if not self._discovered_chats:
+            return
+
         self.app.call_later(
             self.app.transition_to_selection,
-            None,  # No driver in dry run
-            mock_chats,
+            self._connected_driver,
+            self._discovered_chats,
+        )
+
+    def action_refresh_chats(self) -> None:
+        """Clear inventory and re-run chat discovery."""
+        # Guard: no-op if scanning or no driver
+        if self._scanning_chats:
+            return
+        if self._connected_driver is None:
+            return
+
+        # Increment generation to invalidate in-flight callbacks
+        self._discovery_generation += 1
+
+        # Clear existing inventory
+        self._discovered_chats.clear()
+        try:
+            inventory = self.query_one("#discovery-inventory", ListView)
+            inventory.clear()
+
+            count_label = self.query_one("#discovery-count", Static)
+            count_label.update("Discovered 0 chats")
+
+            # Disable buttons during scan
+            self.query_one("#btn-continue", Button).disabled = True
+            self.query_one("#btn-refresh-chats", Button).disabled = True
+        except Exception:
+            pass
+
+        activity = self.query_one(ActivityLog)
+        activity.log_info("Re-scanning WhatsApp for chats...")
+
+        status = self.query_one("#device-status", Static)
+        status.update("[yellow]Re-scanning chats...[/yellow]")
+
+        # Re-run discovery with exclusive=True to cancel any prior worker
+        self._scanning_chats = True
+        self.run_worker(
+            self._collect_chats(self._connected_driver),
+            name="collect_chats",
+            exclusive=True,
         )
 
     def _start_wireless_connect(self) -> None:
@@ -815,3 +964,7 @@ class DiscoveryScreen(Screen):
             self.action_connect_device()
         elif event.button.id == "btn-wireless-connect":
             self._start_wireless_connect()
+        elif event.button.id == "btn-continue":
+            self.action_continue()
+        elif event.button.id == "btn-refresh-chats":
+            self.action_refresh_chats()

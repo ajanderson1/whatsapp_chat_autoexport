@@ -340,6 +340,49 @@ DiscoveryScreen ActivityLog {
     max-height: 15;
 }
 
+/* Discovery Inventory Section */
+DiscoveryScreen #discovery-section {
+    height: auto;
+    padding: 0;
+}
+
+DiscoveryScreen #discovery-section.hidden {
+    display: none;
+}
+
+DiscoveryScreen .discovery-title {
+    margin-top: 1;
+    padding: 0;
+}
+
+DiscoveryScreen #discovery-count {
+    height: auto;
+    color: $text-muted;
+    margin: 0;
+}
+
+DiscoveryScreen #discovery-inventory {
+    height: auto;
+    min-height: 3;
+    max-height: 15;
+    border: solid $secondary;
+    margin: 1 0;
+}
+
+DiscoveryScreen #discovery-inventory ListItem {
+    padding: 0 1;
+}
+
+DiscoveryScreen #discovery-inventory ListItem:hover {
+    background: $secondary-background;
+}
+
+DiscoveryScreen #discovery-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
 /* Wireless ADB Section */
 DiscoveryScreen .wireless-title {
     margin-top: 1;
