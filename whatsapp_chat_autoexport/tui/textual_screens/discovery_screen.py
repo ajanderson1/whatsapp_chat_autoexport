@@ -58,6 +58,7 @@ class DiscoveryScreen(Screen):
         self._updating_device_list = False  # Guard against concurrent list updates
         self._last_scan_had_devices: Optional[bool] = None  # Dedup "No devices found" warnings
         self._wireless_connecting = False  # Guard against concurrent wireless connect
+        self._wireless_pairing_ip: Optional[str] = None  # IP from pairing step
 
         # Appium server management (managed at app level for persistence)
         self._appium_started = False
@@ -144,6 +145,21 @@ class DiscoveryScreen(Screen):
                     "",
                     id="wireless-status",
                 )
+                # Connect port section — hidden until pairing succeeds
+                with Vertical(id="wireless-connect-section", classes="hidden"):
+                    yield Static(
+                        "Connect Port (from main Wireless Debugging screen — NOT the pairing dialog):",
+                        classes="field-label",
+                    )
+                    yield Input(
+                        placeholder="e.g. 39765",
+                        id="wireless-connect-port",
+                    )
+                    yield Button(
+                        "Connect",
+                        id="btn-wireless-finish-connect",
+                        variant="success",
+                    )
         yield ActivityLog(id="activity-log")
 
     async def on_mount(self) -> None:
@@ -292,6 +308,24 @@ class DiscoveryScreen(Screen):
                     self._handle_worker_error("wireless_connect", "No result returned")
                     try:
                         self.query_one("#btn-wireless-connect", Button).disabled = False
+                    except Exception:
+                        pass
+                else:
+                    self._handle_wireless_pair_result(worker.result)
+        elif worker.name == "wireless_finish_connect":
+            if is_finished:
+                if is_failed:
+                    self._wireless_connecting = False
+                    self._handle_worker_error("wireless_finish_connect", getattr(worker, 'error', None))
+                    try:
+                        self.query_one("#btn-wireless-finish-connect", Button).disabled = False
+                    except Exception:
+                        pass
+                elif worker.result is None:
+                    self._wireless_connecting = False
+                    self._handle_worker_error("wireless_finish_connect", "No result returned")
+                    try:
+                        self.query_one("#btn-wireless-finish-connect", Button).disabled = False
                     except Exception:
                         pass
                 else:
@@ -821,6 +855,7 @@ class DiscoveryScreen(Screen):
             return
 
         self._wireless_connecting = True
+        self._wireless_pairing_ip = ip_port.split(":")[0]
         wireless_status.update("[yellow]Pairing...[/yellow]")
         activity.log_info(f"Wireless ADB: pairing with {ip_port}...")
 
@@ -829,28 +864,25 @@ class DiscoveryScreen(Screen):
         btn.disabled = True
 
         self.run_worker(
-            self._wireless_pair_and_connect(ip_port, pairing_code),
+            self._wireless_pair(ip_port, pairing_code),
             name="wireless_connect",
         )
 
-    async def _wireless_pair_and_connect(self, ip_port: str, pairing_code: str) -> dict:
+    async def _wireless_pair(self, ip_port: str, pairing_code: str) -> dict:
         """
-        Pair and connect to a device via wireless ADB.
+        Pair with a device via wireless ADB (step 1 only).
 
-        Steps:
-        1. adb pair <ip:port> <code>
-        2. adb connect <ip>:5555
+        After pairing succeeds, the UI will prompt the user for the connect port.
 
         Args:
             ip_port: IP:port string for pairing (e.g. "192.168.1.100:37453")
             pairing_code: 6-digit pairing code
 
         Returns:
-            Dictionary with success status and device_id or error
+            Dictionary with success/paired status or error
         """
         import subprocess
 
-        # Step 1: Pair
         try:
             pair_result = await asyncio.to_thread(
                 subprocess.run,
@@ -867,7 +899,6 @@ class DiscoveryScreen(Screen):
         except Exception as e:
             return {"success": False, "error": f"Pairing failed: {str(e)}"}
 
-        # Check pair result
         pair_output = (pair_result.stdout + pair_result.stderr).strip()
         if pair_result.returncode != 0 or "Failed" in pair_output or "error" in pair_output.lower():
             return {
@@ -876,10 +907,22 @@ class DiscoveryScreen(Screen):
                 "hint": "Pairing codes expire after a few minutes. Get a fresh code and try again.",
             }
 
-        # Step 2: Extract IP and connect on standard port 5555
-        ip = ip_port.split(":")[0]
-        connect_addr = f"{ip}:5555"
+        return {"success": True, "paired": True}
 
+    async def _wireless_connect(self, ip: str, connect_port: str) -> dict:
+        """
+        Connect to a paired wireless ADB device (step 2).
+
+        Args:
+            ip: Device IP address
+            connect_port: Port from the main Wireless Debugging screen
+
+        Returns:
+            Dictionary with success status and device_id or error
+        """
+        import subprocess
+
+        connect_addr = f"{ip}:{connect_port}"
         try:
             connect_result = await asyncio.to_thread(
                 subprocess.run,
@@ -890,30 +933,101 @@ class DiscoveryScreen(Screen):
                 close_fds=True,
             )
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": "Connection timed out after pairing succeeded."}
+            return {"success": False, "error": f"Connection to {connect_addr} timed out."}
         except Exception as e:
-            return {"success": False, "error": f"Connection failed after pairing: {str(e)}"}
+            return {"success": False, "error": f"Connection failed: {str(e)}"}
 
         connect_output = (connect_result.stdout + connect_result.stderr).strip()
-        if "connected" not in connect_output.lower() and "already connected" not in connect_output.lower():
+        if "connected" in connect_output.lower() or "already connected" in connect_output.lower():
             return {
-                "success": False,
-                "error": f"Connection failed: {connect_output}",
+                "success": True,
+                "device_id": connect_addr,
+                "message": f"Connected to {connect_addr}",
             }
 
         return {
-            "success": True,
-            "device_id": connect_addr,
-            "message": f"Connected to {connect_addr}",
+            "success": False,
+            "error": f"Connection failed: {connect_output}",
         }
 
+    def _handle_wireless_pair_result(self, result: dict) -> None:
+        """Handle the result of wireless pairing (step 1)."""
+        wireless_status = self.query_one("#wireless-status", Static)
+        activity = self.query_one(ActivityLog)
+
+        if result.get("paired"):
+            # Pairing succeeded — show connect port input
+            wireless_status.update(
+                "[green]Paired![/green] Now enter the connect port from the main "
+                "Wireless Debugging screen (not the pairing dialog)."
+            )
+            activity.log_success("Pairing successful")
+            activity.log_info(
+                "Enter the port shown on the main Wireless Debugging screen, then press Connect."
+            )
+
+            # Show the connect port section
+            connect_section = self.query_one("#wireless-connect-section")
+            connect_section.remove_class("hidden")
+
+            # Focus the connect port input
+            connect_port_input = self.query_one("#wireless-connect-port", Input)
+            connect_port_input.focus()
+
+            # Keep wireless_connecting True — not done yet
+            # But re-enable pair button in case they need to re-pair
+            self.query_one("#btn-wireless-connect", Button).disabled = False
+        else:
+            self._wireless_connecting = False
+            error = result.get("error", "Unknown error")
+            hint = result.get("hint", "")
+            msg = f"[red]{error}[/red]"
+            if hint:
+                msg += f"\n[yellow]{hint}[/yellow]"
+            wireless_status.update(msg)
+            activity.log_error(f"Wireless ADB pairing failed: {error}")
+            if hint:
+                activity.log_warning(hint)
+            self.query_one("#btn-wireless-connect", Button).disabled = False
+
+    def _start_wireless_finish_connect(self) -> None:
+        """Initiate the connect step after pairing succeeded."""
+        connect_port_input = self.query_one("#wireless-connect-port", Input)
+        wireless_status = self.query_one("#wireless-status", Static)
+        activity = self.query_one(ActivityLog)
+
+        connect_port = connect_port_input.value.strip()
+        if not connect_port:
+            wireless_status.update(
+                "[red]Enter the port from the main Wireless Debugging screen[/red]"
+            )
+            return
+
+        if not connect_port.isdigit():
+            wireless_status.update("[red]Port must be a number[/red]")
+            return
+
+        ip = getattr(self, "_wireless_pairing_ip", None)
+        if not ip:
+            wireless_status.update("[red]No pairing IP found. Please pair again.[/red]")
+            return
+
+        wireless_status.update(f"[yellow]Connecting to {ip}:{connect_port}...[/yellow]")
+        activity.log_info(f"Wireless ADB: connecting to {ip}:{connect_port}...")
+
+        btn = self.query_one("#btn-wireless-finish-connect", Button)
+        btn.disabled = True
+
+        self.run_worker(
+            self._wireless_connect(ip, connect_port),
+            name="wireless_finish_connect",
+        )
+
     def _handle_wireless_connect_result(self, result: dict) -> None:
-        """Handle the result of wireless pairing and connection."""
+        """Handle the result of wireless connection (step 2)."""
         self._wireless_connecting = False
         wireless_status = self.query_one("#wireless-status", Static)
         activity = self.query_one(ActivityLog)
-        btn = self.query_one("#btn-wireless-connect", Button)
-        btn.disabled = False
 
         if result.get("success"):
             device_id = result["device_id"]
@@ -927,7 +1041,11 @@ class DiscoveryScreen(Screen):
             # Disable all connection buttons
             self.query_one("#btn-refresh", Button).disabled = True
             self.query_one("#btn-connect", Button).disabled = True
-            btn.disabled = True
+            self.query_one("#btn-wireless-connect", Button).disabled = True
+            try:
+                self.query_one("#btn-wireless-finish-connect", Button).disabled = True
+            except Exception:
+                pass
 
             status = self.query_one("#device-status", Static)
 
@@ -947,14 +1065,13 @@ class DiscoveryScreen(Screen):
                 )
         else:
             error = result.get("error", "Unknown error")
-            hint = result.get("hint", "")
-            msg = f"[red]{error}[/red]"
-            if hint:
-                msg += f"\n[yellow]{hint}[/yellow]"
-            wireless_status.update(msg)
-            activity.log_error(f"Wireless ADB failed: {error}")
-            if hint:
-                activity.log_warning(hint)
+            wireless_status.update(f"[red]{error}[/red]")
+            activity.log_error(f"Wireless ADB connect failed: {error}")
+            # Re-enable connect button for retry
+            try:
+                self.query_one("#btn-wireless-finish-connect", Button).disabled = False
+            except Exception:
+                pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -964,6 +1081,8 @@ class DiscoveryScreen(Screen):
             self.action_connect_device()
         elif event.button.id == "btn-wireless-connect":
             self._start_wireless_connect()
+        elif event.button.id == "btn-wireless-finish-connect":
+            self._start_wireless_finish_connect()
         elif event.button.id == "btn-continue":
             self.action_continue()
         elif event.button.id == "btn-refresh-chats":
