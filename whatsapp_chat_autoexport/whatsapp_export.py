@@ -1208,7 +1208,12 @@ class WhatsAppDriver:
     
     def collect_all_chats(self, limit: Optional[int] = None, sort_alphabetical: bool = True) -> List[str]:
         """Scroll through entire chat list to collect all chats.
-        
+
+        .. deprecated::
+            This is a legacy duplicate. Use WhatsAppDriver.collect_all_chats()
+            from whatsapp_chat_autoexport.export.whatsapp_driver instead, which
+            returns List[ChatMetadata] with rich per-chat metadata.
+
         Args:
             limit: Optional limit on number of chats to collect. If set, stops after collecting this many.
             sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
