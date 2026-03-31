@@ -291,7 +291,8 @@ def _run_wizard_flow(
         # Collect chats
         chats = []
         with console.status("[bold cyan]Scanning chat list..."):
-            chats = driver.collect_all_chats()
+            collected = driver.collect_all_chats()
+            chats = [c.name for c in collected]
 
         if not chats:
             console.print("[yellow]No chats found[/]")

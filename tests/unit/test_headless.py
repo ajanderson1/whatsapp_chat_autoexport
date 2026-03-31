@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
+from whatsapp_chat_autoexport.export.models import ChatMetadata
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -70,7 +72,7 @@ class TestHappyPath:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A", "Chat B"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A"), ChatMetadata(name="Chat B")]
 
         # Exporter — all succeed
         exporter = MockExporter.return_value
@@ -105,7 +107,7 @@ class TestHappyPath:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
 
         exporter = MockExporter.return_value
         exporter.export_chats.return_value = ({"Chat A": True}, {"Chat A": 1.0}, 1.0, {})
@@ -137,7 +139,7 @@ class TestPartialFailure:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A", "Chat B"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A"), ChatMetadata(name="Chat B")]
 
         exporter = MockExporter.return_value
         exporter.export_chats.return_value = (
@@ -239,7 +241,7 @@ class TestFatalErrors:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
 
         MockExporter.return_value.export_chats.return_value = (
             {"Chat A": False}, {"Chat A": 0.5}, 0.5, {},
@@ -277,7 +279,7 @@ class TestApiKeyValidation:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
         MockExporter.return_value.export_chats.return_value = (
             {"Chat A": True}, {"Chat A": 1.0}, 1.0, {},
         )
@@ -383,7 +385,7 @@ class TestResumeMode:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
 
         MockExporter.return_value.export_chats.return_value = (
             {"Chat A": True}, {"Chat A": 1.0}, 1.0, {},
@@ -439,7 +441,7 @@ class TestPipelineConfigWiring:
         driver.check_device_connection.return_value = True
         driver.connect.return_value = True
         driver.navigate_to_main.return_value = True
-        driver.collect_all_chats.return_value = ["Chat A"]
+        driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
         MockExporter.return_value.export_chats.return_value = (
             {"Chat A": True}, {"Chat A": 1.0}, 1.0, {},
         )

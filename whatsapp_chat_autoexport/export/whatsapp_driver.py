@@ -8,7 +8,8 @@ import subprocess
 import os
 import time
 from time import sleep
-from typing import Optional, Tuple, List
+import xml.etree.ElementTree as ET
+from typing import Callable, Optional, Tuple, List
 from pathlib import Path
 
 from appium import webdriver
@@ -20,6 +21,7 @@ from selenium.webdriver.common.by import By
 
 from ..config.timeouts import get_timeout_config
 from ..utils.logger import Logger
+from .models import ChatMetadata
 
 
 # Precise Appium/WebDriver error signatures indicating a dead or crashed session.
@@ -1404,25 +1406,35 @@ class WhatsAppDriver:
             self.logger.error(f"Error listing chats: {e}")
             return []
 
-    def collect_all_chats(self, limit: Optional[int] = None, sort_alphabetical: bool = False) -> List[str]:
-        """Scroll through entire chat list to collect all chats.
+    def collect_all_chats(
+        self,
+        limit: Optional[int] = None,
+        sort_alphabetical: bool = False,
+        on_chat_found: Optional[Callable[[ChatMetadata], None]] = None,
+    ) -> List[ChatMetadata]:
+        """Scroll through entire chat list to collect all chats via XML page source.
+
+        Parses the Appium page_source XML to extract chat metadata from each
+        visible conversation row.  Results are returned as a flat list that may
+        contain duplicate names (one entry per screen appearance).  A ``seen_names``
+        set is used only for end-of-list detection and for firing ``on_chat_found``
+        for genuinely new chats.
 
         Args:
-            limit: Optional limit on number of chats to collect. If set, stops after collecting this many.
-            sort_alphabetical: If True, sort chats alphabetically. If False, keep original order.
+            limit: Optional limit on number of *unique* chats to collect.
+            sort_alphabetical: If True, sort results alphabetically by name.
+            on_chat_found: Optional callback fired once per unique chat name.
         """
         if limit:
             self.logger.info(f"Collecting chats (limited to {limit})...")
         else:
             self.logger.info("Collecting all chats by scrolling...")
 
-        # Use dict.fromkeys() to preserve order and handle duplicates efficiently
-        all_chats_dict = {}  # Preserves insertion order (Python 3.7+)
-        previous_count = 0
+        results: List[ChatMetadata] = []
+        seen_names: set[str] = set()
         no_new_chats_count = 0
         scroll_attempts = 0
         max_scrolls = 50  # Safety limit
-        current_time = time.time()
 
         # Restart app to ensure we're at the top of the chat list
         # (faster and more reliable than scrolling 20-30 times)
@@ -1432,52 +1444,101 @@ class WhatsAppDriver:
 
         while scroll_attempts < max_scrolls:
             try:
-                chats = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
-                current_count = len(all_chats_dict)
+                scroll_attempts += 1
 
-                # Sort chats by Y position (top to bottom) to get visual order
-                chats_with_position = []
-                for chat in chats:
-                    try:
-                        if chat.is_displayed():
-                            chat_name = chat.text.strip()
-                            if chat_name:
-                                location = chat.location
-                                y_pos = location['y']
-                                chats_with_position.append((y_pos, chat_name))
-                    except:
+                # --- Parse XML page source ---
+                try:
+                    xml_source = self.driver.page_source
+                    if not xml_source:
+                        continue
+                    root = ET.fromstring(xml_source)
+                except ET.ParseError:
+                    self.logger.debug_msg(f"Scroll {scroll_attempts}: XML ParseError, skipping")
+                    continue
+                except Exception as e:
+                    self.logger.debug_msg(f"Scroll {scroll_attempts}: page_source error: {e}")
+                    continue
+
+                # Build parent map for walking up from elements to row containers
+                parent_map = {child: parent for parent in root.iter() for child in parent}
+
+                # Find all chat name elements and extract metadata
+                new_this_screen = 0
+                for name_elem in root.iter():
+                    if name_elem.get("resource-id") != "com.whatsapp:id/conversations_row_contact_name":
                         continue
 
-                # Sort by Y position (top to bottom)
-                chats_with_position.sort(key=lambda x: x[0])
+                    chat_name = (name_elem.get("text") or "").strip()
+                    if not chat_name:
+                        continue
 
-                # Add chats in visual order (top to bottom), skipping duplicates
-                for y_pos, chat_name in chats_with_position:
-                    if chat_name not in all_chats_dict:
-                        all_chats_dict[chat_name] = y_pos  # Store position for reference
-                        # Stop early if we've reached the limit
-                        if limit and len(all_chats_dict) >= limit:
+                    # Walk up to contact_row_container
+                    container = name_elem
+                    for _ in range(10):
+                        container = parent_map.get(container)
+                        if container is None:
+                            break
+                        if "contact_row_container" in (container.get("resource-id") or ""):
                             break
 
-                # Check if we've reached the limit
-                if limit and len(all_chats_dict) >= limit:
-                    self.logger.debug_msg(f"Reached limit of {limit} chats. Stopping collection.")
-                    break
+                    # Extract sibling metadata from the row container
+                    metadata = ChatMetadata(name=chat_name)
+                    if container is not None:
+                        for child in container.iter():
+                            rid = child.get("resource-id") or ""
+                            if rid == "com.whatsapp:id/conversations_row_date":
+                                metadata.timestamp = child.get("text")
+                            elif rid == "com.whatsapp:id/single_msg_tv":
+                                metadata.message_preview = child.get("text")
+                            elif rid == "com.whatsapp:id/mute_indicator":
+                                metadata.is_muted = True
+                            elif rid == "com.whatsapp:id/parent_group_profile_photo":
+                                metadata.is_group = True
+                            elif rid == "com.whatsapp:id/msg_from_tv":
+                                metadata.group_sender = child.get("text")
+                            elif rid == "com.whatsapp:id/message_type_indicator":
+                                metadata.has_type_indicator = True
+                            elif rid == "com.whatsapp:id/contact_photo":
+                                metadata.photo_description = child.get("content-desc")
 
-                new_count = len(all_chats_dict)
-                new_chats_this_round = new_count - current_count
+                    results.append(metadata)
 
-                if new_chats_this_round > 0:
-                    self.logger.debug_msg(f"Scroll {scroll_attempts + 1}: Found {new_chats_this_round} new chats (Total: {new_count})")
+                    # Fire callback for genuinely new chats
+                    if chat_name not in seen_names:
+                        new_this_screen += 1
+                        seen_names.add(chat_name)
+                        if on_chat_found is not None:
+                            try:
+                                on_chat_found(metadata)
+                            except Exception:
+                                pass  # Never let callback errors crash collection
+
+                # End-of-list detection
+                if new_this_screen > 0:
+                    self.logger.debug_msg(
+                        f"Scroll {scroll_attempts}: Found {new_this_screen} new chats "
+                        f"(Total unique: {len(seen_names)})"
+                    )
                     no_new_chats_count = 0
                 else:
                     no_new_chats_count += 1
                     if no_new_chats_count >= 3:
-                        self.logger.debug_msg(f"No new chats found after {no_new_chats_count} scrolls. Reached end.")
+                        self.logger.debug_msg(
+                            f"No new chats found after {no_new_chats_count} scrolls. Reached end."
+                        )
                         break
 
-                # Scroll down
-                self.driver.swipe(500, 1500, 500, 500, duration=300)
+                # Check if we've reached the limit (based on unique names)
+                if limit and len(seen_names) >= limit:
+                    self.logger.debug_msg(f"Reached limit of {limit} chats. Stopping collection.")
+                    break
+
+                # Scroll down using proportional coordinates
+                window_size = self.driver.get_window_size()
+                center_x = window_size["width"] // 2
+                start_y = int(window_size["height"] * 0.75)
+                end_y = int(window_size["height"] * 0.25)
+                self.driver.swipe(center_x, start_y, center_x, end_y, duration=300)
 
                 # Smart wait: poll until element count stabilizes or ceiling reached
                 timeout_config = get_timeout_config()
@@ -1503,9 +1564,8 @@ class WhatsAppDriver:
                         last_count = current_el_count
                     sleep(poll_interval)
 
-                scroll_attempts += 1
             except Exception as e:
-                self.logger.error(f"Error during scroll {scroll_attempts + 1}: {e}")
+                self.logger.error(f"Error during scroll {scroll_attempts}: {e}")
                 break
 
         # Restart app to return to top of chat list for export
@@ -1513,16 +1573,14 @@ class WhatsAppDriver:
             self.logger.warning("Failed to restart WhatsApp after collection - may need to scroll during export")
             # Continue anyway - we have the chat list, just might need to scroll more during export
 
-        # Convert dict keys to list (preserves insertion order)
-        chat_list = list(all_chats_dict.keys())
         if sort_alphabetical:
-            chat_list = sorted(chat_list)
+            results = sorted(results, key=lambda m: m.name)
         if limit:
-            chat_list = chat_list[:limit]  # Ensure we don't exceed limit
-            self.logger.success(f"Finished scrolling! Found {len(chat_list)} chats (limited to {limit})")
+            results = results[:limit]
+            self.logger.success(f"Finished scrolling! Found {len(results)} chats (limited to {limit})")
         else:
-            self.logger.success(f"Finished scrolling! Found {len(chat_list)} total chats")
-        return chat_list
+            self.logger.success(f"Finished scrolling! Found {len(results)} total chats")
+        return results
 
     def click_chat(self, chat_name: str) -> bool:
         """Click into a specific chat by name. Uses smart scrolling to find chats that aren't visible."""

@@ -179,8 +179,12 @@ async def test_dry_run_transitions_to_selection(tui_app):
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        # Press 'd' to use dry-run mode
+        # Press 'd' to use dry-run mode, then 'c' to continue to selection
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -197,6 +201,10 @@ async def test_dry_run_populates_chats(tui_app):
         await pilot.pause()
 
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -217,6 +225,10 @@ async def test_selection_screen_has_chat_list(tui_app):
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
 
         chat_list = tui_app.screen.query_one("#chat-list", ChatListWidget)
         assert chat_list is not None
@@ -231,6 +243,10 @@ async def test_selection_screen_has_settings_panel(tui_app):
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -249,6 +265,10 @@ async def test_selection_screen_has_progress_pane_hidden(tui_app):
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
 
         progress = tui_app.screen.query_one("#progress-pane", ProgressPane)
         assert progress.display is False
@@ -263,6 +283,10 @@ async def test_selection_screen_has_start_button(tui_app):
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -400,6 +424,10 @@ async def test_progress_pane_update_pipeline_phase():
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
 
         pane = app.screen.query_one("#progress-pane", ProgressPane)
 
@@ -440,6 +468,10 @@ async def test_progress_pane_update_pipeline_item():
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
 
         pane = app.screen.query_one("#progress-pane", ProgressPane)
 
@@ -466,6 +498,10 @@ async def test_progress_pane_export_mode():
         await pilot.pause()
 
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -506,6 +542,10 @@ async def test_progress_pane_complete_mode():
         await pilot.pause()
 
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -596,6 +636,10 @@ async def test_selection_screen_initial_mode():
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
 
         screen = app.screen
         assert isinstance(screen, SelectionScreen)
@@ -617,6 +661,10 @@ async def test_selection_screen_mode_to_export():
         await pilot.pause()
 
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -656,6 +704,10 @@ async def test_selection_screen_mode_to_complete():
         await pilot.pause()
 
         await pilot.press("d")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        await pilot.press("c")
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
