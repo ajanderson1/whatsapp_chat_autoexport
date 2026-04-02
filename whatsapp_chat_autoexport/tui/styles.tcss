@@ -422,6 +422,98 @@ DiscoveryScreen #wireless-status {
     margin-top: 1;
 }
 
+/* =========================================================================
+   ConnectPane (inside MainScreen Connect tab)
+   ========================================================================= */
+
+ConnectPane {
+    height: 1fr;
+    padding: 1 2;
+}
+
+ConnectPane .instructions {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+ConnectPane #device-list {
+    height: 1fr;
+    min-height: 5;
+    max-height: 20;
+    border: solid $secondary;
+    margin: 1 0;
+}
+
+ConnectPane #device-status {
+    height: auto;
+    margin: 1 0;
+}
+
+ConnectPane #action-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
+/* Wireless ADB Section */
+ConnectPane .wireless-title {
+    margin-top: 1;
+    padding: 0;
+}
+
+ConnectPane .wireless-hint {
+    color: $text-muted;
+    text-style: italic;
+    margin-bottom: 1;
+}
+
+ConnectPane #wireless-section {
+    height: auto;
+    padding: 0;
+}
+
+ConnectPane #wireless-section .field-label {
+    color: $text-muted;
+    padding: 0;
+    margin-top: 1;
+}
+
+ConnectPane #wireless-section Input {
+    margin: 0;
+    width: 100%;
+}
+
+ConnectPane #wireless-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
+ConnectPane #wireless-status {
+    height: auto;
+    margin-top: 1;
+}
+
+ConnectPane #wireless-connect-section {
+    height: auto;
+    padding: 0;
+}
+
+ConnectPane #wireless-connect-section.hidden {
+    display: none;
+}
+
+ConnectPane #wireless-connect-section .field-label {
+    color: $text-muted;
+    padding: 0;
+    margin-top: 1;
+}
+
+ConnectPane #wireless-connect-section Input {
+    margin: 0;
+    width: 100%;
+}
+
 /* Selection Screen - Unified Export View */
 SelectionScreen {
     layout: grid;
