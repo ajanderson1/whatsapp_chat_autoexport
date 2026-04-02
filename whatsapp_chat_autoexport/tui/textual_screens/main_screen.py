@@ -3,6 +3,14 @@ MainScreen with TabbedContent for the WhatsApp Exporter TUI.
 
 Replaces the previous DiscoveryScreen + SelectionScreen two-screen model
 with a single screen containing 4 tabs: Connect, Discover & Select, Export, Summary.
+
+Message handlers on this screen orchestrate tab transitions and auto-advance:
+- ConnectPane.Connected       -> store driver, unlock D&S, auto-advance
+- DiscoverSelectPane.SelectionChanged -> unlock/lock Export tab
+- DiscoverSelectPane.StartExport      -> switch to Export, start export
+- ExportPane.ExportComplete           -> unlock Summary, start processing
+- ExportPane.CancelledReturnToSelection -> switch to D&S, reset export
+- DiscoverSelectPane.ConnectionLost   -> cascade disable downstream tabs
 """
 
 from textual.app import ComposeResult
@@ -61,6 +69,10 @@ class MainScreen(Screen):
         tabbed.disable_tab("export")
         tabbed.disable_tab("summary")
 
+    # ------------------------------------------------------------------
+    # Reactive watchers — drive tab enable/disable cascade
+    # ------------------------------------------------------------------
+
     def watch__connected(self, value: bool) -> None:
         """Enable/disable tabs based on connection state."""
         tabbed = self.query_one(TabbedContent)
@@ -93,9 +105,72 @@ class MainScreen(Screen):
         else:
             tabbed.disable_tab("summary")
 
+    # ------------------------------------------------------------------
+    # Tab switching
+    # ------------------------------------------------------------------
+
     def action_switch_tab(self, tab_id: str) -> None:
         """Switch to a tab if it is not disabled."""
         tabbed = self.query_one(TabbedContent)
         tab = tabbed.get_tab(tab_id)
         if not tab.disabled:
             tabbed.active = tab_id
+
+    # ------------------------------------------------------------------
+    # Message handlers — orchestrate workflow transitions
+    # ------------------------------------------------------------------
+
+    def on_connect_pane_connected(self, event: ConnectPane.Connected) -> None:
+        """Handle device connection -- store driver, unlock D&S, auto-advance."""
+        self.app._whatsapp_driver = event.driver
+        self._connected = True
+        # Auto-advance to D&S tab (R4)
+        self.query_one(TabbedContent).active = "discover-select"
+
+    def on_discover_select_pane_selection_changed(
+        self, event: DiscoverSelectPane.SelectionChanged
+    ) -> None:
+        """Handle selection changes -- unlock/lock Export tab."""
+        self._has_selection = event.count > 0
+
+    def on_discover_select_pane_start_export(
+        self, event: DiscoverSelectPane.StartExport
+    ) -> None:
+        """Handle start export -- switch to Export tab, start export."""
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "export"
+        export_pane = self.query_one(ExportPane)
+        export_pane.start_export(event.selected_chats)
+
+    def on_export_pane_export_complete(
+        self, event: ExportPane.ExportComplete
+    ) -> None:
+        """Handle export completion -- unlock Summary, optionally auto-advance."""
+        self._export_complete = True
+        tabbed = self.query_one(TabbedContent)
+        # Auto-advance to Summary only if user is still on Export tab
+        if tabbed.active == "export":
+            tabbed.active = "summary"
+        # Start processing if not cancelled and transcription/output is configured
+        if not event.cancelled and (
+            self.app.transcribe_audio or self.app.output_dir
+        ):
+            summary_pane = self.query_one(SummaryPane)
+            summary_pane.start_processing(event.results)
+
+    def on_export_pane_cancelled_return_to_selection(
+        self, event: ExportPane.CancelledReturnToSelection
+    ) -> None:
+        """Handle cancel-and-return -- switch to D&S, reset export state."""
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "discover-select"
+        # Reset export pane state
+        export_pane = self.query_one(ExportPane)
+        export_pane.reset()
+
+    def on_discover_select_pane_connection_lost(
+        self, event: DiscoverSelectPane.ConnectionLost
+    ) -> None:
+        """Handle connection loss -- cascade disable downstream tabs."""
+        self._connected = False
+        self.query_one(TabbedContent).active = "connect"
