@@ -312,7 +312,7 @@ class WhatsAppExporterApp(App):
 
     def start_export_session(self, selected_chats: List[str]) -> None:
         """
-        Initialize an export session (called from SelectionScreen).
+        Initialize an export session (called from ExportPane).
 
         This sets up the state manager for tracking export progress
         without transitioning to a different screen.

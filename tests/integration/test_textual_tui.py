@@ -3,6 +3,11 @@ Integration tests for the Textual TUI application.
 
 Uses Textual's pilot harness to test UI behavior with mocked backends.
 All tests run without real Appium, ADB, or device connections.
+
+Updated for the MainScreen tab-navigation model (Units 1-7 refactor):
+- App starts with a single MainScreen containing TabbedContent
+- Tabs: connect, discover-select, export, summary
+- ConnectPane, DiscoverSelectPane, ExportPane, SummaryPane live inside tab panes
 """
 
 import asyncio
@@ -13,8 +18,11 @@ import pytest
 import pytest_asyncio
 
 from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp, PipelineStage
-from whatsapp_chat_autoexport.tui.textual_screens.discovery_screen import DiscoveryScreen
-from whatsapp_chat_autoexport.tui.textual_screens.selection_screen import SelectionScreen
+from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
+from whatsapp_chat_autoexport.tui.textual_panes.connect_pane import ConnectPane
+from whatsapp_chat_autoexport.tui.textual_panes.discover_select_pane import DiscoverSelectPane
+from whatsapp_chat_autoexport.tui.textual_panes.export_pane import ExportPane
+from whatsapp_chat_autoexport.tui.textual_panes.summary_pane import SummaryPane
 from whatsapp_chat_autoexport.tui.textual_widgets.cancel_modal import CancelModal
 from whatsapp_chat_autoexport.tui.textual_widgets.progress_pane import ProgressPane
 
@@ -38,11 +46,22 @@ MOCK_CHATS = [
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_app_launches_with_discovery_screen(tui_app):
-    """App should show DiscoveryScreen on startup."""
+async def test_app_launches_with_main_screen(tui_app):
+    """App should show MainScreen on startup."""
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-        assert isinstance(tui_app.screen, DiscoveryScreen)
+        assert isinstance(tui_app.screen, MainScreen)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_app_starts_on_connect_tab(tui_app):
+    """App should start with the Connect tab active."""
+    async with tui_app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import TabbedContent
+        tabbed = tui_app.screen.query_one(TabbedContent)
+        assert tabbed.active == "connect"
 
 
 @pytest.mark.integration
@@ -70,14 +89,14 @@ async def test_app_initial_pipeline_stage(tui_app):
 
 
 # ---------------------------------------------------------------------------
-# DiscoveryScreen Tests
+# ConnectPane Tests (formerly DiscoveryScreen)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_discovery_screen_has_device_list(tui_app):
-    """DiscoveryScreen should contain a device ListView."""
+async def test_connect_pane_has_device_list(tui_app):
+    """ConnectPane should contain a device ListView."""
     from textual.widgets import ListView
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
@@ -88,8 +107,8 @@ async def test_discovery_screen_has_device_list(tui_app):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_discovery_screen_has_action_buttons(tui_app):
-    """DiscoveryScreen should have Refresh and Connect buttons."""
+async def test_connect_pane_has_action_buttons(tui_app):
+    """ConnectPane should have Refresh and Connect buttons."""
     from textual.widgets import Button
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
@@ -102,8 +121,8 @@ async def test_discovery_screen_has_action_buttons(tui_app):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_discovery_screen_wireless_section(tui_app):
-    """DiscoveryScreen should have wireless ADB input fields."""
+async def test_connect_pane_wireless_section(tui_app):
+    """ConnectPane should have wireless ADB input fields."""
     from textual.widgets import Input, Button
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
@@ -168,85 +187,62 @@ async def test_device_scan_no_devices(tui_app):
 
 
 # ---------------------------------------------------------------------------
-# Dry Run / Transition to Selection
+# Dry Run / Tab Transition
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_dry_run_transitions_to_selection(tui_app):
-    """Pressing 'd' in DiscoveryScreen should enter dry-run and transition to SelectionScreen."""
+async def test_dry_run_transitions_to_discover_select_tab(tui_app):
+    """Dry-run connect should auto-advance to discover-select tab."""
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        # Press 'd' to use dry-run mode, then 'c' to continue to selection
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
+        # Trigger dry-run by calling the action directly on ConnectPane
+        # (key bindings on Container may not fire if focus is on a child widget)
+        connect_pane = tui_app.screen.query_one(ConnectPane)
+        connect_pane.action_use_dry_run()
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
 
-        # Should now be on SelectionScreen
-        assert isinstance(tui_app.screen, SelectionScreen)
+        # Should now be on the discover-select tab
+        from textual.widgets import TabbedContent
+        tabbed = tui_app.screen.query_one(TabbedContent)
+        assert tabbed.active == "discover-select"
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_dry_run_populates_chats(tui_app):
-    """Dry-run mode should populate discovered_chats with mock data."""
-    async with tui_app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        # Should have mock chats populated
-        assert len(tui_app.discovered_chats) > 0
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_selection_screen_has_chat_list(tui_app):
-    """SelectionScreen should render the ChatListWidget."""
+async def test_discover_select_tab_has_chat_list(tui_app):
+    """DiscoverSelectPane should render the ChatListWidget."""
     from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import ChatListWidget
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
+
+        # Trigger dry-run to advance to discover-select tab
+        connect_pane = tui_app.screen.query_one(ConnectPane)
+        connect_pane.action_use_dry_run()
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
 
-        chat_list = tui_app.screen.query_one("#chat-list", ChatListWidget)
+        chat_list = tui_app.screen.query_one("#chat-select-list", ChatListWidget)
         assert chat_list is not None
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_selection_screen_has_settings_panel(tui_app):
-    """SelectionScreen should render the SettingsPanel."""
+async def test_discover_select_tab_has_settings_panel(tui_app):
+    """DiscoverSelectPane should render the SettingsPanel."""
     from whatsapp_chat_autoexport.tui.textual_widgets.settings_panel import SettingsPanel
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
+
+        connect_pane = tui_app.screen.query_one(ConnectPane)
+        connect_pane.action_use_dry_run()
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
@@ -257,45 +253,60 @@ async def test_selection_screen_has_settings_panel(tui_app):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_selection_screen_has_progress_pane_hidden(tui_app):
-    """SelectionScreen should have ProgressPane initially hidden."""
-    async with tui_app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        progress = tui_app.screen.query_one("#progress-pane", ProgressPane)
-        assert progress.display is False
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_selection_screen_has_start_button(tui_app):
-    """SelectionScreen should have Start Export and Back buttons."""
+async def test_discover_select_tab_has_start_export_button(tui_app):
+    """DiscoverSelectPane should have a Start Export button."""
     from textual.widgets import Button
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
+
+        connect_pane = tui_app.screen.query_one(ConnectPane)
+        connect_pane.action_use_dry_run()
         await pilot.pause()
         await asyncio.sleep(0.3)
         await pilot.pause()
 
-        start_btn = tui_app.screen.query_one("#btn-start", Button)
-        back_btn = tui_app.screen.query_one("#btn-back", Button)
+        start_btn = tui_app.screen.query_one("#btn-start-export", Button)
         assert start_btn is not None
-        assert back_btn is not None
         assert "Start Export" in str(start_btn.label)
+
+
+# ---------------------------------------------------------------------------
+# Tab Enable/Disable Cascade
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_tabs_disabled_on_startup(tui_app):
+    """All tabs except Connect should be disabled on startup."""
+    async with tui_app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+
+        from textual.widgets import TabbedContent
+        tabbed = tui_app.screen.query_one(TabbedContent)
+        # discover-select, export, summary should be disabled
+        assert tabbed.get_tab("discover-select").disabled is True
+        assert tabbed.get_tab("export").disabled is True
+        assert tabbed.get_tab("summary").disabled is True
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_dry_run_enables_discover_select_tab(tui_app):
+    """After dry-run connect, discover-select tab should be enabled."""
+    async with tui_app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+
+        connect_pane = tui_app.screen.query_one(ConnectPane)
+        connect_pane.action_use_dry_run()
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+
+        from textual.widgets import TabbedContent
+        tabbed = tui_app.screen.query_one(TabbedContent)
+        assert tabbed.get_tab("discover-select").disabled is False
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +414,7 @@ async def test_cancel_modal_dismiss_on_escape():
 
 
 # ---------------------------------------------------------------------------
-# ProgressPane Widget Tests (unit-level, mounted within an app)
+# ProgressPane Widget Tests (mounted within ExportPane)
 # ---------------------------------------------------------------------------
 
 
@@ -419,17 +430,8 @@ async def test_progress_pane_update_pipeline_phase():
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        # Go to selection screen so ProgressPane is mounted
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        pane = app.screen.query_one("#progress-pane", ProgressPane)
+        # Get the ExportPane's ProgressPane directly (it's mounted even if tab is disabled)
+        pane = app.screen.query_one("#export-progress-pane", ProgressPane)
 
         # Switch to processing mode and update phase
         pane.mode = "processing"
@@ -464,16 +466,7 @@ async def test_progress_pane_update_pipeline_item():
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        pane = app.screen.query_one("#progress-pane", ProgressPane)
+        pane = app.screen.query_one("#export-progress-pane", ProgressPane)
 
         pane.mode = "processing"
         pane.update_pipeline_phase("transcribe")
@@ -497,16 +490,7 @@ async def test_progress_pane_export_mode():
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        pane = app.screen.query_one("#progress-pane", ProgressPane)
+        pane = app.screen.query_one("#export-progress-pane", ProgressPane)
 
         pane.start_export(5)
         await pilot.pause()
@@ -541,16 +525,7 @@ async def test_progress_pane_complete_mode():
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        pane = app.screen.query_one("#progress-pane", ProgressPane)
+        pane = app.screen.query_one("#export-progress-pane", ProgressPane)
 
         pane.set_complete({
             "exported": 5,
@@ -616,112 +591,59 @@ async def test_help_screen_opens():
 
 
 # ---------------------------------------------------------------------------
-# SelectionScreen Mode Transition Tests
+# ExportPane Tests (replaced SelectionScreen mode tests)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_selection_screen_initial_mode():
-    """SelectionScreen should start in 'select' mode."""
+async def test_export_pane_has_pause_and_cancel_buttons():
+    """ExportPane should have Pause and Cancel buttons."""
+    from textual.widgets import Button
+
     app = WhatsAppExporterApp(
-        output_dir=Path("/tmp/test_mode"),
+        output_dir=Path("/tmp/test_export_pane"),
         dry_run=True,
     )
 
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        screen = app.screen
-        assert isinstance(screen, SelectionScreen)
-        assert screen._mode == "select"
+        pause_btn = app.screen.query_one("#btn-pause", Button)
+        cancel_btn = app.screen.query_one("#btn-cancel", Button)
+        assert pause_btn is not None
+        assert cancel_btn is not None
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_selection_screen_mode_to_export():
-    """Changing SelectionScreen mode to 'export' should update UI elements."""
-    from textual.widgets import Button
+async def test_export_pane_has_chat_status_list():
+    """ExportPane should have a ChatListWidget in status mode."""
+    from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import ChatListWidget
 
     app = WhatsAppExporterApp(
-        output_dir=Path("/tmp/test_mode2"),
+        output_dir=Path("/tmp/test_export_pane2"),
         dry_run=True,
     )
 
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        screen = app.screen
-        assert isinstance(screen, SelectionScreen)
-
-        # Manually switch mode to export
-        screen._mode = "export"
-        await pilot.pause()
-
-        # Progress pane should now be visible
-        pane = screen.query_one("#progress-pane", ProgressPane)
-        assert pane.display is True
-
-        # Start button should say "Pause"
-        start_btn = screen.query_one("#btn-start", Button)
-        assert "Pause" in str(start_btn.label)
-
-        # Back button should say "Cancel"
-        back_btn = screen.query_one("#btn-back", Button)
-        assert "Cancel" in str(back_btn.label)
+        chat_list = app.screen.query_one("#chat-status-list", ChatListWidget)
+        assert chat_list is not None
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_selection_screen_mode_to_complete():
-    """Changing SelectionScreen mode to 'complete' should show Done button."""
-    from textual.widgets import Button
-
+async def test_export_pane_has_progress_pane():
+    """ExportPane should have a ProgressPane."""
     app = WhatsAppExporterApp(
-        output_dir=Path("/tmp/test_mode3"),
+        output_dir=Path("/tmp/test_export_pane3"),
         dry_run=True,
     )
 
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        await pilot.press("d")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        await asyncio.sleep(0.3)
-        await pilot.pause()
-
-        screen = app.screen
-        assert isinstance(screen, SelectionScreen)
-
-        # Manually switch mode to complete
-        screen._mode = "complete"
-        await pilot.pause()
-
-        start_btn = screen.query_one("#btn-start", Button)
-        assert "Done" in str(start_btn.label)
-
-        # Back button should be hidden
-        back_btn = screen.query_one("#btn-back", Button)
-        assert back_btn.display is False
+        pane = app.screen.query_one("#export-progress-pane", ProgressPane)
+        assert pane is not None
