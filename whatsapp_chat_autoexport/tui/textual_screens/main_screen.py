@@ -12,6 +12,7 @@ from textual.widgets import Static, TabbedContent, TabPane
 from textual.reactive import reactive
 
 from ..textual_panes.connect_pane import ConnectPane
+from ..textual_panes.discover_select_pane import DiscoverSelectPane
 from ..textual_widgets.activity_log import ActivityLog
 
 
@@ -44,7 +45,7 @@ class MainScreen(Screen):
             with TabPane("1 Connect", id="connect"):
                 yield ConnectPane()
             with TabPane("2 Discover & Select", id="discover-select"):
-                yield Static("Content goes here")
+                yield DiscoverSelectPane()
             with TabPane("3 Export", id="export"):
                 yield Static("Content goes here")
             with TabPane("4 Summary", id="summary"):

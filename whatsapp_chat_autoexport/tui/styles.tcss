@@ -514,6 +514,71 @@ ConnectPane #wireless-connect-section Input {
     width: 100%;
 }
 
+/* =========================================================================
+   DiscoverSelectPane (inside MainScreen Discover & Select tab)
+   ========================================================================= */
+
+DiscoverSelectPane {
+    height: 1fr;
+    padding: 1 2;
+}
+
+DiscoverSelectPane .discovery-title {
+    margin-top: 1;
+    padding: 0;
+}
+
+DiscoverSelectPane #discovery-count {
+    height: auto;
+    color: $text-muted;
+    margin: 0;
+}
+
+DiscoverSelectPane #discovery-inventory {
+    height: auto;
+    min-height: 3;
+    max-height: 15;
+    border: solid $secondary;
+    margin: 1 0;
+}
+
+DiscoverSelectPane #discovery-inventory ListItem {
+    padding: 0 1;
+}
+
+DiscoverSelectPane #discovery-inventory ListItem:hover {
+    background: $secondary-background;
+}
+
+DiscoverSelectPane #discovery-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
+DiscoverSelectPane .main-content {
+    layout: horizontal;
+    height: 1fr;
+    width: 100%;
+}
+
+DiscoverSelectPane .left-panel {
+    width: 2fr;
+    height: 100%;
+}
+
+DiscoverSelectPane .right-panel {
+    width: 1fr;
+    height: 100%;
+}
+
+DiscoverSelectPane .bottom-bar {
+    height: auto;
+    padding: 1;
+    background: $primary-background;
+    border-top: solid $primary;
+}
+
 /* Selection Screen - Unified Export View */
 SelectionScreen {
     layout: grid;
