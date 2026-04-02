@@ -13,6 +13,8 @@ from textual.reactive import reactive
 
 from ..textual_panes.connect_pane import ConnectPane
 from ..textual_panes.discover_select_pane import DiscoverSelectPane
+from ..textual_panes.export_pane import ExportPane
+from ..textual_panes.summary_pane import SummaryPane
 from ..textual_widgets.activity_log import ActivityLog
 
 
@@ -47,9 +49,9 @@ class MainScreen(Screen):
             with TabPane("2 Discover & Select", id="discover-select"):
                 yield DiscoverSelectPane()
             with TabPane("3 Export", id="export"):
-                yield Static("Content goes here")
+                yield ExportPane()
             with TabPane("4 Summary", id="summary"):
-                yield Static("Content goes here")
+                yield SummaryPane()
         yield ActivityLog()
 
     def on_mount(self) -> None:

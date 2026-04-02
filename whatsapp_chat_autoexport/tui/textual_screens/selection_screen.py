@@ -133,8 +133,8 @@ class SelectionScreen(Screen):
         progress_pane.display = False
 
         # Focus the chat list ListView for keyboard navigation
-        chat_listview = self.query_one("#chat-listview", ListView)
-        chat_listview.focus()
+        chat_list = self.query_one("#chat-list", ChatListWidget)
+        chat_list.query_one(ListView).focus()
 
     # =========================================================================
     # Mode management
@@ -290,7 +290,7 @@ class SelectionScreen(Screen):
     def action_go_back_or_cancel(self) -> None:
         """Go back or cancel based on current mode."""
         if self._mode == "select":
-            self.query_one("#chat-listview").focus()
+            self.query_one("#chat-list", ChatListWidget).query_one(ListView).focus()
         elif self._mode in ("export", "processing"):
             self._show_cancel_modal()
         elif self._mode == "complete":

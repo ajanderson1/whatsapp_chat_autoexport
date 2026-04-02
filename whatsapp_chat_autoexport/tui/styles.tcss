@@ -579,6 +579,43 @@ DiscoverSelectPane .bottom-bar {
     border-top: solid $primary;
 }
 
+/* =========================================================================
+   ExportPane (inside MainScreen Export tab)
+   ========================================================================= */
+
+ExportPane {
+    height: 1fr;
+    padding: 1 2;
+}
+
+ExportPane .main-content {
+    layout: horizontal;
+    height: 1fr;
+    width: 100%;
+}
+
+ExportPane .left-panel {
+    width: 2fr;
+    height: 100%;
+}
+
+ExportPane .right-panel {
+    width: 1fr;
+    height: 100%;
+}
+
+ExportPane .bottom-bar {
+    height: auto;
+    padding: 1;
+    background: $primary-background;
+    border-top: solid $primary;
+}
+
+ExportPane ProgressPane {
+    height: 100%;
+    min-height: 8;
+}
+
 /* Selection Screen - Unified Export View */
 SelectionScreen {
     layout: grid;
@@ -1185,4 +1222,23 @@ MainScreen Tab:disabled {
 
 MainScreen TabPane {
     padding: 1;
+}
+
+/* ======================================================================
+   SummaryPane (inside MainScreen Summary tab)
+   ====================================================================== */
+
+SummaryPane {
+    layout: vertical;
+}
+
+SummaryPane .bottom-bar {
+    dock: bottom;
+    height: auto;
+    padding: 1 2;
+    display: none;
+}
+
+SummaryPane .bottom-bar.visible {
+    display: block;
 }
