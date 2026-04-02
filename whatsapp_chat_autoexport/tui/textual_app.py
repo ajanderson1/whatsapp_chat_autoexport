@@ -65,6 +65,10 @@ class WhatsAppExporterApp(App):
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("escape", "go_back", "Back", show=False),
         Binding("slash", "show_secret_settings", "Settings", show=False),
+        Binding("1", "switch_tab('connect')", show=False),
+        Binding("2", "switch_tab('discover-select')", show=False),
+        Binding("3", "switch_tab('export')", show=False),
+        Binding("4", "switch_tab('summary')", show=False),
     ]
 
     # Reactive state
@@ -214,8 +218,8 @@ class WhatsAppExporterApp(App):
         self.theme = saved_theme
 
         # Show initial screen
-        from .textual_screens.discovery_screen import DiscoveryScreen
-        await self.push_screen(DiscoveryScreen())
+        from .textual_screens.main_screen import MainScreen
+        await self.push_screen(MainScreen())
 
     def watch_current_stage(self, stage: PipelineStage) -> None:
         """React to stage changes."""
@@ -288,10 +292,17 @@ class WhatsAppExporterApp(App):
         from .textual_widgets import SecretSettingsModal
         self.push_screen(SecretSettingsModal())
 
+    def action_switch_tab(self, tab_id: str) -> None:
+        """Delegate tab switching to MainScreen."""
+        from .textual_screens.main_screen import MainScreen
+        if isinstance(self.screen, MainScreen):
+            self.screen.action_switch_tab(tab_id)
+
     # =========================================================================
     # Stage transitions
     # =========================================================================
 
+    # DEPRECATED: will be removed in Unit 6 when MainScreen orchestration is wired up
     async def transition_to_selection(
         self,
         driver: "WhatsAppDriver",

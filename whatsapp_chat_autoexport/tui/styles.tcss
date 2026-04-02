@@ -997,3 +997,35 @@ ColorSchemeModal .modal-footer {
     border-top: solid $primary-background;
     margin-top: 1;
 }
+
+/* ======================================================================
+   MainScreen - Tab Navigation
+   ====================================================================== */
+
+MainScreen {
+    layout: vertical;
+}
+
+MainScreen TabbedContent {
+    height: 1fr;
+}
+
+MainScreen > ActivityLog {
+    height: auto;
+    max-height: 30%;
+    min-height: 5;
+}
+
+/* Tab styling */
+MainScreen Tab {
+    padding: 1 2;
+}
+
+MainScreen Tab:disabled {
+    color: $text-muted 40%;
+    text-style: dim;
+}
+
+MainScreen TabPane {
+    padding: 1;
+}
