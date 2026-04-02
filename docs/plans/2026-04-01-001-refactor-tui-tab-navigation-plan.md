@@ -1,7 +1,7 @@
 ---
 title: "refactor: Replace TUI screen-stack with navigable tab interface"
 type: refactor
-status: active
+status: completed
 date: 2026-04-01
 origin: docs/brainstorms/2026-04-01-tui-tab-navigation-requirements.md
 deepened: 2026-04-01
