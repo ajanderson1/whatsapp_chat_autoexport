@@ -2,8 +2,10 @@
 Unit tests for MainScreen with TabbedContent tab navigation.
 
 Tests the 4-tab layout, progressive tab enabling via reactive properties,
-and cascade disable logic.
+cascade disable logic, and connection-triggered discovery.
 """
+
+import inspect
 
 import pytest
 
@@ -150,3 +152,28 @@ async def test_activity_log_visible(tui_app):
         logs = screen.query(ActivityLog)
         assert len(logs) == 1
         assert logs.first().display is True
+
+
+@pytest.mark.unit
+def test_connect_handler_calls_start_discovery():
+    """on_connect_pane_connected should call start_discovery() on DiscoverSelectPane."""
+    source = inspect.getsource(MainScreen.on_connect_pane_connected)
+    assert "start_discovery()" in source
+
+
+@pytest.mark.unit
+def test_tab_2_label_is_select():
+    """Tab 2 label should be '2 Select', not '2 Discover & Select'."""
+    source = inspect.getsource(MainScreen.compose)
+    assert '"2 Select"' in source
+    assert "Discover & Select" not in source
+
+
+@pytest.mark.unit
+def test_binding_2_description_is_select():
+    """Binding for key '2' should have description 'Select'."""
+    for binding in MainScreen.BINDINGS:
+        if binding.key == "2":
+            assert binding.description == "Select"
+            return
+    pytest.fail("No binding found for key '2'")

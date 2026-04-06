@@ -34,10 +34,15 @@ class TestDiscoverSelectPaneInit:
         pane = DiscoverSelectPane()
         assert isinstance(pane, Container)
 
-    def test_first_show_defaults_true(self):
-        """_first_show flag should default to True."""
+    def test_discovery_worker_defaults_none(self):
+        """_discovery_worker should default to None."""
         pane = DiscoverSelectPane()
-        assert pane._first_show is True
+        assert pane._discovery_worker is None
+
+    def test_start_discovery_is_public(self):
+        """start_discovery() should be a public method."""
+        pane = DiscoverSelectPane()
+        assert callable(getattr(pane, "start_discovery", None))
 
     def test_discovery_generation_defaults_zero(self):
         """_discovery_generation counter should default to 0."""
@@ -53,6 +58,32 @@ class TestDiscoverSelectPaneInit:
         """_scanning_chats should default to False."""
         pane = DiscoverSelectPane()
         assert pane._scanning_chats is False
+
+    def test_no_on_show_method(self):
+        """DiscoverSelectPane should not have an on_show auto-trigger."""
+        pane = DiscoverSelectPane()
+        # on_show was removed — discovery is now triggered by MainScreen
+        assert not hasattr(pane, "_first_show")
+
+    def test_stop_discovery_is_public(self):
+        """stop_discovery() should be a public method."""
+        pane = DiscoverSelectPane()
+        assert callable(getattr(pane, "stop_discovery", None))
+
+    def test_stop_discovery_noop_when_no_worker(self):
+        """stop_discovery() should be safe to call when no worker is running."""
+        pane = DiscoverSelectPane()
+        assert pane._discovery_worker is None
+        # Should not raise
+        pane.stop_discovery()
+        assert pane._scanning_chats is False
+
+    def test_stop_discovery_increments_generation(self):
+        """stop_discovery() should increment _discovery_generation."""
+        pane = DiscoverSelectPane()
+        gen_before = pane._discovery_generation
+        pane.stop_discovery()
+        assert pane._discovery_generation == gen_before + 1
 
 
 # =============================================================================

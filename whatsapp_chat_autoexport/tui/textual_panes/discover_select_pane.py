@@ -3,10 +3,10 @@ DiscoverSelectPane -- chat discovery and selection pane.
 
 Combines the discovery inventory section (from DiscoveryScreen) with the
 chat selection and settings layout (from SelectionScreen) into a single
-pane that lives inside the "Discover & Select" TabPane.
+pane that lives inside the "Select" TabPane.
 
 Flow:
-1. On first show, auto-start chat discovery if driver is connected
+1. MainScreen calls start_discovery() after device connection
 2. Live-stream discovered chat names into a ListView
 3. When discovery completes, populate ChatListWidget and pre-select all
 4. User adjusts selection + settings
@@ -74,10 +74,10 @@ class DiscoverSelectPane(Container):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._first_show: bool = True
         self._discovery_generation: int = 0
         self._discovered_chats: List[str] = []
         self._scanning_chats: bool = False
+        self._discovery_worker: Worker | None = None
 
     # ------------------------------------------------------------------
     # Compose
@@ -131,23 +131,14 @@ class DiscoverSelectPane(Container):
             )
 
     # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
-    def on_show(self) -> None:
-        """Auto-start discovery on first show if driver is connected."""
-        if self._first_show:
-            self._first_show = False
-            if getattr(self.app, "driver", None) is not None:
-                self._start_discovery()
-
-    # ------------------------------------------------------------------
     # Discovery
     # ------------------------------------------------------------------
 
-    def _start_discovery(self) -> None:
+    def start_discovery(self) -> None:
         """Kick off chat collection in a background worker."""
         if self._scanning_chats:
+            return
+        if getattr(self.app, "driver", None) is None:
             return
 
         self._scanning_chats = True
@@ -164,7 +155,17 @@ class DiscoverSelectPane(Container):
             pass
 
         self._log("Starting chat discovery...")
-        self.run_worker(self._collect_chats, exclusive=True, thread=True)
+        self._discovery_worker = self.run_worker(
+            self._collect_chats, exclusive=True, thread=True
+        )
+
+    def stop_discovery(self) -> None:
+        """Cancel a running discovery worker, if any."""
+        if self._discovery_worker is not None:
+            self._discovery_worker.cancel()
+            self._discovery_worker = None
+        self._scanning_chats = False
+        self._discovery_generation += 1
 
     def _collect_chats(self) -> List[str]:
         """Worker: collect chats from the device (runs in thread)."""
@@ -290,12 +291,13 @@ class DiscoverSelectPane(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button clicks."""
         if event.button.id == "btn-refresh-chats":
-            self._start_discovery()
+            self.start_discovery()
         elif event.button.id == "btn-start-export":
             self._handle_start_export()
 
     def _handle_start_export(self) -> None:
-        """Validate and emit StartExport."""
+        """Validate and emit StartExport. Stops discovery if still running."""
+        self.stop_discovery()
         try:
             chat_list = self.query_one("#chat-select-list", ChatListWidget)
             selected = chat_list.get_selected()
@@ -314,7 +316,7 @@ class DiscoverSelectPane(Container):
 
     def action_refresh_chats(self) -> None:
         """Action bound to 'f' key."""
-        self._start_discovery()
+        self.start_discovery()
 
     # ------------------------------------------------------------------
     # Helpers
