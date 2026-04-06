@@ -17,47 +17,6 @@ Footer {
 }
 
 /* =========================================================================
-   Pipeline Header Widget
-   ========================================================================= */
-
-PipelineHeader {
-    height: 5;
-    background: $primary-background;
-    border: solid $primary;
-    padding: 0 1;
-}
-
-PipelineHeader .title {
-    text-style: bold;
-    color: $text;
-    text-align: center;
-}
-
-PipelineHeader .stages {
-    height: auto;
-    width: 100%;
-    layout: horizontal;
-}
-
-PipelineHeader .stage {
-    width: 1fr;
-    padding: 0 2;
-}
-
-PipelineHeader .stage-active {
-    color: $success;
-    text-style: bold;
-}
-
-PipelineHeader .stage-inactive {
-    color: $text-muted;
-}
-
-PipelineHeader .stage-completed {
-    color: $primary;
-}
-
-/* =========================================================================
    Chat List Widget
    ========================================================================= */
 
@@ -297,25 +256,21 @@ QueueWidget .status-skipped {
    Screen Layouts
    ========================================================================= */
 
-/* Discovery Screen */
-DiscoveryScreen {
-    layout: grid;
-    grid-size: 1;
-    grid-rows: auto 1fr auto;
-}
+/* =========================================================================
+   ConnectPane (inside MainScreen Connect tab)
+   ========================================================================= */
 
-DiscoveryScreen .content {
+ConnectPane {
+    height: 1fr;
     padding: 1 2;
-    height: 100%;
-    width: 100%;
 }
 
-DiscoveryScreen .instructions {
+ConnectPane .instructions {
     color: $text-muted;
     margin-bottom: 1;
 }
 
-DiscoveryScreen #device-list {
+ConnectPane #device-list {
     height: 1fr;
     min-height: 5;
     max-height: 20;
@@ -323,45 +278,97 @@ DiscoveryScreen #device-list {
     margin: 1 0;
 }
 
-DiscoveryScreen #device-status {
+ConnectPane #device-status {
     height: auto;
     margin: 1 0;
 }
 
-DiscoveryScreen #action-buttons {
+ConnectPane #action-buttons {
     height: auto;
     margin-top: 1;
     align: center middle;
 }
 
-DiscoveryScreen ActivityLog {
-    height: auto;
-    min-height: 8;
-    max-height: 15;
-}
-
-/* Discovery Inventory Section */
-DiscoveryScreen #discovery-section {
-    height: auto;
-    padding: 0;
-}
-
-DiscoveryScreen #discovery-section.hidden {
-    display: none;
-}
-
-DiscoveryScreen .discovery-title {
+/* Wireless ADB Section */
+ConnectPane .wireless-title {
     margin-top: 1;
     padding: 0;
 }
 
-DiscoveryScreen #discovery-count {
+ConnectPane .wireless-hint {
+    color: $text-muted;
+    text-style: italic;
+    margin-bottom: 1;
+}
+
+ConnectPane #wireless-section {
+    height: auto;
+    padding: 0;
+}
+
+ConnectPane #wireless-section .field-label {
+    color: $text-muted;
+    padding: 0;
+    margin-top: 1;
+}
+
+ConnectPane #wireless-section Input {
+    margin: 0;
+    width: 100%;
+}
+
+ConnectPane #wireless-buttons {
+    height: auto;
+    margin-top: 1;
+    align: center middle;
+}
+
+ConnectPane #wireless-status {
+    height: auto;
+    margin-top: 1;
+}
+
+ConnectPane #wireless-connect-section {
+    height: auto;
+    padding: 0;
+}
+
+ConnectPane #wireless-connect-section.hidden {
+    display: none;
+}
+
+ConnectPane #wireless-connect-section .field-label {
+    color: $text-muted;
+    padding: 0;
+    margin-top: 1;
+}
+
+ConnectPane #wireless-connect-section Input {
+    margin: 0;
+    width: 100%;
+}
+
+/* =========================================================================
+   DiscoverSelectPane (inside MainScreen Discover & Select tab)
+   ========================================================================= */
+
+DiscoverSelectPane {
+    height: 1fr;
+    padding: 1 2;
+}
+
+DiscoverSelectPane .discovery-title {
+    margin-top: 1;
+    padding: 0;
+}
+
+DiscoverSelectPane #discovery-count {
     height: auto;
     color: $text-muted;
     margin: 0;
 }
 
-DiscoveryScreen #discovery-inventory {
+DiscoverSelectPane #discovery-inventory {
     height: auto;
     min-height: 3;
     max-height: 15;
@@ -369,97 +376,77 @@ DiscoveryScreen #discovery-inventory {
     margin: 1 0;
 }
 
-DiscoveryScreen #discovery-inventory ListItem {
+DiscoverSelectPane #discovery-inventory ListItem {
     padding: 0 1;
 }
 
-DiscoveryScreen #discovery-inventory ListItem:hover {
+DiscoverSelectPane #discovery-inventory ListItem:hover {
     background: $secondary-background;
 }
 
-DiscoveryScreen #discovery-buttons {
+DiscoverSelectPane #discovery-buttons {
     height: auto;
     margin-top: 1;
     align: center middle;
 }
 
-/* Wireless ADB Section */
-DiscoveryScreen .wireless-title {
-    margin-top: 1;
-    padding: 0;
-}
-
-DiscoveryScreen .wireless-hint {
-    color: $text-muted;
-    text-style: italic;
-    margin-bottom: 1;
-}
-
-DiscoveryScreen #wireless-section {
-    height: auto;
-    padding: 0;
-}
-
-DiscoveryScreen #wireless-section .field-label {
-    color: $text-muted;
-    padding: 0;
-    margin-top: 1;
-}
-
-DiscoveryScreen #wireless-section Input {
-    margin: 0;
-    width: 100%;
-}
-
-DiscoveryScreen #wireless-buttons {
-    height: auto;
-    margin-top: 1;
-    align: center middle;
-}
-
-DiscoveryScreen #wireless-status {
-    height: auto;
-    margin-top: 1;
-}
-
-/* Selection Screen - Unified Export View */
-SelectionScreen {
-    layout: grid;
-    grid-size: 1;
-    grid-rows: auto 1fr auto auto;
-}
-
-SelectionScreen .main-content {
+DiscoverSelectPane .main-content {
     layout: horizontal;
     height: 1fr;
     width: 100%;
 }
 
-SelectionScreen .left-panel {
+DiscoverSelectPane .left-panel {
     width: 2fr;
     height: 100%;
 }
 
-SelectionScreen .right-panel {
+DiscoverSelectPane .right-panel {
     width: 1fr;
     height: 100%;
 }
 
-SelectionScreen .bottom-bar {
+DiscoverSelectPane .bottom-bar {
     height: auto;
     padding: 1;
     background: $primary-background;
     border-top: solid $primary;
 }
 
-SelectionScreen .action-hint {
-    color: $text-muted;
-    text-align: center;
+/* =========================================================================
+   ExportPane (inside MainScreen Export tab)
+   ========================================================================= */
+
+ExportPane {
+    height: 1fr;
+    padding: 1 2;
 }
 
-/* Progress Pane positioned between main content and bottom bar */
-SelectionScreen ProgressPane {
-    height: 30%;
+ExportPane .main-content {
+    layout: horizontal;
+    height: 1fr;
+    width: 100%;
+}
+
+ExportPane .left-panel {
+    width: 2fr;
+    height: 100%;
+}
+
+ExportPane .right-panel {
+    width: 1fr;
+    height: 100%;
+}
+
+ExportPane .bottom-bar {
+    height: auto;
+    padding: 1;
+    background: $primary-background;
+    border-top: solid $primary;
+}
+
+ExportPane ProgressPane {
+    height: 100%;
     min-height: 8;
 }
 
@@ -659,57 +646,6 @@ SettingsPanel .api-status-unknown {
     color: $text-muted;
 }
 
-
-/* Export Screen */
-ExportScreen {
-    layout: grid;
-    grid-size: 1;
-    grid-rows: auto auto 1fr auto;
-}
-
-ExportScreen .top-section {
-    height: auto;
-    padding: 1;
-}
-
-ExportScreen .middle-section {
-    layout: horizontal;
-    height: 1fr;
-}
-
-ExportScreen .queue-section {
-    width: 1fr;
-    height: 100%;
-}
-
-ExportScreen .activity-section {
-    width: 1fr;
-    height: 100%;
-}
-
-ExportScreen .control-bar {
-    height: auto;
-    padding: 1;
-    background: $primary-background;
-    border-top: solid $primary;
-}
-
-/* Processing Screen */
-ProcessingScreen {
-    layout: grid;
-    grid-size: 1;
-    grid-rows: auto 1fr auto;
-}
-
-ProcessingScreen .progress-section {
-    height: auto;
-    padding: 1;
-}
-
-ProcessingScreen .log-section {
-    height: 1fr;
-    padding: 0 1;
-}
 
 /* =========================================================================
    Help Screen (Modal)
@@ -996,4 +932,55 @@ ColorSchemeModal .modal-footer {
     padding-top: 1;
     border-top: solid $primary-background;
     margin-top: 1;
+}
+
+/* ======================================================================
+   MainScreen - Tab Navigation
+   ====================================================================== */
+
+MainScreen {
+    layout: vertical;
+}
+
+MainScreen TabbedContent {
+    height: 1fr;
+}
+
+MainScreen > ActivityLog {
+    height: auto;
+    max-height: 30%;
+    min-height: 5;
+}
+
+/* Tab styling */
+MainScreen Tab {
+    padding: 1 2;
+}
+
+MainScreen Tab:disabled {
+    color: $text-muted 40%;
+    text-style: dim;
+}
+
+MainScreen TabPane {
+    padding: 1;
+}
+
+/* ======================================================================
+   SummaryPane (inside MainScreen Summary tab)
+   ====================================================================== */
+
+SummaryPane {
+    layout: vertical;
+}
+
+SummaryPane .bottom-bar {
+    dock: bottom;
+    height: auto;
+    padding: 1 2;
+    display: none;
+}
+
+SummaryPane .bottom-bar.visible {
+    display: block;
 }

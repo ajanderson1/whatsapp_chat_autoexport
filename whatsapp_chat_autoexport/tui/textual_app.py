@@ -32,7 +32,11 @@ if TYPE_CHECKING:
 
 
 class PipelineStage(Enum):
-    """Pipeline stages for the export workflow."""
+    """Pipeline stages for the export workflow.
+
+    Deprecated: will be removed once all references are migrated to the
+    tab-based MainScreen workflow.
+    """
     CONNECT = auto()
     DISCOVER = auto()
     SELECT = auto()
@@ -65,6 +69,10 @@ class WhatsAppExporterApp(App):
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("escape", "go_back", "Back", show=False),
         Binding("slash", "show_secret_settings", "Settings", show=False),
+        Binding("1", "switch_tab('connect')", show=False),
+        Binding("2", "switch_tab('discover-select')", show=False),
+        Binding("3", "switch_tab('export')", show=False),
+        Binding("4", "switch_tab('summary')", show=False),
     ]
 
     # Reactive state
@@ -214,8 +222,8 @@ class WhatsAppExporterApp(App):
         self.theme = saved_theme
 
         # Show initial screen
-        from .textual_screens.discovery_screen import DiscoveryScreen
-        await self.push_screen(DiscoveryScreen())
+        from .textual_screens.main_screen import MainScreen
+        await self.push_screen(MainScreen())
 
     def watch_current_stage(self, stage: PipelineStage) -> None:
         """React to stage changes."""
@@ -279,53 +287,32 @@ class WhatsAppExporterApp(App):
         self.push_screen(HelpScreen())
 
     def action_go_back(self) -> None:
-        """Go back to previous screen."""
+        """Go back -- only pops modal screens, never the main screen."""
+        from textual.screen import ModalScreen
+
         if len(self.screen_stack) > 1:
-            self.pop_screen()
+            top_screen = self.screen_stack[-1]
+            if isinstance(top_screen, ModalScreen):
+                self.pop_screen()
 
     def action_show_secret_settings(self) -> None:
         """Show the secret settings modal (triggered by '/' key)."""
         from .textual_widgets import SecretSettingsModal
         self.push_screen(SecretSettingsModal())
 
+    def action_switch_tab(self, tab_id: str) -> None:
+        """Delegate tab switching to MainScreen."""
+        from .textual_screens.main_screen import MainScreen
+        if isinstance(self.screen, MainScreen):
+            self.screen.action_switch_tab(tab_id)
+
     # =========================================================================
     # Stage transitions
     # =========================================================================
 
-    async def transition_to_selection(
-        self,
-        driver: "WhatsAppDriver",
-        chats: List[ChatMetadata],
-    ) -> None:
-        """
-        Transition from Discovery to Selection stage.
-
-        The SelectionScreen now handles the entire workflow:
-        - Selection mode: choose which chats to export
-        - Export mode: export chats with status updates
-        - Processing mode: post-export processing phases
-        - Complete mode: show summary
-
-        Args:
-            driver: Connected WhatsApp driver
-            chats: List of discovered ChatMetadata objects
-        """
-        self._whatsapp_driver = driver
-        self._discovered_chats = chats
-        self._selected_chats = [c.name for c in chats]  # Select all by default
-        self.current_stage = PipelineStage.PROCESS
-
-        from .textual_screens.selection_screen import SelectionScreen
-        await self.switch_screen(SelectionScreen())
-
-    # Note: transition_to_export and transition_to_processing have been removed.
-    # The SelectionScreen now handles all modes internally without screen transitions.
-    # This provides a unified experience where the chat list stays visible throughout
-    # the export and processing phases.
-
     def start_export_session(self, selected_chats: List[str]) -> None:
         """
-        Initialize an export session (called from SelectionScreen).
+        Initialize an export session (called from ExportPane).
 
         This sets up the state manager for tracking export progress
         without transitioning to a different screen.

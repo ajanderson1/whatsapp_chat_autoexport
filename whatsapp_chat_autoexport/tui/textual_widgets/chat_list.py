@@ -100,10 +100,17 @@ class ChatListWidget(Widget):
         # Map chat names to their widget IDs (for efficient lookup)
         self._chat_to_widget_id: Dict[str, str] = {}
 
+    @property
+    def _listview_id(self) -> str:
+        """Derive a unique ListView ID from the parent widget's ID."""
+        if self.id:
+            return f"{self.id}-listview"
+        return "chat-listview"
+
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
         yield Static(f" {self._title} ", classes="chat-list-title")
-        yield ListView(*self._create_items(), id="chat-listview")
+        yield ListView(*self._create_items(), id=self._listview_id)
         yield Static(
             " > SPACE to select | A select all | N none | [bold]ENTER = Start Export[/bold] ",
             classes="hint",
@@ -200,7 +207,7 @@ class ChatListWidget(Widget):
 
     def _get_current_chat(self) -> str | None:
         """Get the currently highlighted chat name."""
-        listview = self.query_one("#chat-listview", ListView)
+        listview = self.query_one(ListView)
         if listview.highlighted_child:
             return listview.highlighted_child.name
         return None
@@ -298,7 +305,7 @@ class ChatListWidget(Widget):
     async def _async_refresh_list(self) -> None:
         """Refresh the list view asynchronously to avoid race conditions."""
         try:
-            listview = self.query_one("#chat-listview", ListView)
+            listview = self.query_one(ListView)
             # Await removal to ensure DOM is updated before adding new items
             await listview.remove_children()
 

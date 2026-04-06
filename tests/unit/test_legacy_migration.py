@@ -38,19 +38,16 @@ class TestActiveImports:
     def test_import_textual_screens(self):
         """Active Textual screens should be importable."""
         from whatsapp_chat_autoexport.tui.textual_screens import (
-            DiscoveryScreen,
-            SelectionScreen,
+            MainScreen,
             HelpScreen,
         )
 
-        assert DiscoveryScreen is not None
-        assert SelectionScreen is not None
+        assert MainScreen is not None
         assert HelpScreen is not None
 
     def test_import_textual_widgets(self):
         """Textual widgets should be importable."""
         from whatsapp_chat_autoexport.tui.textual_widgets import (
-            PipelineHeader,
             ChatListWidget,
             SettingsPanel,
             ActivityLog,
@@ -58,7 +55,6 @@ class TestActiveImports:
             ProgressDisplay,
         )
 
-        assert PipelineHeader is not None
         assert ChatListWidget is not None
         assert SettingsPanel is not None
         assert ActivityLog is not None
