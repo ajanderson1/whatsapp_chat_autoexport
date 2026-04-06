@@ -2,7 +2,7 @@
 MainScreen with TabbedContent for the WhatsApp Exporter TUI.
 
 Replaces the previous DiscoveryScreen + SelectionScreen two-screen model
-with a single screen containing 4 tabs: Connect, Discover & Select, Export, Summary.
+with a single screen containing 4 tabs: Connect, Select, Export, Summary.
 
 Message handlers on this screen orchestrate tab transitions and auto-advance:
 - ConnectPane.Connected       -> store driver, unlock D&S, auto-advance
@@ -32,14 +32,14 @@ class MainScreen(Screen):
 
     Tabs are progressively enabled as the user advances through the workflow:
     1. Connect - always enabled
-    2. Discover & Select - enabled after device connection
+    2. Select - enabled after device connection
     3. Export - enabled after chat selection
     4. Summary - enabled after export completes
     """
 
     BINDINGS = [
         Binding("1", "switch_tab('connect')", "Connect", show=False),
-        Binding("2", "switch_tab('discover-select')", "Discover", show=False),
+        Binding("2", "switch_tab('discover-select')", "Select", show=False),
         Binding("3", "switch_tab('export')", "Export", show=False),
         Binding("4", "switch_tab('summary')", "Summary", show=False),
     ]
@@ -54,7 +54,7 @@ class MainScreen(Screen):
         with TabbedContent():
             with TabPane("1 Connect", id="connect"):
                 yield ConnectPane()
-            with TabPane("2 Discover & Select", id="discover-select"):
+            with TabPane("2 Select", id="discover-select"):
                 yield DiscoverSelectPane()
             with TabPane("3 Export", id="export"):
                 yield ExportPane()
@@ -121,10 +121,11 @@ class MainScreen(Screen):
     # ------------------------------------------------------------------
 
     def on_connect_pane_connected(self, event: ConnectPane.Connected) -> None:
-        """Handle device connection -- store driver, unlock D&S, auto-advance."""
+        """Handle device connection -- store driver, unlock Select, auto-advance."""
         self.app._whatsapp_driver = event.driver
         self._connected = True
-        # Auto-advance to D&S tab (R4)
+        # Auto-start discovery (R1) then advance to Select tab
+        self.query_one(DiscoverSelectPane).start_discovery()
         self.query_one(TabbedContent).active = "discover-select"
 
     def on_discover_select_pane_selection_changed(

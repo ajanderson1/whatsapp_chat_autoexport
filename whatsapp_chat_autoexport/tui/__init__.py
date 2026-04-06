@@ -3,7 +3,7 @@ TUI (Text User Interface) for WhatsApp Chat Auto-Export.
 
 Provides:
 - Interactive Textual-based terminal UI
-- Tab-based navigation (Connect, Discover & Select, Export, Summary)
+- Tab-based navigation (Connect, Select, Export, Summary)
 - Real-time progress updates
 """
 

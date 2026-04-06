@@ -77,3 +77,40 @@ class TestSummaryPaneStructure:
         source = inspect.getsource(SummaryPane.compose)
         # Verify the ProgressPane is created with mode="processing"
         assert 'mode="processing"' in source
+
+
+class TestSummaryPaneCancelButton:
+    """Tests for SummaryPane cancel button (R8, R9)."""
+
+    def test_cancelled_flag_defaults_false(self):
+        """_cancelled flag should default to False."""
+        pane = SummaryPane()
+        assert pane._cancelled is False
+
+    def test_cancel_button_in_compose(self):
+        """SummaryPane.compose() should include a Cancel button."""
+        import inspect
+
+        source = inspect.getsource(SummaryPane.compose)
+        assert "btn-cancel-processing" in source
+        assert 'variant="error"' in source
+
+    def test_cancel_processing_method_exists(self):
+        """SummaryPane should have a _cancel_processing method."""
+        pane = SummaryPane()
+        assert hasattr(pane, "_cancel_processing")
+        assert callable(pane._cancel_processing)
+
+    def test_cancel_processing_noop_when_no_worker(self):
+        """_cancel_processing should be a no-op when _processing_worker is None."""
+        pane = SummaryPane()
+        assert pane._processing_worker is None
+        # Should not raise
+        pane._cancel_processing()
+
+    def test_show_results_accepts_cancelled_param(self):
+        """show_results should accept a cancelled keyword argument."""
+        import inspect
+
+        sig = inspect.signature(SummaryPane.show_results)
+        assert "cancelled" in sig.parameters

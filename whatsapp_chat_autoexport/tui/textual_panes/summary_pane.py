@@ -48,6 +48,7 @@ class SummaryPane(Container):
         super().__init__(**kwargs)
         self._export_results: dict = {}
         self._processing_worker: Optional[Worker] = None
+        self._cancelled: bool = False
 
     def compose(self) -> ComposeResult:
         yield ProgressPane(
@@ -55,6 +56,7 @@ class SummaryPane(Container):
             id="summary-progress",
         )
         with Horizontal(classes="bottom-bar"):
+            yield Button("Cancel", id="btn-cancel-processing", variant="error")
             yield Button("Open Output", id="btn-open-output", variant="default")
             yield Button("Done", id="btn-done", variant="success")
 
@@ -81,18 +83,25 @@ class SummaryPane(Container):
             thread=True,
         )
 
-    def show_results(self, results: dict) -> None:
+    def show_results(self, results: dict, cancelled: bool = False) -> None:
         """
         Display final results and reveal action buttons.
 
         Args:
             results: Summary dict with keys exported, failed, transcribed,
                 output_path.
+            cancelled: If True, indicate partial completion in the UI.
         """
         progress = self.query_one("#summary-progress", ProgressPane)
+        if cancelled:
+            results = dict(results, cancelled=True)
         progress.set_complete(results)
 
-        # Reveal the bottom bar
+        # Hide cancel button, reveal the bottom bar
+        try:
+            self.query_one("#btn-cancel-processing", Button).display = False
+        except Exception:
+            pass
         bottom_bar = self.query_one(".bottom-bar")
         bottom_bar.add_class("visible")
 
@@ -289,13 +298,15 @@ class SummaryPane(Container):
         """Handle worker state changes for the processing worker."""
         worker = event.worker
 
-        if worker.state == WorkerState.CANCELLED:
+        if worker.name != "processing_worker":
             return
 
-        if (
-            worker.name == "processing_worker"
-            and worker.state in (WorkerState.SUCCESS, WorkerState.ERROR)
-        ):
+        if worker.state == WorkerState.CANCELLED:
+            self._cancelled = True
+            self._handle_processing_complete({})
+            return
+
+        if worker.state in (WorkerState.SUCCESS, WorkerState.ERROR):
             processing_results = worker.result if worker.result else {}
             self._handle_processing_complete(processing_results)
 
@@ -309,7 +320,7 @@ class SummaryPane(Container):
                 str(self.app.output_dir) if self.app.output_dir else ""
             ),
         }
-        self.show_results(summary)
+        self.show_results(summary, cancelled=self._cancelled)
 
     # ------------------------------------------------------------------
     # Actions
@@ -329,7 +340,22 @@ class SummaryPane(Container):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
-        if event.button.id == "btn-open-output":
+        if event.button.id == "btn-cancel-processing":
+            self._cancel_processing()
+        elif event.button.id == "btn-open-output":
             self.action_open_output()
         elif event.button.id == "btn-done":
             self.app.exit()
+
+    def _cancel_processing(self) -> None:
+        """Cancel the running processing pipeline."""
+        if self._processing_worker is None:
+            return
+        # Disable button to prevent double-click
+        try:
+            btn = self.query_one("#btn-cancel-processing", Button)
+            btn.label = "Cancelling..."
+            btn.disabled = True
+        except Exception:
+            pass
+        self._processing_worker.cancel()
