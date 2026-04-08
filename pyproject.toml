@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "whatsapp-chat-autoexport"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 authors = ["AJ Anderson <ajanderson1@gmail.com>"]
 readme = "README.md"
