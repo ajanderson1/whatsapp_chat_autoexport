@@ -216,7 +216,7 @@ class ProgressPane(Widget):
                 markup=True,
                 wrap=True,
                 auto_scroll=True,
-                max_lines=15,
+                max_lines=50,
                 id="activity-log",
             )
         with Vertical(classes="summary-section", id="summary-section"):

@@ -56,10 +56,15 @@ ChatListWidget .chat-unselected {
     color: $text-muted;
 }
 
-ChatListWidget .hint {
-    color: $text-muted;
-    text-style: italic;
+ChatListWidget .chat-list-actions {
+    height: auto;
     padding: 0 1;
+    align: left middle;
+}
+
+ChatListWidget .chat-list-actions Button {
+    min-width: 12;
+    margin: 0 1 0 0;
 }
 
 /* =========================================================================
@@ -355,39 +360,6 @@ ConnectPane #wireless-connect-section Input {
 DiscoverSelectPane {
     height: 1fr;
     padding: 1 2;
-}
-
-DiscoverSelectPane .discovery-title {
-    margin-top: 1;
-    padding: 0;
-}
-
-DiscoverSelectPane #discovery-count {
-    height: auto;
-    color: $text-muted;
-    margin: 0;
-}
-
-DiscoverSelectPane #discovery-inventory {
-    height: auto;
-    min-height: 3;
-    max-height: 15;
-    border: solid $secondary;
-    margin: 1 0;
-}
-
-DiscoverSelectPane #discovery-inventory ListItem {
-    padding: 0 1;
-}
-
-DiscoverSelectPane #discovery-inventory ListItem:hover {
-    background: $secondary-background;
-}
-
-DiscoverSelectPane #discovery-buttons {
-    height: auto;
-    margin-top: 1;
-    align: center middle;
 }
 
 DiscoverSelectPane .main-content {
@@ -952,11 +924,7 @@ MainScreen > ActivityLog {
     min-height: 5;
 }
 
-/* Tab styling */
-MainScreen Tab {
-    padding: 1 2;
-}
-
+/* Tab styling - disabled tabs should be dimmed */
 MainScreen Tab:disabled {
     color: $text-muted 40%;
     text-style: dim;
@@ -972,6 +940,15 @@ MainScreen TabPane {
 
 SummaryPane {
     layout: vertical;
+}
+
+SummaryPane ProgressPane {
+    height: 1fr;
+    min-height: 30;
+}
+
+SummaryPane ProgressPane RichLog {
+    min-height: 20;
 }
 
 SummaryPane .bottom-bar {
