@@ -365,6 +365,14 @@ class ExportPane(Container):
 
         self._consecutive_failures = 0
 
+        # Reset WhatsApp to the top of the chat list before exporting
+        # (discovery may have scrolled to the bottom)
+        if driver:
+            try:
+                await asyncio.to_thread(driver.restart_app_to_top)
+            except Exception:
+                pass
+
         for i, chat_name in enumerate(chats):
             # Check for pause
             while self._paused:
@@ -498,15 +506,29 @@ class ExportPane(Container):
 
         try:
             if not driver.verify_whatsapp_is_open():
+                if log_callback:
+                    log_callback("WhatsApp verification failed", "error")
                 return False
 
-            success = exporter.export_chat(
+            # Navigate to main screen and open the chat
+            driver.navigate_to_main()
+            from time import sleep
+            sleep(0.3)
+
+            if not driver.click_chat(chat_name):
+                if log_callback:
+                    log_callback(f"Could not open chat '{chat_name}'", "error")
+                return False
+
+            success = exporter.export_chat_to_google_drive(
                 chat_name,
                 include_media=include_media,
                 on_progress=progress_callback,
             )
             return success
-        except Exception:
+        except Exception as e:
+            if log_callback:
+                log_callback(f"Export error: {e}", "error")
             return False
 
     # ------------------------------------------------------------------
