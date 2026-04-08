@@ -42,6 +42,7 @@ class MainScreen(Screen):
         Binding("2", "switch_tab('discover-select')", "Select", show=False),
         Binding("3", "switch_tab('export')", "Export", show=False),
         Binding("4", "switch_tab('summary')", "Summary", show=False),
+        Binding("e", "trigger_export", "Start Export", show=False),
     ]
 
     # Reactive state that drives tab enable/disable cascade
@@ -116,16 +117,30 @@ class MainScreen(Screen):
         if not tab.disabled:
             tabbed.active = tab_id
 
+    def action_trigger_export(self) -> None:
+        """Trigger start export from keyboard shortcut."""
+        tabbed = self.query_one(TabbedContent)
+        if tabbed.active == "discover-select":
+            ds = self.query_one(DiscoverSelectPane)
+            ds._handle_start_export()
+
     # ------------------------------------------------------------------
     # Message handlers — orchestrate workflow transitions
     # ------------------------------------------------------------------
 
     def on_connect_pane_connected(self, event: ConnectPane.Connected) -> None:
         """Handle device connection -- store driver, unlock Select, auto-advance."""
+        # If a previous discovery is still running (e.g. on a stale driver
+        # after a disconnect/reconnect), cancel it before swapping the driver
+        # so the fresh discovery we are about to kick off isn't dropped by the
+        # `_scanning_chats` guard in DiscoverSelectPane.start_discovery().
+        ds = self.query_one(DiscoverSelectPane)
+        ds.stop_discovery()
+
         self.app._whatsapp_driver = event.driver
         self._connected = True
         # Auto-start discovery (R1) then advance to Select tab
-        self.query_one(DiscoverSelectPane).start_discovery()
+        ds.start_discovery()
         self.query_one(TabbedContent).active = "discover-select"
 
     def on_discover_select_pane_selection_changed(
@@ -137,9 +152,12 @@ class MainScreen(Screen):
     def on_discover_select_pane_start_export(
         self, event: DiscoverSelectPane.StartExport
     ) -> None:
-        """Handle start export -- switch to Export tab, start export."""
+        """Handle start export -- enable Export tab, switch to it, start export."""
+        self._has_selection = True
         tabbed = self.query_one(TabbedContent)
+        tabbed.enable_tab("export")
         tabbed.active = "export"
+        self._log(f"Starting export of {len(event.selected_chats)} chats")
         export_pane = self.query_one(ExportPane)
         export_pane.start_export(event.selected_chats)
 
@@ -175,3 +193,15 @@ class MainScreen(Screen):
         """Handle connection loss -- cascade disable downstream tabs."""
         self._connected = False
         self.query_one(TabbedContent).active = "connect"
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _log(self, message: str) -> None:
+        """Write to the screen-level ActivityLog."""
+        try:
+            log_widget = self.query_one(ActivityLog)
+            log_widget.log(message)
+        except Exception:
+            pass

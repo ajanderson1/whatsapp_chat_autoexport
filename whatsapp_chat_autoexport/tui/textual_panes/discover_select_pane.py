@@ -1,14 +1,10 @@
 """
 DiscoverSelectPane -- chat discovery and selection pane.
 
-Combines the discovery inventory section (from DiscoveryScreen) with the
-chat selection and settings layout (from SelectionScreen) into a single
-pane that lives inside the "Select" TabPane.
-
 Flow:
 1. MainScreen calls start_discovery() after device connection
-2. Live-stream discovered chat names into a ListView
-3. When discovery completes, populate ChatListWidget and pre-select all
+2. Live-stream discovered chat names directly into ChatListWidget
+3. When discovery completes, finalize counts and enable export
 4. User adjusts selection + settings
 5. "Start Export" emits StartExport with the selected chat list
 """
@@ -18,7 +14,7 @@ from typing import List
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Static, Button, ListView, ListItem, Label, Rule
+from textual.widgets import Static, Button
 from textual.binding import Binding
 from textual.worker import Worker, WorkerState
 
@@ -33,7 +29,7 @@ class DiscoverSelectPane(Container):
 
     Responsibilities:
     - Run chat discovery via the WhatsApp driver
-    - Live-stream discovered chats into a discovery inventory
+    - Live-stream discovered chats directly into ChatListWidget
     - Present a ChatListWidget for chat selection with a SettingsPanel
     - Emit StartExport when the user is ready to export
     """
@@ -75,7 +71,7 @@ class DiscoverSelectPane(Container):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._discovery_generation: int = 0
-        self._discovered_chats: List[str] = []
+        self._discovered_count: int = 0
         self._scanning_chats: bool = False
         self._discovery_worker: Worker | None = None
 
@@ -84,22 +80,7 @@ class DiscoverSelectPane(Container):
     # ------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        # --- Discovery section ---
-        yield Rule(line_style="heavy")
-        yield Static("[bold]DISCOVER CHATS[/bold]", classes="discovery-title")
-        yield Static("Discovered 0 chats", id="discovery-count")
-        yield ListView(id="discovery-inventory")
-        with Horizontal(id="discovery-buttons"):
-            yield Button(
-                "Refresh Chats",
-                id="btn-refresh-chats",
-                variant="default",
-                disabled=True,
-            )
-
-        yield Rule(line_style="heavy")
-
-        # --- Selection section ---
+        # --- Discovery status + selection ---
         with Horizontal(classes="main-content"):
             with Vertical(classes="left-panel"):
                 yield ChatListWidget(
@@ -124,6 +105,12 @@ class DiscoverSelectPane(Container):
                 id="selection-count",
             )
             yield Button(
+                "Refresh Chats",
+                id="btn-refresh-chats",
+                variant="default",
+                disabled=True,
+            )
+            yield Button(
                 "Start Export",
                 id="btn-start-export",
                 variant="success",
@@ -143,14 +130,17 @@ class DiscoverSelectPane(Container):
 
         self._scanning_chats = True
         self._discovery_generation += 1
-        self._discovered_chats = []
+        self._discovered_count = 0
 
-        # Reset UI
+        # Reset the ChatListWidget for a fresh scan
         try:
-            self.query_one("#discovery-count", Static).update("Discovering chats...")
-            inventory = self.query_one("#discovery-inventory", ListView)
-            inventory.clear()
+            chat_list = self.query_one("#chat-select-list", ChatListWidget)
+            chat_list.clear_chats()
             self.query_one("#btn-refresh-chats", Button).disabled = True
+            self.query_one("#btn-start-export", Button).disabled = True
+            self.query_one("#selection-count", Static).update(
+                "[dim]Discovering chats...[/dim]"
+            )
         except Exception:
             pass
 
@@ -176,62 +166,56 @@ class DiscoverSelectPane(Container):
 
         limit = getattr(self.app, "limit", None)
 
-        def on_found(name: str) -> None:
-            """Live callback -- called from driver thread."""
+        def on_found(chat: object) -> None:
+            """Live callback -- called from driver thread with ChatMetadata."""
             if self._discovery_generation != generation:
                 return  # stale callback
+            name = chat.name if hasattr(chat, "name") else str(chat)
             self.app.call_from_thread(self._add_discovered_chat, name, generation)
 
         chats = driver.collect_all_chats(
             limit=limit,
-            interactive=False,
-            on_found_callback=on_found,
+            on_chat_found=on_found,
         )
         return [c.name if hasattr(c, "name") else str(c) for c in chats]
 
     def _add_discovered_chat(self, name: str, generation: int) -> None:
-        """Add a single chat to the discovery inventory (called on main thread)."""
+        """Add a single chat directly to the ChatListWidget (called on main thread)."""
         if generation != self._discovery_generation:
             return
-        self._discovered_chats.append(name)
+
         try:
-            inventory = self.query_one("#discovery-inventory", ListView)
-            inventory.append(ListItem(Label(f"  {name}")))
-            self.query_one("#discovery-count", Static).update(
-                f"Discovered {len(self._discovered_chats)} chats"
+            chat_list = self.query_one("#chat-select-list", ChatListWidget)
+            chat_list.add_chat(name, selected=True)
+            self._discovered_count += 1
+            self.query_one("#selection-count", Static).update(
+                f"[dim]Discovering... {self._discovered_count} chats found[/dim]"
             )
         except Exception:
             pass
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         """Handle discovery worker completion."""
+        # Ignore state changes from stale workers (e.g. a previous discovery
+        # that was superseded by a reconnect). Only react to the worker we
+        # currently track as "the" discovery worker.
+        if event.worker is not self._discovery_worker:
+            return
+
         if event.state == WorkerState.SUCCESS:
             self._scanning_chats = False
-            chat_names = event.worker.result or self._discovered_chats
 
-            # Populate the selection ChatListWidget
             try:
                 chat_list = self.query_one("#chat-select-list", ChatListWidget)
-                chat_list.set_chats(chat_names, select_all=True)
-            except Exception:
-                pass
-
-            # Update counts
-            count = len(chat_names)
-            try:
-                self.query_one("#discovery-count", Static).update(
-                    f"Discovered {count} chats"
-                )
-                self.query_one("#selection-count", Static).update(
-                    f"[dim]Selected: {count} chats[/dim]"
-                )
+                count = len(chat_list.get_selected())
                 self.query_one("#btn-refresh-chats", Button).disabled = False
                 self.query_one("#btn-start-export", Button).disabled = (count == 0)
             except Exception:
                 pass
 
-            self._log(f"Discovery complete: {count} chats found")
-            self.post_message(self.SelectionChanged(count))
+            self._update_selection_count()
+            self._log(f"Discovery complete: {self._discovered_count} chats found")
+            self.post_message(self.SelectionChanged(self._discovered_count))
 
         elif event.state == WorkerState.ERROR:
             self._scanning_chats = False
@@ -259,13 +243,20 @@ class DiscoverSelectPane(Container):
         """Bubble up selection changes."""
         count = len(event.selected)
         try:
-            self.query_one("#selection-count", Static).update(
-                f"[dim]Selected: {count} chats[/dim]"
-            )
             self.query_one("#btn-start-export", Button).disabled = (count == 0)
         except Exception:
             pass
+        self._update_selection_count()
         self.post_message(self.SelectionChanged(count))
+
+    def on_chat_list_widget_refresh_requested(
+        self, event: ChatListWidget.RefreshRequested
+    ) -> None:
+        """Re-run chat discovery when the Refresh button is clicked."""
+        # Cancel any stale/in-flight discovery first so a manual refresh is
+        # never silently dropped by the `_scanning_chats` guard.
+        self.stop_discovery()
+        self.start_discovery()
 
     # ------------------------------------------------------------------
     # Settings handling
@@ -292,7 +283,7 @@ class DiscoverSelectPane(Container):
         """Handle button clicks."""
         if event.button.id == "btn-refresh-chats":
             self.start_discovery()
-        elif event.button.id == "btn-start-export":
+        elif event.button.id in ("btn-start-export", "btn-chat-start-export"):
             self._handle_start_export()
 
     def _handle_start_export(self) -> None:
@@ -322,10 +313,22 @@ class DiscoverSelectPane(Container):
     # Helpers
     # ------------------------------------------------------------------
 
+    def _update_selection_count(self) -> None:
+        """Update the selection count display with 'Selected X of Y chats'."""
+        try:
+            chat_list = self.query_one("#chat-select-list", ChatListWidget)
+            selected = len(chat_list.get_selected())
+            total = len(chat_list._chats)
+            self.query_one("#selection-count", Static).update(
+                f"[dim]Selected {selected} of {total} chats[/dim]"
+            )
+        except Exception:
+            pass
+
     def _log(self, message: str) -> None:
         """Write to the screen-level ActivityLog."""
         try:
             log_widget = self.screen.query_one(ActivityLog)
-            log_widget.write(message)
+            log_widget.log(message)
         except Exception:
             pass

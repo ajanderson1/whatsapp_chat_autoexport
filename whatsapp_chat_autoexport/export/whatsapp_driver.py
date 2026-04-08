@@ -1508,6 +1508,36 @@ class WhatsAppDriver:
             self.logger.error("Failed to restart WhatsApp - cannot collect chats")
             return []
 
+        # Wait for the chat list to actually render. verify_whatsapp_is_open()
+        # only confirms the main activity is loaded, but the RecyclerView may
+        # still be empty for a moment. Poll until we see at least one chat row
+        # or hit a timeout — otherwise the first few XML parses come back empty
+        # and trip the no_new_chats_count >= 3 early-exit.
+        chat_list_ready = False
+        chat_list_wait_start = time.time()
+        chat_list_wait_ceiling = 10.0
+        while time.time() - chat_list_wait_start < chat_list_wait_ceiling:
+            try:
+                visible = self.driver.find_elements(
+                    "id", "com.whatsapp:id/conversations_row_contact_name"
+                )
+                if len(visible) > 0:
+                    chat_list_ready = True
+                    self.logger.debug_msg(
+                        f"Chat list rendered after {time.time() - chat_list_wait_start:.1f}s "
+                        f"({len(visible)} rows visible)"
+                    )
+                    break
+            except Exception:
+                pass
+            sleep(0.25)
+
+        if not chat_list_ready:
+            self.logger.warning(
+                f"Chat list did not render within {chat_list_wait_ceiling:.0f}s — "
+                "discovery may return 0 chats"
+            )
+
         while scroll_attempts < max_scrolls:
             try:
                 scroll_attempts += 1

@@ -12,9 +12,9 @@ from enum import Enum
 from typing import List, Set, Dict, Optional
 from textual.app import ComposeResult
 from textual.widget import Widget
-from textual.widgets import Static, ListView, ListItem, Label
+from textual.widgets import Static, ListView, ListItem, Label, Button, Rule
 from textual.reactive import reactive
-from textual.containers import Vertical
+from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
 from textual.message import Message
 
@@ -107,14 +107,25 @@ class ChatListWidget(Widget):
             return f"{self.id}-listview"
         return "chat-listview"
 
+    class StartExportRequested(Message):
+        """Message sent when Start Export button is clicked."""
+        pass
+
+    class RefreshRequested(Message):
+        """Message sent when Refresh button is clicked."""
+        pass
+
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
         yield Static(f" {self._title} ", classes="chat-list-title")
         yield ListView(*self._create_items(), id=self._listview_id)
-        yield Static(
-            " > SPACE to select | A select all | N none | [bold]ENTER = Start Export[/bold] ",
-            classes="hint",
-        )
+        yield Rule(line_style="heavy")
+        with Horizontal(classes="chat-list-actions"):
+            yield Button("Refresh", id="btn-chat-refresh", variant="default")
+            yield Button("Select All", id="btn-chat-select-all", variant="default")
+            yield Button("Select None", id="btn-chat-select-none", variant="default")
+            yield Button("Invert", id="btn-chat-invert", variant="default")
+            yield Button("Start Export", id="btn-chat-start-export", variant="success")
 
     def _create_items(self) -> List[ListItem]:
         """Create list items for all chats with unique IDs."""
@@ -232,6 +243,32 @@ class ChatListWidget(Widget):
         """Post message about selection change."""
         self.post_message(self.SelectionChanged(self.selected_chats.copy()))
 
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Toggle selection when a list item is clicked."""
+        if self._locked:
+            return
+        chat = event.item.name
+        if chat:
+            if chat in self.selected_chats:
+                self.selected_chats.discard(chat)
+            else:
+                self.selected_chats.add(chat)
+            self._update_item_display(chat)
+            self._notify_selection_changed()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle action button clicks."""
+        if event.button.id == "btn-chat-refresh":
+            self.post_message(self.RefreshRequested())
+        elif event.button.id == "btn-chat-select-all":
+            self.action_select_all()
+        elif event.button.id == "btn-chat-select-none":
+            self.action_select_none()
+        elif event.button.id == "btn-chat-invert":
+            self.action_invert_selection()
+        elif event.button.id == "btn-chat-start-export":
+            self.post_message(self.StartExportRequested())
+
     # =========================================================================
     # Actions
     # =========================================================================
@@ -285,6 +322,59 @@ class ChatListWidget(Widget):
     # Public API
     # =========================================================================
 
+    def add_chat(self, name: str, selected: bool = True) -> None:
+        """
+        Add a single chat to the list (used for live-streaming discovery).
+
+        Skips duplicates. Appends a new ListItem to the ListView directly
+        without rebuilding the entire list.
+
+        Args:
+            name: Chat name to add
+            selected: Whether to pre-select the chat
+        """
+        if name in self._chat_to_widget_id:
+            return  # Already present
+
+        self._chats.append(name)
+        if selected:
+            self.selected_chats.add(name)
+
+        # Generate unique widget ID
+        seen_ids = set(self._chat_to_widget_id.values())
+        base_id = f"chat-{self._sanitize_id(name)}"
+        unique_id = base_id
+        counter = 1
+        while unique_id in seen_ids:
+            unique_id = f"{base_id}-{counter}"
+            counter += 1
+        self._chat_to_widget_id[name] = unique_id
+
+        is_selected = name in self.selected_chats
+        item = ListItem(
+            Label(self._format_chat_label(name, is_selected)),
+            id=unique_id,
+            name=name,
+        )
+
+        try:
+            listview = self.query_one(ListView)
+            listview.append(item)
+        except Exception:
+            pass
+
+    def clear_chats(self) -> None:
+        """Clear all chats from the list."""
+        self._chats = []
+        self.selected_chats = set()
+        self.chat_statuses = {}
+        self._chat_to_widget_id = {}
+        try:
+            listview = self.query_one(ListView)
+            listview.clear()
+        except Exception:
+            pass
+
     def set_chats(self, chats: List[str], select_all: bool = True) -> None:
         """
         Update the chat list.
@@ -333,15 +423,11 @@ class ChatListWidget(Widget):
             locked: If True, selection changes are disabled
         """
         self._locked = locked
-        # Update hint text
         try:
-            hint = self.query_one(".hint", Static)
-            if locked:
-                hint.update(" [dim]Selection locked during export[/dim] ")
-            else:
-                hint.update(" > SPACE to select | A select all | N none | [bold]ENTER = Start Export[/bold] ")
+            for btn_id in ("#btn-chat-refresh", "#btn-chat-select-all", "#btn-chat-select-none", "#btn-chat-invert", "#btn-chat-start-export"):
+                self.query_one(btn_id, Button).disabled = locked
         except Exception:
-            pass  # Widget may not be mounted yet
+            pass
 
     def set_display_mode(self, mode: str) -> None:
         """
