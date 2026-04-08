@@ -1,4 +1,12 @@
 # CLAUDE.md
+<!-- BEGIN:PROJECT_NOTE -->
+## Project Note
+
+This project's Obsidian project note: `/Users/ajanderson/Journal/Atlas/Whatsapp Chat AutoExport.md`
+
+Read this note at the start of every session to understand current status, decisions, and context.
+Update it when you complete significant work, make architectural decisions, or change direction.
+<!-- END:PROJECT_NOTE -->
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -766,8 +774,5 @@ poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 # Focus on specific module
 poetry run pytest --cov=whatsapp_chat_autoexport.transcription tests/unit/test_transcription.py
 ```
-
-**Project note:** `/Users/ajanderson/Journal/Atlas/Whatsapp Chat AutoExport.md`
-This is the human's project notebook. Refer to it for project context, conventions, and working notes.
 
 <!-- Run `claude-tui-settings` to reconfigure. -->

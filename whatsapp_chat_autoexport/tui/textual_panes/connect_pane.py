@@ -411,6 +411,7 @@ class ConnectPane(Container):
                 self._selected_device = devices[0]["id"]
                 connect_btn = self.query_one("#btn-connect", Button)
                 connect_btn.disabled = False
+                listview.focus()
                 activity.log("Press Enter to connect or select a different device")
         finally:
             self._updating_device_list = False
