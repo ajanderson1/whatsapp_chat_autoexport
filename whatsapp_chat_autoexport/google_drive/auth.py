@@ -298,3 +298,56 @@ class GoogleDriveAuth:
         except Exception as e:
             self.logger.error(f"Failed to revoke credentials: {e}")
             return False
+
+    def get_credentials_status(self) -> dict:
+        """Read-only status check for the Settings panel.
+
+        Returns the current auth state without triggering any OAuth flow.
+        The dict is safe to call from any thread and never opens a browser.
+
+        Returns:
+            dict with keys:
+                client_secrets_present (bool): client_secrets.json exists
+                token_present (bool): a cached token file exists
+                token_valid (bool): the cached token is usable right now
+                user_email (Optional[str]): email from the token's id_token
+                expires_at (Optional[str]): ISO-formatted expiry, or None
+        """
+        status = {
+            "client_secrets_present": self.has_client_secrets(),
+            "token_present": self.token_file.exists(),
+            "token_valid": False,
+            "user_email": None,
+            "expires_at": None,
+        }
+
+        if not status["token_present"]:
+            return status
+
+        try:
+            creds = self.load_token()
+            if creds is None:
+                return status
+
+            # Check validity (may be expired but refreshable)
+            status["token_valid"] = bool(creds.valid)
+
+            # Try to extract expiry
+            if hasattr(creds, "expiry") and creds.expiry:
+                status["expires_at"] = creds.expiry.isoformat()
+
+            # Try to extract email from the id_token or token info
+            if hasattr(creds, "id_token") and creds.id_token:
+                # id_token is a dict when present
+                if isinstance(creds.id_token, dict):
+                    status["user_email"] = creds.id_token.get("email")
+
+            # Fallback: try the token_uri response if no id_token
+            if not status["user_email"] and hasattr(creds, "_id_token") and creds._id_token:
+                if isinstance(creds._id_token, dict):
+                    status["user_email"] = creds._id_token.get("email")
+
+        except Exception:
+            pass
+
+        return status

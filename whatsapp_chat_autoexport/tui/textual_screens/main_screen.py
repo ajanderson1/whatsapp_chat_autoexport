@@ -139,6 +139,23 @@ class MainScreen(Screen):
 
         self.app._whatsapp_driver = event.driver
         self._connected = True
+
+        # Read WhatsApp version from device (non-blocking, best-effort)
+        if event.driver is not None:
+            try:
+                self.app._whatsapp_version = event.driver.get_whatsapp_version()
+                if self.app._whatsapp_version:
+                    from ...constants import TESTED_WHATSAPP_VERSION
+                    if self.app._whatsapp_version != TESTED_WHATSAPP_VERSION:
+                        self._log(
+                            f"WhatsApp version {self.app._whatsapp_version} "
+                            f"(tested with {TESTED_WHATSAPP_VERSION}) — things may break"
+                        )
+                    else:
+                        self._log(f"WhatsApp version {self.app._whatsapp_version}")
+            except Exception:
+                pass
+
         # Auto-start discovery (R1) then advance to Select tab
         ds.start_discovery()
         self.query_one(TabbedContent).active = "discover-select"

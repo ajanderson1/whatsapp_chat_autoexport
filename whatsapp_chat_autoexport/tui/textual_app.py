@@ -137,6 +137,16 @@ class WhatsAppExporterApp(App):
         # Selection state (locked after export starts)
         self._selection_locked = False
 
+        # WhatsApp version (set on device connect)
+        self._whatsapp_version: Optional[str] = None
+
+        # Google Drive auth state (set when user authenticates via Settings)
+        self._drive_credentials = None  # google.oauth2.credentials.Credentials
+        self._drive_user_email: Optional[str] = None
+
+        # Per-session confirmation flag for delete_from_drive
+        self._delete_from_drive_confirmed: bool = False
+
         # Activity log
         self._activity_log: List[str] = []
 
@@ -359,6 +369,26 @@ class WhatsAppExporterApp(App):
     def selection_locked(self) -> bool:
         """Check if selection is locked."""
         return self._selection_locked
+
+    @property
+    def whatsapp_version(self) -> Optional[str]:
+        """Get the detected WhatsApp version on the connected device."""
+        return self._whatsapp_version
+
+    @property
+    def drive_credentials(self):
+        """Get the current Google Drive OAuth credentials (or None)."""
+        return self._drive_credentials
+
+    @property
+    def drive_user_email(self) -> Optional[str]:
+        """Get the Google account email used for Drive auth (or None)."""
+        return self._drive_user_email
+
+    @property
+    def delete_from_drive_confirmed(self) -> bool:
+        """Whether the user has confirmed delete_from_drive this session."""
+        return self._delete_from_drive_confirmed
 
     @property
     def activity_log(self) -> List[str]:

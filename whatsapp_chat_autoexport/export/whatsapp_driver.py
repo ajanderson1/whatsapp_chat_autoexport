@@ -1418,6 +1418,33 @@ class WhatsAppDriver:
             self.logger.error(f"Failed to restart WhatsApp: {e}")
             return False
 
+    def get_whatsapp_version(self) -> Optional[str]:
+        """Read the installed WhatsApp version from the device via ADB.
+
+        Returns:
+            Version string (e.g. "2.26.13.73") or None if unreadable.
+        """
+        try:
+            adb_prefix = ["adb"]
+            if self.device_id:
+                adb_prefix.extend(["-s", self.device_id])
+            cmd = adb_prefix + ["shell", "dumpsys", "package", "com.whatsapp"]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10, close_fds=True
+            )
+            if result.returncode == 0 and result.stdout:
+                import re
+                match = re.search(r"versionName=([\d.]+)", result.stdout)
+                if match:
+                    version = match.group(1)
+                    self.logger.debug_msg(f"WhatsApp version: {version}")
+                    return version
+            self.logger.debug_msg("Could not read WhatsApp version")
+            return None
+        except Exception as e:
+            self.logger.debug_msg(f"WhatsApp version check failed: {e}")
+            return None
+
     def check_status(self):
         """Quick status check - shows package, activity, and visible chat count."""
         try:
