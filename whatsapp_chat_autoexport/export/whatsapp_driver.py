@@ -1472,197 +1472,485 @@ class WhatsAppDriver:
             self.logger.error(f"Error listing chats: {e}")
             return []
 
+    def _query_whatsapp_contacts(self) -> set[str]:
+        """Query Android ContactsContract for all WhatsApp contacts via adb.
+
+        Returns a set of display names for contacts that have a WhatsApp
+        profile registered in the system contacts database. This is
+        deterministic and instant (no UI scrolling required).
+
+        Only works for 1:1 contacts — group chats are not in ContactsContract.
+        """
+        adb_cmd = ["adb"]
+        if self.device_id:
+            adb_cmd.extend(["-s", self.device_id])
+
+        # The --where clause contains single quotes that must survive the
+        # adb shell layer. Passing the entire content-query as a single
+        # shell string argument preserves the quoting correctly.
+        adb_cmd.extend([
+            "shell",
+            "content query "
+            "--uri content://com.android.contacts/data "
+            "--projection display_name "
+            "--where \"mimetype='vnd.android.cursor.item/vnd.com.whatsapp.profile'\"",
+        ])
+
+        try:
+            result = subprocess.run(
+                adb_cmd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                close_fds=True,
+            )
+            if result.returncode != 0 or (
+                not result.stdout.strip() and result.stderr.strip()
+            ):
+                self.logger.debug_msg(
+                    f"ContactsContract query failed: {result.stderr.strip()}"
+                )
+                return set()
+
+            contacts: set[str] = set()
+            for line in result.stdout.strip().splitlines():
+                # Lines look like: "Row: 0 display_name=John Doe"
+                if "display_name=" in line:
+                    name = line.split("display_name=", 1)[1].strip()
+                    if name:
+                        contacts.add(name)
+
+            self.logger.debug_msg(
+                f"ContactsContract: {len(contacts)} WhatsApp contacts"
+            )
+            return contacts
+        except subprocess.TimeoutExpired:
+            self.logger.debug_msg("ContactsContract query timed out")
+            return set()
+        except Exception as e:
+            self.logger.debug_msg(f"ContactsContract query error: {e}")
+            return set()
+
+    def _search_for_chat(self, contact_name: str) -> Optional[str]:
+        """Search WhatsApp for a contact by name and check if a conversation exists.
+
+        Taps the search bar, types the contact name, checks if a conversation
+        row appears in the results, then dismisses the search.
+
+        Returns the matched chat name if found, None otherwise.
+        """
+        try:
+            # Tap the search bar (embedded in the chat list header)
+            search_bar = self.driver.find_element(
+                "id", "com.whatsapp:id/my_search_bar"
+            )
+            search_bar.click()
+            sleep(0.5)
+
+            # Type the contact name into the search input
+            search_input = self.driver.find_element(
+                "id", "com.whatsapp:id/search_input"
+            )
+            search_input.clear()
+            search_input.send_keys(contact_name)
+            sleep(0.8)  # Wait for results to populate
+
+            # Check if any conversation row appears in the search results.
+            # Search results show conversations_row_contact_name for existing
+            # chats. We look for an exact or close match.
+            xml_source = self.driver.page_source
+            if not xml_source:
+                return None
+
+            root = ET.fromstring(xml_source)
+            for elem in root.iter():
+                rid = elem.get("resource-id") or ""
+                if rid == "com.whatsapp:id/conversations_row_contact_name":
+                    result_name = (elem.get("text") or "").strip()
+                    if result_name and result_name.lower() == contact_name.lower():
+                        return result_name
+
+            return None
+        except Exception as e:
+            self.logger.debug_msg(f"Search for '{contact_name}' failed: {e}")
+            return None
+        finally:
+            # Dismiss the search — press back until search bar reappears
+            for _ in range(3):
+                try:
+                    self.driver.back()
+                    sleep(0.3)
+                    self.driver.find_element(
+                        "id", "com.whatsapp:id/my_search_bar"
+                    )
+                    break  # Back on main chat list
+                except Exception:
+                    continue
+
+    def _reconcile_contacts(
+        self,
+        seen_names: set[str],
+        results: list,
+        on_chat_found: Optional[Callable] = None,
+    ) -> int:
+        """Fill gaps in scroll-based discovery using ContactsContract.
+
+        Queries Android's contact database for all WhatsApp contacts, then
+        searches WhatsApp for any contact not already found during scrolling.
+        Only catches missed 1:1 chats (groups aren't in ContactsContract).
+
+        Returns the number of newly discovered chats.
+        """
+        contacts = self._query_whatsapp_contacts()
+        if not contacts:
+            self.logger.debug_msg("ContactsContract reconciliation: no contacts to check")
+            return 0
+
+        # Find contacts that weren't discovered during scrolling.
+        # Use case-insensitive comparison since ContactsContract names may
+        # differ slightly in casing from WhatsApp's display.
+        seen_lower = {n.lower() for n in seen_names}
+        missing = [c for c in sorted(contacts) if c.lower() not in seen_lower]
+
+        if not missing:
+            self.logger.info(
+                f"ContactsContract reconciliation: all {len(contacts)} contacts "
+                f"already found — no gaps"
+            )
+            return 0
+
+        self.logger.info(
+            f"ContactsContract reconciliation: {len(missing)} of "
+            f"{len(contacts)} contacts not found during scrolling — searching..."
+        )
+
+        # Restart app to ensure we're on the main chat list for searching
+        self.restart_app_to_top()
+        sleep(0.5)
+
+        found_count = 0
+        searched = 0
+        for contact_name in missing:
+            searched += 1
+            if searched % 25 == 0:
+                self.logger.debug_msg(
+                    f"Reconciliation progress: {searched}/{len(missing)} "
+                    f"searched, {found_count} found"
+                )
+
+            matched_name = self._search_for_chat(contact_name)
+            if matched_name and matched_name.lower() not in seen_lower:
+                metadata = ChatMetadata(name=matched_name)
+                results.append(metadata)
+                seen_names.add(matched_name)
+                seen_lower.add(matched_name.lower())
+                found_count += 1
+
+                if on_chat_found is not None:
+                    try:
+                        on_chat_found(metadata)
+                    except Exception:
+                        pass
+
+        self.logger.info(
+            f"ContactsContract reconciliation complete: found {found_count} "
+            f"additional chats from {len(missing)} candidates"
+        )
+        return found_count
+
     def collect_all_chats(
         self,
         limit: Optional[int] = None,
         sort_alphabetical: bool = False,
         on_chat_found: Optional[Callable[[ChatMetadata], None]] = None,
+        passes: int = 2,
+        reconcile_contacts: bool = True,
     ) -> List[ChatMetadata]:
-        """Scroll through entire chat list to collect all chats via XML page source.
+        """Scroll through the chat list to collect all chats via XML page source.
 
-        Parses the Appium page_source XML to extract chat metadata from each
-        visible conversation row.  Results are returned as a flat list that may
-        contain duplicate names (one entry per screen appearance).  A ``seen_names``
-        set is used only for end-of-list detection and for firing ``on_chat_found``
-        for genuinely new chats.
+        Performs ``passes`` top-to-bottom scroll passes, unioning the results.
+        WhatsApp reorders the chat list mid-scroll when new messages arrive, so
+        a single pass misses ~20% of chats. Two passes captures ~95%.
+
+        When ``reconcile_contacts`` is True (default), a final phase queries
+        Android's ContactsContract for all WhatsApp contacts and searches for
+        any that were missed during scrolling. This only catches 1:1 chats
+        (group chats are not in the contacts database).
 
         Args:
             limit: Optional limit on number of *unique* chats to collect.
             sort_alphabetical: If True, sort results alphabetically by name.
-            on_chat_found: Optional callback fired once per unique chat name.
+            on_chat_found: Optional callback fired once per unique chat name
+                (across all passes — only on first discovery of a chat).
+            passes: Number of full top-to-bottom scroll passes (default 2).
+            reconcile_contacts: If True (default), run a ContactsContract
+                reconciliation pass after scrolling to find missed 1:1 chats.
         """
         if limit:
-            self.logger.info(f"Collecting chats (limited to {limit})...")
+            self.logger.info(f"Collecting chats (limited to {limit}, passes={passes})...")
         else:
-            self.logger.info("Collecting all chats by scrolling...")
+            self.logger.info(f"Collecting all chats by scrolling (passes={passes})...")
 
         results: List[ChatMetadata] = []
         seen_names: set[str] = set()
-        no_new_chats_count = 0
-        scroll_attempts = 0
-        max_scrolls = 50  # Safety limit
+        max_scrolls = 100  # Safety limit (raised from 50 to handle 400+ chat lists)
+        no_new_chats_threshold = 6  # Raised from 3 to reduce premature termination on
+        # mid-list scrolls where every visible row happens to already be in seen_names
+        # (e.g. after a tiny swipe or a re-layout that shifts rows by less than one row).
 
-        # Restart app to ensure we're at the top of the chat list
-        # (faster and more reliable than scrolling 20-30 times)
-        if not self.restart_app_to_top():
-            self.logger.error("Failed to restart WhatsApp - cannot collect chats")
-            return []
-
-        # Wait for the chat list to actually render. verify_whatsapp_is_open()
-        # only confirms the main activity is loaded, but the RecyclerView may
-        # still be empty for a moment. Poll until we see at least one chat row
-        # or hit a timeout — otherwise the first few XML parses come back empty
-        # and trip the no_new_chats_count >= 3 early-exit.
-        chat_list_ready = False
-        chat_list_wait_start = time.time()
-        chat_list_wait_ceiling = 10.0
-        while time.time() - chat_list_wait_start < chat_list_wait_ceiling:
-            try:
-                visible = self.driver.find_elements(
-                    "id", "com.whatsapp:id/conversations_row_contact_name"
-                )
-                if len(visible) > 0:
-                    chat_list_ready = True
-                    self.logger.debug_msg(
-                        f"Chat list rendered after {time.time() - chat_list_wait_start:.1f}s "
-                        f"({len(visible)} rows visible)"
-                    )
-                    break
-            except Exception:
-                pass
-            sleep(0.25)
-
-        if not chat_list_ready:
-            self.logger.warning(
-                f"Chat list did not render within {chat_list_wait_ceiling:.0f}s — "
-                "discovery may return 0 chats"
+        # Multi-pass loop. Each pass: restart app → wait for list → scroll to end.
+        # seen_names and results persist across passes, so later passes only add
+        # genuinely new chats (those missed by earlier passes due to WhatsApp
+        # reordering the list mid-scroll).
+        for pass_idx in range(passes):
+            self.logger.info(
+                f"Discovery: starting pass {pass_idx + 1}/{passes} "
+                f"({len(seen_names)} chats so far)"
             )
 
-        while scroll_attempts < max_scrolls:
-            try:
-                scroll_attempts += 1
+            # Restart app to ensure we're at the top of the chat list
+            # (faster and more reliable than scrolling 20-30 times)
+            if not self.restart_app_to_top():
+                self.logger.error(
+                    f"Failed to restart WhatsApp at start of pass {pass_idx + 1} "
+                    f"- aborting remaining passes"
+                )
+                break
 
-                # --- Parse XML page source ---
+            # Wait for the chat list to actually render. verify_whatsapp_is_open()
+            # only confirms the main activity is loaded, but the RecyclerView may
+            # still be empty for a moment. Poll until we see at least one chat row
+            # or hit a timeout — otherwise the first few XML parses come back empty
+            # and trip the no_new_chats early-exit.
+            chat_list_ready = False
+            chat_list_wait_start = time.time()
+            chat_list_wait_ceiling = 10.0
+            while time.time() - chat_list_wait_start < chat_list_wait_ceiling:
                 try:
-                    xml_source = self.driver.page_source
-                    if not xml_source:
+                    visible = self.driver.find_elements(
+                        "id", "com.whatsapp:id/conversations_row_contact_name"
+                    )
+                    if len(visible) > 0:
+                        chat_list_ready = True
+                        self.logger.debug_msg(
+                            f"Chat list rendered after {time.time() - chat_list_wait_start:.1f}s "
+                            f"({len(visible)} rows visible)"
+                        )
+                        break
+                except Exception:
+                    pass
+                sleep(0.25)
+
+            if not chat_list_ready:
+                self.logger.warning(
+                    f"Chat list did not render within {chat_list_wait_ceiling:.0f}s — "
+                    f"pass {pass_idx + 1} may return 0 new chats"
+                )
+
+            # Per-pass scroll state
+            no_new_chats_count = 0
+            scroll_attempts = 0
+            pass_start_count = len(seen_names)
+
+            while scroll_attempts < max_scrolls:
+                try:
+                    scroll_attempts += 1
+
+                    # --- Parse XML page source ---
+                    try:
+                        xml_source = self.driver.page_source
+                        if not xml_source:
+                            continue
+                        root = ET.fromstring(xml_source)
+                    except ET.ParseError:
+                        self.logger.debug_msg(f"Scroll {scroll_attempts}: XML ParseError, skipping")
                         continue
-                    root = ET.fromstring(xml_source)
-                except ET.ParseError:
-                    self.logger.debug_msg(f"Scroll {scroll_attempts}: XML ParseError, skipping")
-                    continue
-                except Exception as e:
-                    self.logger.debug_msg(f"Scroll {scroll_attempts}: page_source error: {e}")
-                    continue
-
-                # Build parent map for walking up from elements to row containers
-                parent_map = {child: parent for parent in root.iter() for child in parent}
-
-                # Find all chat name elements and extract metadata
-                new_this_screen = 0
-                for name_elem in root.iter():
-                    if name_elem.get("resource-id") != "com.whatsapp:id/conversations_row_contact_name":
+                    except Exception as e:
+                        self.logger.debug_msg(f"Scroll {scroll_attempts}: page_source error: {e}")
                         continue
 
-                    chat_name = (name_elem.get("text") or "").strip()
-                    if not chat_name:
-                        continue
+                    # Build parent map for walking up from elements to row containers
+                    parent_map = {child: parent for parent in root.iter() for child in parent}
 
-                    # Walk up to contact_row_container
-                    container = name_elem
-                    for _ in range(10):
-                        container = parent_map.get(container)
-                        if container is None:
-                            break
-                        if "contact_row_container" in (container.get("resource-id") or ""):
-                            break
+                    # Dedup by the displayed text of the row's name element.
+                    # Using photo_description / content-desc is polluted by
+                    # nested avatars and accessibility state suffixes.
+                    new_this_screen = 0
+                    for name_elem in root.iter():
+                        if name_elem.get("resource-id") != "com.whatsapp:id/conversations_row_contact_name":
+                            continue
 
-                    # Extract sibling metadata from the row container
-                    metadata = ChatMetadata(name=chat_name)
-                    if container is not None:
-                        for child in container.iter():
-                            rid = child.get("resource-id") or ""
-                            if rid == "com.whatsapp:id/conversations_row_date":
-                                metadata.timestamp = child.get("text")
-                            elif rid == "com.whatsapp:id/single_msg_tv":
-                                metadata.message_preview = child.get("text")
-                            elif rid == "com.whatsapp:id/mute_indicator":
-                                metadata.is_muted = True
-                            elif rid == "com.whatsapp:id/parent_group_profile_photo":
-                                metadata.is_group = True
-                            elif rid == "com.whatsapp:id/msg_from_tv":
-                                metadata.group_sender = child.get("text")
-                            elif rid == "com.whatsapp:id/message_type_indicator":
-                                metadata.has_type_indicator = True
-                            elif rid == "com.whatsapp:id/contact_photo":
-                                metadata.photo_description = child.get("content-desc")
+                        chat_name = (name_elem.get("text") or "").strip()
+                        if not chat_name:
+                            continue
 
-                    results.append(metadata)
+                        # Filter out status-row entries mixed into the list.
+                        if chat_name.endswith(" new update") or chat_name.endswith(" new updates"):
+                            continue
+                        if "'s status." in chat_name:
+                            continue
 
-                    # Fire callback for genuinely new chats
-                    if chat_name not in seen_names:
+                        # Walk up to contact_row_container
+                        container = name_elem
+                        for _ in range(10):
+                            container = parent_map.get(container)
+                            if container is None:
+                                break
+                            if "contact_row_container" in (container.get("resource-id") or ""):
+                                break
+
+                        # Extract sibling metadata from the row container.
+                        # conversations_row_header content-desc carries the full
+                        # untruncated chat name (e.g. "Helicopter PILOTS &
+                        # operators  Worldwide community") while the displayed
+                        # text in conversations_row_contact_name is visually
+                        # truncated with "…". We prefer the header desc for the
+                        # canonical name when available.
+                        header_desc = ""
+                        metadata = ChatMetadata(name=chat_name)
+                        if container is not None:
+                            for child in container.iter():
+                                rid = child.get("resource-id") or ""
+                                if rid == "com.whatsapp:id/conversations_row_header":
+                                    header_desc = (child.get("content-desc") or "").strip()
+                                elif rid == "com.whatsapp:id/conversations_row_date":
+                                    metadata.timestamp = child.get("text")
+                                elif rid == "com.whatsapp:id/single_msg_tv":
+                                    metadata.message_preview = child.get("text")
+                                elif rid == "com.whatsapp:id/mute_indicator":
+                                    metadata.is_muted = True
+                                elif rid == "com.whatsapp:id/parent_group_profile_photo":
+                                    metadata.is_group = True
+                                elif rid == "com.whatsapp:id/msg_from_tv":
+                                    metadata.group_sender = child.get("text")
+                                elif rid == "com.whatsapp:id/message_type_indicator":
+                                    metadata.has_type_indicator = True
+                                elif rid == "com.whatsapp:id/contact_photo":
+                                    metadata.photo_description = child.get("content-desc")
+
+                        # Canonical name: prefer the untruncated header desc,
+                        # strip any trailing accessibility suffixes like
+                        # ", Community". Fall back to displayed text with
+                        # trailing ellipsis stripped.
+                        canonical_key = header_desc or chat_name
+                        # Strip known accessibility suffixes
+                        for suffix in [", Community"]:
+                            if canonical_key.endswith(suffix):
+                                canonical_key = canonical_key[: -len(suffix)]
+                        canonical_key = canonical_key.rstrip("…").strip()
+                        if not canonical_key:
+                            canonical_key = chat_name
+
+                        if canonical_key in seen_names:
+                            continue
+
+                        metadata.name = canonical_key
+                        results.append(metadata)
+                        seen_names.add(canonical_key)
                         new_this_screen += 1
-                        seen_names.add(chat_name)
                         if on_chat_found is not None:
                             try:
                                 on_chat_found(metadata)
                             except Exception:
                                 pass  # Never let callback errors crash collection
 
-                # End-of-list detection
-                if new_this_screen > 0:
-                    self.logger.debug_msg(
-                        f"Scroll {scroll_attempts}: Found {new_this_screen} new chats "
-                        f"(Total unique: {len(seen_names)})"
-                    )
-                    no_new_chats_count = 0
-                else:
-                    no_new_chats_count += 1
-                    if no_new_chats_count >= 3:
+                    # End-of-list detection: require N consecutive scrolls with
+                    # zero new chats before terminating.
+                    if new_this_screen > 0:
                         self.logger.debug_msg(
-                            f"No new chats found after {no_new_chats_count} scrolls. Reached end."
+                            f"Pass {pass_idx + 1} scroll {scroll_attempts}: "
+                            f"found {new_this_screen} new (total unique: {len(seen_names)})"
                         )
-                        break
-
-                # Check if we've reached the limit (based on unique names)
-                if limit and len(seen_names) >= limit:
-                    self.logger.debug_msg(f"Reached limit of {limit} chats. Stopping collection.")
-                    break
-
-                # Scroll down using proportional coordinates
-                window_size = self.driver.get_window_size()
-                center_x = window_size["width"] // 2
-                start_y = int(window_size["height"] * 0.75)
-                end_y = int(window_size["height"] * 0.25)
-                self.driver.swipe(center_x, start_y, center_x, end_y, duration=300)
-
-                # Smart wait: poll until element count stabilizes or ceiling reached
-                timeout_config = get_timeout_config()
-                settle_ceiling = timeout_config.scroll_settle_time
-                poll_interval = 0.05
-                stable_count = 0
-                last_count = None
-                settle_start = time.time()
-                while time.time() - settle_start < settle_ceiling:
-                    try:
-                        elements = self.driver.find_elements(
-                            "id", "com.whatsapp:id/conversations_row_contact_name"
-                        )
-                        current_el_count = len(elements)
-                    except Exception:
-                        break
-                    if current_el_count == last_count:
-                        stable_count += 1
-                        if stable_count >= 2:
-                            break
+                        no_new_chats_count = 0
                     else:
-                        stable_count = 0
-                        last_count = current_el_count
-                    sleep(poll_interval)
+                        no_new_chats_count += 1
+                        self.logger.debug_msg(
+                            f"Pass {pass_idx + 1} scroll {scroll_attempts}: 0 new "
+                            f"(no_new={no_new_chats_count}/{no_new_chats_threshold})"
+                        )
 
-            except Exception as e:
-                self.logger.error(f"Error during scroll {scroll_attempts}: {e}")
+                    if no_new_chats_count >= no_new_chats_threshold:
+                        self.logger.info(
+                            f"Discovery pass {pass_idx + 1}: reached end-of-list "
+                            f"after {scroll_attempts} scrolls ({len(seen_names)} unique chats)"
+                        )
+                        break
+
+                    # Check if we've reached the limit
+                    if limit and len(seen_names) >= limit:
+                        self.logger.info(
+                            f"Discovery: hit user limit of {limit} chats after "
+                            f"{scroll_attempts} scrolls. Stopping collection."
+                        )
+                        break
+
+                    # Scroll down using proportional coordinates. Keeping the
+                    # swipe at 300ms (original) and distance at 50% of screen
+                    # height: faster swipes or longer distances cause the
+                    # RecyclerView to fling past rows we'd otherwise capture,
+                    # which masquerades as an "earlier end-of-list" and cuts
+                    # the captured set roughly in half. Settle window is
+                    # trimmed from 0.5s to 0.30s for a modest speedup.
+                    window_size = self.driver.get_window_size()
+                    center_x = window_size["width"] // 2
+                    start_y = int(window_size["height"] * 0.75)
+                    end_y = int(window_size["height"] * 0.25)
+                    self.driver.swipe(center_x, start_y, center_x, end_y, duration=300)
+
+                    # Smart wait: poll until element count stabilizes.
+                    settle_ceiling = 0.30
+                    poll_interval = 0.03
+                    stable_count = 0
+                    last_count = None
+                    settle_start = time.time()
+                    while time.time() - settle_start < settle_ceiling:
+                        try:
+                            elements = self.driver.find_elements(
+                                "id", "com.whatsapp:id/conversations_row_contact_name"
+                            )
+                            current_el_count = len(elements)
+                        except Exception:
+                            break
+                        if current_el_count == last_count:
+                            stable_count += 1
+                            if stable_count >= 2:
+                                break
+                        else:
+                            stable_count = 0
+                            last_count = current_el_count
+                        sleep(poll_interval)
+
+                except Exception as e:
+                    self.logger.error(f"Error during scroll {scroll_attempts}: {e}")
+                    break
+            else:
+                # Inner while exited via condition without break — hit safety ceiling.
+                self.logger.warning(
+                    f"Discovery pass {pass_idx + 1}: hit max_scrolls ceiling "
+                    f"({max_scrolls}) with {len(seen_names)} unique chats — "
+                    f"pass may be incomplete."
+                )
+
+            # End of this pass
+            pass_new_count = len(seen_names) - pass_start_count
+            self.logger.info(
+                f"Discovery: pass {pass_idx + 1}/{passes} complete — "
+                f"added {pass_new_count} new chats ({len(seen_names)} total)"
+            )
+
+            # Early-out: if a pass after the first adds zero new chats, further
+            # passes are very unlikely to help. Save time.
+            if pass_idx > 0 and pass_new_count == 0:
+                self.logger.info(
+                    f"Discovery: pass {pass_idx + 1} added no new chats — "
+                    f"stopping early (convergence reached)"
+                )
                 break
+
+        # ContactsContract reconciliation: search for 1:1 chats missed during
+        # scrolling by cross-referencing against Android's contact database.
+        if reconcile_contacts and not (limit and len(seen_names) >= limit):
+            self._reconcile_contacts(seen_names, results, on_chat_found)
 
         # Restart app to return to top of chat list for export
         if not self.restart_app_to_top():
