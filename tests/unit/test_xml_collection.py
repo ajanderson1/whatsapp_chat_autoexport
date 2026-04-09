@@ -484,3 +484,265 @@ class TestRestartCalls:
         assert result == []
         # Pass 1 restart fails (1 call) → break → final restart (1 call) = 2
         assert driver.restart_app_to_top.call_count == 2
+
+
+# ===========================================================================
+# ContactsContract reconciliation tests
+# ===========================================================================
+
+
+class TestQueryWhatsAppContacts:
+    """Tests for _query_whatsapp_contacts() method."""
+
+    def test_parses_adb_output(self):
+        """Parses 'Row: N display_name=...' lines from adb output."""
+        driver = _make_driver()
+        adb_output = (
+            "Row: 0 display_name=Alice\n"
+            "Row: 1 display_name=Bob\n"
+            "Row: 2 display_name=Charlie\n"
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=adb_output, stderr=""
+            )
+            result = driver._query_whatsapp_contacts()
+
+        assert result == {"Alice", "Bob", "Charlie"}
+        # Verify device_id is passed via -s flag
+        call_args = mock_run.call_args[0][0]
+        assert "-s" in call_args
+        assert "emulator-5554" in call_args
+
+    def test_returns_empty_on_failure(self):
+        """Returns empty set when adb command fails."""
+        driver = _make_driver()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="error"
+            )
+            result = driver._query_whatsapp_contacts()
+
+        assert result == set()
+
+    def test_returns_empty_on_timeout(self):
+        """Returns empty set when adb command times out."""
+        driver = _make_driver()
+        with patch("subprocess.run") as mock_run:
+            import subprocess
+            mock_run.side_effect = subprocess.TimeoutExpired("adb", 15)
+            result = driver._query_whatsapp_contacts()
+
+        assert result == set()
+
+    def test_skips_empty_names(self):
+        """Filters out rows with empty display_name."""
+        driver = _make_driver()
+        adb_output = (
+            "Row: 0 display_name=Alice\n"
+            "Row: 1 display_name=\n"
+            "Row: 2 display_name=Bob\n"
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=adb_output, stderr=""
+            )
+            result = driver._query_whatsapp_contacts()
+
+        assert result == {"Alice", "Bob"}
+
+    def test_no_device_id_omits_s_flag(self):
+        """When device_id is None, -s flag is not included."""
+        driver = _make_driver()
+        driver.device_id = None
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Row: 0 display_name=Alice\n", stderr=""
+            )
+            driver._query_whatsapp_contacts()
+
+        call_args = mock_run.call_args[0][0]
+        assert "-s" not in call_args
+
+
+class TestSearchForChat:
+    """Tests for _search_for_chat() method."""
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
+    def test_finds_exact_match(self, _mock_sleep):
+        """Returns matched name when search results contain an exact match."""
+        driver = _make_driver()
+        mock_search_bar = MagicMock()
+        mock_search_input = MagicMock()
+
+        driver.driver.find_element = MagicMock(
+            side_effect=[mock_search_bar, mock_search_input, MagicMock()]
+        )
+
+        # Build search result XML with a matching chat
+        search_xml = _build_xml(_chat_row("Alice"))
+        type(driver.driver).page_source = property(lambda self: search_xml)
+
+        result = driver._search_for_chat("Alice")
+        assert result == "Alice"
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
+    def test_returns_none_when_no_match(self, _mock_sleep):
+        """Returns None when search results don't contain the contact."""
+        driver = _make_driver()
+        mock_search_bar = MagicMock()
+        mock_search_input = MagicMock()
+
+        driver.driver.find_element = MagicMock(
+            side_effect=[mock_search_bar, mock_search_input, MagicMock()]
+        )
+
+        # Search results show Bob but we searched for Alice
+        search_xml = _build_xml(_chat_row("Bob"))
+        type(driver.driver).page_source = property(lambda self: search_xml)
+
+        result = driver._search_for_chat("Alice")
+        assert result is None
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
+    def test_case_insensitive_match(self, _mock_sleep):
+        """Matches contact names case-insensitively."""
+        driver = _make_driver()
+        mock_search_bar = MagicMock()
+        mock_search_input = MagicMock()
+
+        driver.driver.find_element = MagicMock(
+            side_effect=[mock_search_bar, mock_search_input, MagicMock()]
+        )
+
+        search_xml = _build_xml(_chat_row("alice"))
+        type(driver.driver).page_source = property(lambda self: search_xml)
+
+        result = driver._search_for_chat("Alice")
+        assert result == "alice"
+
+
+class TestReconcileContacts:
+    """Tests for _reconcile_contacts() method."""
+
+    def test_finds_missing_contacts(self):
+        """Discovers chats for contacts not found during scrolling."""
+        driver = _make_driver()
+        driver._query_whatsapp_contacts = MagicMock(
+            return_value={"Alice", "Bob", "Charlie"}
+        )
+        # Alice already found, Bob and Charlie missing
+        # But only Bob has an active chat
+        driver._search_for_chat = MagicMock(
+            side_effect=lambda name: name if name == "Bob" else None
+        )
+        driver.restart_app_to_top = MagicMock(return_value=True)
+
+        seen = {"Alice"}
+        results = []
+        found = driver._reconcile_contacts(seen, results)
+
+        assert found == 1
+        assert len(results) == 1
+        assert results[0].name == "Bob"
+        assert "Bob" in seen
+
+    def test_no_gaps_skips_search(self):
+        """When all contacts are already found, no searches are performed."""
+        driver = _make_driver()
+        driver._query_whatsapp_contacts = MagicMock(
+            return_value={"Alice", "Bob"}
+        )
+        driver._search_for_chat = MagicMock()
+        driver.restart_app_to_top = MagicMock(return_value=True)
+
+        seen = {"Alice", "Bob"}
+        results = []
+        found = driver._reconcile_contacts(seen, results)
+
+        assert found == 0
+        driver._search_for_chat.assert_not_called()
+
+    def test_empty_contacts_returns_zero(self):
+        """Returns 0 when ContactsContract query returns no contacts."""
+        driver = _make_driver()
+        driver._query_whatsapp_contacts = MagicMock(return_value=set())
+
+        seen = {"Alice"}
+        results = []
+        found = driver._reconcile_contacts(seen, results)
+
+        assert found == 0
+
+    def test_fires_callback_for_new_chats(self):
+        """on_chat_found callback is fired for each newly discovered chat."""
+        driver = _make_driver()
+        driver._query_whatsapp_contacts = MagicMock(
+            return_value={"Alice", "Bob"}
+        )
+        driver._search_for_chat = MagicMock(return_value="Bob")
+        driver.restart_app_to_top = MagicMock(return_value=True)
+
+        callback = MagicMock()
+        seen = {"Alice"}
+        results = []
+        driver._reconcile_contacts(seen, results, on_chat_found=callback)
+
+        callback.assert_called_once()
+        assert callback.call_args[0][0].name == "Bob"
+
+    def test_case_insensitive_dedup(self):
+        """Contact 'alice' is not searched if 'Alice' is already seen."""
+        driver = _make_driver()
+        driver._query_whatsapp_contacts = MagicMock(
+            return_value={"alice"}
+        )
+        driver._search_for_chat = MagicMock()
+        driver.restart_app_to_top = MagicMock(return_value=True)
+
+        seen = {"Alice"}
+        results = []
+        found = driver._reconcile_contacts(seen, results)
+
+        assert found == 0
+        driver._search_for_chat.assert_not_called()
+
+
+class TestCollectAllChatsWithReconciliation:
+    """Tests for reconcile_contacts integration in collect_all_chats."""
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
+    def test_reconciliation_called_by_default(self, _mock_sleep):
+        """collect_all_chats calls _reconcile_contacts when reconcile_contacts=True."""
+        driver = _make_driver()
+        xml = _build_xml(_chat_row("Alice"))
+        _setup_driver_for_collection(driver, [xml])
+        driver._reconcile_contacts = MagicMock(return_value=0)
+
+        driver.collect_all_chats()
+
+        driver._reconcile_contacts.assert_called_once()
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
+    def test_reconciliation_skipped_when_disabled(self, _mock_sleep):
+        """collect_all_chats skips _reconcile_contacts when reconcile_contacts=False."""
+        driver = _make_driver()
+        xml = _build_xml(_chat_row("Alice"))
+        _setup_driver_for_collection(driver, [xml])
+        driver._reconcile_contacts = MagicMock(return_value=0)
+
+        driver.collect_all_chats(reconcile_contacts=False)
+
+        driver._reconcile_contacts.assert_not_called()
+
+    @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
+    def test_reconciliation_skipped_when_limit_reached(self, _mock_sleep):
+        """Reconciliation is skipped if the user-specified limit is already met."""
+        driver = _make_driver()
+        xml = _build_xml(_chat_row("Alice"), _chat_row("Bob"))
+        _setup_driver_for_collection(driver, [xml])
+        driver._reconcile_contacts = MagicMock(return_value=0)
+
+        driver.collect_all_chats(limit=1)
+
+        driver._reconcile_contacts.assert_not_called()

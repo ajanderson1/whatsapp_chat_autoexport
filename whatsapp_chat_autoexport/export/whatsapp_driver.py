@@ -1472,12 +1472,199 @@ class WhatsAppDriver:
             self.logger.error(f"Error listing chats: {e}")
             return []
 
+    def _query_whatsapp_contacts(self) -> set[str]:
+        """Query Android ContactsContract for all WhatsApp contacts via adb.
+
+        Returns a set of display names for contacts that have a WhatsApp
+        profile registered in the system contacts database. This is
+        deterministic and instant (no UI scrolling required).
+
+        Only works for 1:1 contacts — group chats are not in ContactsContract.
+        """
+        adb_cmd = ["adb"]
+        if self.device_id:
+            adb_cmd.extend(["-s", self.device_id])
+
+        # The --where clause contains single quotes that must survive the
+        # adb shell layer. Passing the entire content-query as a single
+        # shell string argument preserves the quoting correctly.
+        adb_cmd.extend([
+            "shell",
+            "content query "
+            "--uri content://com.android.contacts/data "
+            "--projection display_name "
+            "--where \"mimetype='vnd.android.cursor.item/vnd.com.whatsapp.profile'\"",
+        ])
+
+        try:
+            result = subprocess.run(
+                adb_cmd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                close_fds=True,
+            )
+            if result.returncode != 0 or (
+                not result.stdout.strip() and result.stderr.strip()
+            ):
+                self.logger.debug_msg(
+                    f"ContactsContract query failed: {result.stderr.strip()}"
+                )
+                return set()
+
+            contacts: set[str] = set()
+            for line in result.stdout.strip().splitlines():
+                # Lines look like: "Row: 0 display_name=John Doe"
+                if "display_name=" in line:
+                    name = line.split("display_name=", 1)[1].strip()
+                    if name:
+                        contacts.add(name)
+
+            self.logger.debug_msg(
+                f"ContactsContract: {len(contacts)} WhatsApp contacts"
+            )
+            return contacts
+        except subprocess.TimeoutExpired:
+            self.logger.debug_msg("ContactsContract query timed out")
+            return set()
+        except Exception as e:
+            self.logger.debug_msg(f"ContactsContract query error: {e}")
+            return set()
+
+    def _search_for_chat(self, contact_name: str) -> Optional[str]:
+        """Search WhatsApp for a contact by name and check if a conversation exists.
+
+        Taps the search bar, types the contact name, checks if a conversation
+        row appears in the results, then dismisses the search.
+
+        Returns the matched chat name if found, None otherwise.
+        """
+        try:
+            # Tap the search bar (embedded in the chat list header)
+            search_bar = self.driver.find_element(
+                "id", "com.whatsapp:id/my_search_bar"
+            )
+            search_bar.click()
+            sleep(0.5)
+
+            # Type the contact name into the search input
+            search_input = self.driver.find_element(
+                "id", "com.whatsapp:id/search_input"
+            )
+            search_input.clear()
+            search_input.send_keys(contact_name)
+            sleep(0.8)  # Wait for results to populate
+
+            # Check if any conversation row appears in the search results.
+            # Search results show conversations_row_contact_name for existing
+            # chats. We look for an exact or close match.
+            xml_source = self.driver.page_source
+            if not xml_source:
+                return None
+
+            root = ET.fromstring(xml_source)
+            for elem in root.iter():
+                rid = elem.get("resource-id") or ""
+                if rid == "com.whatsapp:id/conversations_row_contact_name":
+                    result_name = (elem.get("text") or "").strip()
+                    if result_name and result_name.lower() == contact_name.lower():
+                        return result_name
+
+            return None
+        except Exception as e:
+            self.logger.debug_msg(f"Search for '{contact_name}' failed: {e}")
+            return None
+        finally:
+            # Dismiss the search — press back until search bar reappears
+            for _ in range(3):
+                try:
+                    self.driver.back()
+                    sleep(0.3)
+                    self.driver.find_element(
+                        "id", "com.whatsapp:id/my_search_bar"
+                    )
+                    break  # Back on main chat list
+                except Exception:
+                    continue
+
+    def _reconcile_contacts(
+        self,
+        seen_names: set[str],
+        results: list,
+        on_chat_found: Optional[Callable] = None,
+    ) -> int:
+        """Fill gaps in scroll-based discovery using ContactsContract.
+
+        Queries Android's contact database for all WhatsApp contacts, then
+        searches WhatsApp for any contact not already found during scrolling.
+        Only catches missed 1:1 chats (groups aren't in ContactsContract).
+
+        Returns the number of newly discovered chats.
+        """
+        contacts = self._query_whatsapp_contacts()
+        if not contacts:
+            self.logger.debug_msg("ContactsContract reconciliation: no contacts to check")
+            return 0
+
+        # Find contacts that weren't discovered during scrolling.
+        # Use case-insensitive comparison since ContactsContract names may
+        # differ slightly in casing from WhatsApp's display.
+        seen_lower = {n.lower() for n in seen_names}
+        missing = [c for c in sorted(contacts) if c.lower() not in seen_lower]
+
+        if not missing:
+            self.logger.info(
+                f"ContactsContract reconciliation: all {len(contacts)} contacts "
+                f"already found — no gaps"
+            )
+            return 0
+
+        self.logger.info(
+            f"ContactsContract reconciliation: {len(missing)} of "
+            f"{len(contacts)} contacts not found during scrolling — searching..."
+        )
+
+        # Restart app to ensure we're on the main chat list for searching
+        self.restart_app_to_top()
+        sleep(0.5)
+
+        found_count = 0
+        searched = 0
+        for contact_name in missing:
+            searched += 1
+            if searched % 25 == 0:
+                self.logger.debug_msg(
+                    f"Reconciliation progress: {searched}/{len(missing)} "
+                    f"searched, {found_count} found"
+                )
+
+            matched_name = self._search_for_chat(contact_name)
+            if matched_name and matched_name.lower() not in seen_lower:
+                metadata = ChatMetadata(name=matched_name)
+                results.append(metadata)
+                seen_names.add(matched_name)
+                seen_lower.add(matched_name.lower())
+                found_count += 1
+
+                if on_chat_found is not None:
+                    try:
+                        on_chat_found(metadata)
+                    except Exception:
+                        pass
+
+        self.logger.info(
+            f"ContactsContract reconciliation complete: found {found_count} "
+            f"additional chats from {len(missing)} candidates"
+        )
+        return found_count
+
     def collect_all_chats(
         self,
         limit: Optional[int] = None,
         sort_alphabetical: bool = False,
         on_chat_found: Optional[Callable[[ChatMetadata], None]] = None,
         passes: int = 2,
+        reconcile_contacts: bool = True,
     ) -> List[ChatMetadata]:
         """Scroll through the chat list to collect all chats via XML page source.
 
@@ -1485,12 +1672,19 @@ class WhatsAppDriver:
         WhatsApp reorders the chat list mid-scroll when new messages arrive, so
         a single pass misses ~20% of chats. Two passes captures ~95%.
 
+        When ``reconcile_contacts`` is True (default), a final phase queries
+        Android's ContactsContract for all WhatsApp contacts and searches for
+        any that were missed during scrolling. This only catches 1:1 chats
+        (group chats are not in the contacts database).
+
         Args:
             limit: Optional limit on number of *unique* chats to collect.
             sort_alphabetical: If True, sort results alphabetically by name.
             on_chat_found: Optional callback fired once per unique chat name
                 (across all passes — only on first discovery of a chat).
             passes: Number of full top-to-bottom scroll passes (default 2).
+            reconcile_contacts: If True (default), run a ContactsContract
+                reconciliation pass after scrolling to find missed 1:1 chats.
         """
         if limit:
             self.logger.info(f"Collecting chats (limited to {limit}, passes={passes})...")
@@ -1752,6 +1946,11 @@ class WhatsAppDriver:
                     f"stopping early (convergence reached)"
                 )
                 break
+
+        # ContactsContract reconciliation: search for 1:1 chats missed during
+        # scrolling by cross-referencing against Android's contact database.
+        if reconcile_contacts and not (limit and len(seen_names) >= limit):
+            self._reconcile_contacts(seen_names, results, on_chat_found)
 
         # Restart app to return to top of chat list for export
         if not self.restart_app_to_top():
