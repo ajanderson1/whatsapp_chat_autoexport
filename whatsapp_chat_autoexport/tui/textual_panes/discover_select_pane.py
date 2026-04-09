@@ -20,6 +20,7 @@ from textual.worker import Worker, WorkerState
 
 from ..textual_widgets.activity_log import ActivityLog
 from ..textual_widgets.chat_list import ChatListWidget
+from ..textual_widgets.prerequisite_banner import PrerequisiteBanner, BannerStatus
 from ..textual_widgets.settings_panel import SettingsPanel, DEFAULT_OUTPUT_DIR
 
 
@@ -75,6 +76,10 @@ class DiscoverSelectPane(Container):
         self._scanning_chats: bool = False
         self._discovery_worker: Worker | None = None
 
+    def on_mount(self) -> None:
+        """Refresh prerequisite banners on mount."""
+        self._refresh_banners()
+
     # ------------------------------------------------------------------
     # Compose
     # ------------------------------------------------------------------
@@ -98,11 +103,36 @@ class DiscoverSelectPane(Container):
                     id="settings-panel",
                 )
 
+        # --- Prerequisite banners ---
+        with Vertical(id="prerequisite-banners"):
+            yield PrerequisiteBanner(
+                key="drive",
+                label="Google Drive",
+                status=BannerStatus.UNMET,
+                detail="not signed in",
+                hint="open Settings tab to configure",
+            )
+            yield PrerequisiteBanner(
+                key="apikey",
+                label="Transcription API key",
+                status=BannerStatus.OK,
+            )
+            yield PrerequisiteBanner(
+                key="whatsapp-version",
+                label="WhatsApp version",
+                status=BannerStatus.OK,
+            )
+
         # --- Bottom bar ---
         with Horizontal(classes="bottom-bar"):
             yield Static(
                 "[dim]Selected: 0 chats[/dim]",
                 id="selection-count",
+            )
+            yield Static(
+                "",
+                id="blocker-reason",
+                classes="blocker-reason",
             )
             yield Button(
                 "Refresh Chats",
@@ -206,14 +236,12 @@ class DiscoverSelectPane(Container):
             self._scanning_chats = False
 
             try:
-                chat_list = self.query_one("#chat-select-list", ChatListWidget)
-                count = len(chat_list.get_selected())
                 self.query_one("#btn-refresh-chats", Button).disabled = False
-                self.query_one("#btn-start-export", Button).disabled = (count == 0)
             except Exception:
                 pass
 
             self._update_selection_count()
+            self._update_gate()
             self._log(f"Discovery complete: {self._discovered_count} chats found")
             self.post_message(self.SelectionChanged(self._discovered_count))
 
@@ -242,11 +270,8 @@ class DiscoverSelectPane(Container):
     ) -> None:
         """Bubble up selection changes."""
         count = len(event.selected)
-        try:
-            self.query_one("#btn-start-export", Button).disabled = (count == 0)
-        except Exception:
-            pass
         self._update_selection_count()
+        self._update_gate()
         self.post_message(self.SelectionChanged(count))
 
     def on_chat_list_widget_refresh_requested(
@@ -274,6 +299,7 @@ class DiscoverSelectPane(Container):
             from pathlib import Path
             app.output_dir = Path(event.output_folder)
         app.transcription_provider = event.transcription_provider
+        self._refresh_banners()
 
     # ------------------------------------------------------------------
     # Button handlers
@@ -308,6 +334,151 @@ class DiscoverSelectPane(Container):
     def action_refresh_chats(self) -> None:
         """Action bound to 'f' key."""
         self.start_discovery()
+
+    # ------------------------------------------------------------------
+    # Prerequisite banners
+    # ------------------------------------------------------------------
+
+    def on_settings_panel_drive_status_changed(
+        self, event: SettingsPanel.DriveStatusChanged
+    ) -> None:
+        """Refresh banners when Drive auth state changes."""
+        self._refresh_banners()
+
+    def _refresh_banners(self) -> None:
+        """Re-evaluate all prerequisite banners from current app state."""
+        self._refresh_drive_banner()
+        self._refresh_apikey_banner()
+        self._refresh_whatsapp_version_banner()
+        self._update_gate()
+
+    def _refresh_drive_banner(self) -> None:
+        """Update the Drive prerequisite banner."""
+        try:
+            banner = self.query_one("#banner-drive", PrerequisiteBanner)
+            if getattr(self.app, "drive_credentials", None) is not None:
+                email = getattr(self.app, "drive_user_email", None) or "unknown"
+                banner.update_status(
+                    BannerStatus.OK,
+                    detail=f"signed in as {email}",
+                )
+            else:
+                # Check if client_secrets at least exists
+                try:
+                    from ...google_drive.auth import GoogleDriveAuth
+                    auth = GoogleDriveAuth()
+                    if auth.has_client_secrets():
+                        banner.update_status(
+                            BannerStatus.UNMET,
+                            detail="not signed in",
+                            hint="open Settings tab and click Sign in to Drive",
+                        )
+                    else:
+                        banner.update_status(
+                            BannerStatus.UNMET,
+                            detail="client_secrets.json not found",
+                            hint="open Settings tab to configure",
+                        )
+                except Exception:
+                    banner.update_status(
+                        BannerStatus.UNMET,
+                        detail="not configured",
+                        hint="open Settings tab to configure",
+                    )
+        except Exception:
+            pass
+
+    def _refresh_apikey_banner(self) -> None:
+        """Update the API key prerequisite banner."""
+        try:
+            banner = self.query_one("#banner-apikey", PrerequisiteBanner)
+            transcribe = getattr(self.app, "transcribe_audio", False)
+            if not transcribe:
+                banner.update_status(BannerStatus.OK)
+                return
+
+            provider = getattr(self.app, "transcription_provider", "whisper")
+            try:
+                settings = self.query_one("#settings-panel", SettingsPanel)
+                if settings.has_valid_transcription_provider():
+                    banner.update_status(BannerStatus.OK)
+                else:
+                    display = "OpenAI" if provider == "whisper" else provider.title()
+                    banner.update_status(
+                        BannerStatus.UNMET,
+                        detail=f"{display} API key missing or invalid",
+                        hint="open Settings tab to configure",
+                    )
+            except Exception:
+                banner.update_status(BannerStatus.OK)
+        except Exception:
+            pass
+
+    def _refresh_whatsapp_version_banner(self) -> None:
+        """Update the WhatsApp version warning banner."""
+        try:
+            banner = self.query_one("#banner-whatsapp-version", PrerequisiteBanner)
+            device_version = getattr(self.app, "whatsapp_version", None)
+            if device_version is None:
+                banner.update_status(BannerStatus.OK)
+                return
+
+            from ...constants import TESTED_WHATSAPP_VERSION
+            if device_version == TESTED_WHATSAPP_VERSION:
+                banner.update_status(BannerStatus.OK)
+            else:
+                banner.update_status(
+                    BannerStatus.WARNING,
+                    detail=f"v{device_version} (tested with v{TESTED_WHATSAPP_VERSION})",
+                    hint="things may break",
+                )
+        except Exception:
+            pass
+
+    def _compute_blocking_prerequisites(self) -> list[str]:
+        """Return human-readable list of unmet prerequisites that block export."""
+        blockers = []
+        try:
+            drive_banner = self.query_one("#banner-drive", PrerequisiteBanner)
+            if drive_banner.is_blocking:
+                blockers.append("Drive not signed in")
+        except Exception:
+            pass
+        try:
+            apikey_banner = self.query_one("#banner-apikey", PrerequisiteBanner)
+            if apikey_banner.is_blocking:
+                blockers.append("API key missing")
+        except Exception:
+            pass
+        return blockers
+
+    def _update_gate(self) -> None:
+        """Update Start Export button and blocker reason based on prerequisites + selection."""
+        blockers = self._compute_blocking_prerequisites()
+
+        try:
+            chat_list = self.query_one("#chat-select-list", ChatListWidget)
+            has_selection = len(chat_list.get_selected()) > 0
+        except Exception:
+            has_selection = False
+
+        can_export = has_selection and not blockers
+
+        try:
+            self.query_one("#btn-start-export", Button).disabled = not can_export
+        except Exception:
+            pass
+
+        try:
+            reason_widget = self.query_one("#blocker-reason", Static)
+            if blockers:
+                reason_widget.update(
+                    f"[red]Cannot export \u2014 {', '.join(blockers)}[/red]"
+                )
+            else:
+                reason_widget.update("")
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Helpers

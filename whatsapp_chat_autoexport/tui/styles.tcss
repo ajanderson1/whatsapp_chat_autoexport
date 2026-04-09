@@ -378,6 +378,19 @@ DiscoverSelectPane .right-panel {
     height: 100%;
 }
 
+DiscoverSelectPane #prerequisite-banners {
+    height: auto;
+    padding: 0 1;
+    margin: 0;
+}
+
+DiscoverSelectPane .blocker-reason {
+    height: auto;
+    width: 1fr;
+    color: $error;
+    padding: 0 1;
+}
+
 DiscoverSelectPane .bottom-bar {
     height: auto;
     padding: 1;
