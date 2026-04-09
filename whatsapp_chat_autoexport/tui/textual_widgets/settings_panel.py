@@ -8,16 +8,18 @@ Displays export settings with:
 - API key configuration with validation status
 """
 
+import shutil
 from pathlib import Path
 from typing import Optional, List
 
 from textual.app import ComposeResult
 from textual.events import Key
 from textual.widget import Widget
-from textual.widgets import Static, Checkbox, Input, Label, RadioButton, RadioSet
+from textual.widgets import Static, Checkbox, Input, Label, RadioButton, RadioSet, Button
 from textual.containers import Vertical, Horizontal
 from textual.message import Message
 from textual.reactive import reactive
+from textual.worker import Worker, WorkerState
 
 
 # Default output directory
@@ -71,6 +73,14 @@ class SettingsPanel(Widget):
             self.transcription_provider = transcription_provider
             super().__init__()
 
+    class DriveStatusChanged(Message):
+        """Posted when Drive auth state changes (sign in, sign out, file pick)."""
+
+        def __init__(self, signed_in: bool, user_email: Optional[str] = None) -> None:
+            self.signed_in = signed_in
+            self.user_email = user_email
+            super().__init__()
+
     def __init__(
         self,
         include_media: bool = True,
@@ -102,6 +112,16 @@ class SettingsPanel(Widget):
 
         # API key manager instance
         self._api_key_manager = None
+        # Drive auth instance (lazy)
+        self._drive_auth = None
+        self._drive_signing_in = False
+
+    def _get_drive_auth(self):
+        """Lazy load Google Drive auth manager."""
+        if self._drive_auth is None:
+            from ...google_drive.auth import GoogleDriveAuth
+            self._drive_auth = GoogleDriveAuth()
+        return self._drive_auth
 
     def _get_api_key_manager(self):
         """Lazy load API key manager."""
@@ -131,6 +151,41 @@ class SettingsPanel(Widget):
                 id="setting-delete",
                 disabled=self._locked,
             )
+
+            # Google Drive Section
+            yield Static("", classes="section-spacer")
+            yield Static("Google Drive", classes="section-title")
+            yield Static(
+                "[dim]Checking...[/dim]",
+                id="drive-status",
+                classes="drive-status",
+            )
+            yield Input(
+                value="",
+                placeholder="Path to client_secrets.json...",
+                id="setting-client-secrets-path",
+                disabled=self._locked,
+                classes="client-secrets-input",
+            )
+            with Horizontal(classes="drive-buttons"):
+                yield Button(
+                    "Choose file\u2026",
+                    id="btn-choose-secrets",
+                    variant="default",
+                    disabled=self._locked,
+                )
+                yield Button(
+                    "Sign in to Drive",
+                    id="btn-drive-sign-in",
+                    variant="primary",
+                    disabled=True,
+                )
+                yield Button(
+                    "Sign out",
+                    id="btn-drive-sign-out",
+                    variant="error",
+                    disabled=True,
+                )
 
             # Output Folder Section
             yield Static("", classes="section-spacer")
@@ -218,7 +273,9 @@ class SettingsPanel(Widget):
 
 
     def on_mount(self) -> None:
-        """Auto-select valid provider and disable transcription if no providers available."""
+        """Auto-select valid provider, disable transcription if no providers, refresh Drive."""
+        self._refresh_drive_section()
+
         manager = self._get_api_key_manager()
         available = manager.get_available_providers()
         if not available:
@@ -318,6 +375,8 @@ class SettingsPanel(Widget):
         # Handle API key submission
         if input_id in ("setting-openai-key", "setting-elevenlabs-key"):
             self._save_api_key(input_id, event.value)
+        elif input_id == "setting-client-secrets-path":
+            self._handle_choose_secrets()
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         """Handle radio set changes."""
@@ -428,6 +487,176 @@ class SettingsPanel(Widget):
             except Exception:
                 pass
 
+    # ------------------------------------------------------------------
+    # Google Drive section
+    # ------------------------------------------------------------------
+
+    def _refresh_drive_section(self) -> None:
+        """Update Drive section UI from current auth state."""
+        try:
+            auth = self._get_drive_auth()
+            status = auth.get_credentials_status()
+
+            status_widget = self.query_one("#drive-status", Static)
+            sign_in_btn = self.query_one("#btn-drive-sign-in", Button)
+            sign_out_btn = self.query_one("#btn-drive-sign-out", Button)
+            secrets_input = self.query_one("#setting-client-secrets-path", Input)
+
+            if not status["client_secrets_present"]:
+                status_widget.update(
+                    "[yellow]Not configured[/yellow] — "
+                    "provide client_secrets.json below"
+                )
+                sign_in_btn.disabled = True
+                sign_out_btn.disabled = True
+            elif status["token_valid"] and status["user_email"]:
+                status_widget.update(
+                    f"[green]Signed in[/green] as {status['user_email']}"
+                )
+                sign_in_btn.disabled = True
+                sign_out_btn.disabled = self._locked
+                # Store on app
+                self.app._drive_user_email = status["user_email"]
+            elif status["token_present"]:
+                status_widget.update(
+                    "[yellow]Token expired[/yellow] — click Sign in to refresh"
+                )
+                sign_in_btn.disabled = self._locked or self._drive_signing_in
+                sign_out_btn.disabled = self._locked
+            else:
+                status_widget.update(
+                    "[dim]Ready to authenticate[/dim] — click Sign in"
+                )
+                sign_in_btn.disabled = self._locked or self._drive_signing_in
+                sign_out_btn.disabled = True
+
+            # Show current secrets path
+            secrets_path = str(auth.client_secrets_file)
+            if status["client_secrets_present"]:
+                secrets_input.value = secrets_path
+            else:
+                secrets_input.value = ""
+                secrets_input.placeholder = f"Path to client_secrets.json (will copy to {secrets_path})"
+
+        except Exception:
+            pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Drive section button clicks."""
+        if event.button.id == "btn-choose-secrets":
+            self._handle_choose_secrets()
+        elif event.button.id == "btn-drive-sign-in":
+            self._handle_drive_sign_in()
+        elif event.button.id == "btn-drive-sign-out":
+            self._handle_drive_sign_out()
+
+    def _handle_choose_secrets(self) -> None:
+        """Copy user-provided client_secrets.json path to the credentials dir."""
+        try:
+            secrets_input = self.query_one("#setting-client-secrets-path", Input)
+            source_path = Path(secrets_input.value.strip())
+
+            if not source_path.exists():
+                self._log("client_secrets.json not found at that path")
+                return
+            if not source_path.is_file():
+                self._log("Path is not a file")
+                return
+
+            auth = self._get_drive_auth()
+            auth.setup_credentials_directory()
+            dest = auth.client_secrets_file
+
+            if source_path.resolve() != dest.resolve():
+                shutil.copy2(str(source_path), str(dest))
+                self._log(f"Copied client_secrets.json to {dest}")
+            else:
+                self._log("client_secrets.json already in place")
+
+            self._refresh_drive_section()
+            self.post_message(self.DriveStatusChanged(signed_in=False))
+        except Exception as e:
+            self._log(f"Failed to copy client_secrets.json: {e}")
+
+    def _handle_drive_sign_in(self) -> None:
+        """Start the OAuth sign-in flow in a worker thread."""
+        if self._drive_signing_in:
+            return
+
+        self._drive_signing_in = True
+        try:
+            self.query_one("#btn-drive-sign-in", Button).disabled = True
+            self.query_one("#drive-status", Static).update(
+                "[dim]Opening browser for authentication...[/dim]"
+            )
+        except Exception:
+            pass
+
+        self._log("Starting Google Drive sign-in — check your browser...")
+        self.run_worker(self._do_drive_sign_in, thread=True, name="drive_sign_in")
+
+    def _do_drive_sign_in(self) -> dict:
+        """Worker thread: run the OAuth flow."""
+        auth = self._get_drive_auth()
+        creds = auth.authenticate()
+        if creds is None:
+            return {"success": False, "error": "Authentication failed or was cancelled"}
+
+        # Get user email
+        status = auth.get_credentials_status()
+        email = status.get("user_email")
+
+        return {"success": True, "credentials": creds, "email": email}
+
+    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        """Handle Drive sign-in worker completion."""
+        if event.worker.name != "drive_sign_in":
+            return
+
+        self._drive_signing_in = False
+
+        if event.state == WorkerState.SUCCESS:
+            result = event.worker.result or {}
+            if result.get("success"):
+                email = result.get("email", "unknown")
+                self.app._drive_credentials = result.get("credentials")
+                self.app._drive_user_email = email
+                self._log(f"Signed in to Google Drive as {email}")
+                self.post_message(self.DriveStatusChanged(signed_in=True, user_email=email))
+            else:
+                error = result.get("error", "Unknown error")
+                self._log(f"Drive sign-in failed: {error}")
+                self.post_message(self.DriveStatusChanged(signed_in=False))
+
+        elif event.state == WorkerState.ERROR:
+            self._log("Drive sign-in failed — check the activity log for details")
+            self.post_message(self.DriveStatusChanged(signed_in=False))
+
+        elif event.state == WorkerState.CANCELLED:
+            self._log("Drive sign-in cancelled")
+            self.post_message(self.DriveStatusChanged(signed_in=False))
+
+        self._refresh_drive_section()
+
+    def _handle_drive_sign_out(self) -> None:
+        """Sign out: delete the token file and clear app state."""
+        auth = self._get_drive_auth()
+        auth.revoke_credentials()
+        self.app._drive_credentials = None
+        self.app._drive_user_email = None
+        self._log("Signed out of Google Drive")
+        self._refresh_drive_section()
+        self.post_message(self.DriveStatusChanged(signed_in=False))
+
+    def _log(self, message: str) -> None:
+        """Write to the screen-level ActivityLog."""
+        try:
+            from .activity_log import ActivityLog
+            log_widget = self.screen.query_one(ActivityLog)
+            log_widget.log(message)
+        except Exception:
+            pass
+
     def _notify_settings_changed(self) -> None:
         """Post message about settings change."""
         self.post_message(
@@ -459,9 +688,13 @@ class SettingsPanel(Widget):
         for radio_set in self.query(RadioSet):
             radio_set.disabled = locked
 
+        for button in self.query(Button):
+            button.disabled = locked
+
         # Provider select should also respect transcribe checkbox state
         if not locked:
             self._update_provider_select_state()
+            self._refresh_drive_section()
 
     def get_settings(self) -> dict:
         """

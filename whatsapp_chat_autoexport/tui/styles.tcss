@@ -618,6 +618,28 @@ SettingsPanel .api-status-unknown {
     color: $text-muted;
 }
 
+/* --- Drive section --- */
+
+SettingsPanel .drive-status {
+    height: auto;
+    margin: 0 0 1 0;
+    color: $text;
+}
+
+SettingsPanel .client-secrets-input {
+    margin: 0 0 1 0;
+}
+
+SettingsPanel .drive-buttons {
+    height: auto;
+    align: left middle;
+}
+
+SettingsPanel .drive-buttons Button {
+    min-width: 14;
+    margin: 0 1 0 0;
+}
+
 
 /* =========================================================================
    Help Screen (Modal)
