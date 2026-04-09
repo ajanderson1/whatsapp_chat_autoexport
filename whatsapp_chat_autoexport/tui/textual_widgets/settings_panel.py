@@ -502,6 +502,9 @@ class SettingsPanel(Widget):
             sign_out_btn = self.query_one("#btn-drive-sign-out", Button)
             secrets_input = self.query_one("#setting-client-secrets-path", Input)
 
+            # Check app-level email (set after sign-in via Drive API)
+            app_email = getattr(self.app, "_drive_user_email", None)
+
             if not status["client_secrets_present"]:
                 status_widget.update(
                     "[yellow]Not configured[/yellow] — "
@@ -509,14 +512,13 @@ class SettingsPanel(Widget):
                 )
                 sign_in_btn.disabled = True
                 sign_out_btn.disabled = True
-            elif status["token_valid"] and status["user_email"]:
+            elif status["token_valid"] or (status["token_present"] and app_email):
+                email = app_email or status.get("user_email") or "unknown"
                 status_widget.update(
-                    f"[green]Signed in[/green] as {status['user_email']}"
+                    f"[green]Signed in[/green] as {email}"
                 )
                 sign_in_btn.disabled = True
                 sign_out_btn.disabled = self._locked
-                # Store on app
-                self.app._drive_user_email = status["user_email"]
             elif status["token_present"]:
                 status_widget.update(
                     "[yellow]Token expired[/yellow] — click Sign in to refresh"
@@ -602,9 +604,17 @@ class SettingsPanel(Widget):
         if creds is None:
             return {"success": False, "error": "Authentication failed or was cancelled"}
 
-        # Get user email
-        status = auth.get_credentials_status()
-        email = status.get("user_email")
+        # Fetch the user's email via the Drive API about endpoint.
+        # The `drive` scope doesn't include id_token claims, so we
+        # can't read it from the token itself.
+        email = None
+        try:
+            from googleapiclient.discovery import build
+            service = build("drive", "v3", credentials=creds)
+            about = service.about().get(fields="user(emailAddress)").execute()
+            email = about.get("user", {}).get("emailAddress")
+        except Exception:
+            pass
 
         return {"success": True, "credentials": creds, "email": email}
 
