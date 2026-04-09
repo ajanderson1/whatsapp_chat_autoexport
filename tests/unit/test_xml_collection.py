@@ -304,8 +304,8 @@ class TestXmlCollectionEdgeCases:
         assert minimal.photo_description is None
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
-    def test_duplicate_names_both_in_results(self, _mock_sleep):
-        """Duplicate chat names appear in results (no dedup of results list)."""
+    def test_duplicate_names_deduped_in_results(self, _mock_sleep):
+        """Duplicate chat names are deduped — only the first sighting is kept."""
         driver = _make_driver()
         xml = _build_xml(
             _chat_row("Alice", "09:00", "First"),
@@ -316,7 +316,7 @@ class TestXmlCollectionEdgeCases:
         result = driver.collect_all_chats()
 
         alice_entries = [m for m in result if m.name == "Alice"]
-        assert len(alice_entries) >= 2
+        assert len(alice_entries) == 1
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
     def test_callback_fires_only_for_first_occurrence(self, _mock_sleep):
@@ -458,23 +458,29 @@ class TestRestartCalls:
     """Verify restart_app_to_top is called at start and end."""
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
-    def test_restart_called_at_start_and_end(self, _mock_sleep):
-        """restart_app_to_top called twice: before and after collection."""
+    def test_restart_called_per_pass_and_at_end(self, _mock_sleep):
+        """restart_app_to_top called at the start of each pass + once at end."""
         driver = _make_driver()
         xml = _build_xml(_chat_row("Alice"))
         _setup_driver_for_collection(driver, [xml])
 
+        # Default passes=2: pass 1 restart + pass 2 restart (early-out after
+        # finding 0 new) + final restart = 3 calls.  But pass 2 sees all chats
+        # already in seen_names, adds 0, and triggers early-out — so pass 2
+        # still calls restart_app_to_top before scrolling.
         driver.collect_all_chats()
 
-        assert driver.restart_app_to_top.call_count == 2
+        # 2 pass starts + 1 final restart = 3
+        assert driver.restart_app_to_top.call_count == 3
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
     def test_restart_failure_at_start_returns_empty(self, _mock_sleep):
-        """If restart fails at start, returns empty list."""
+        """If restart fails at start of pass 1, returns empty list."""
         driver = _make_driver()
         driver.restart_app_to_top = MagicMock(return_value=False)
 
         result = driver.collect_all_chats()
 
         assert result == []
-        assert driver.restart_app_to_top.call_count == 1
+        # Pass 1 restart fails (1 call) → break → final restart (1 call) = 2
+        assert driver.restart_app_to_top.call_count == 2
