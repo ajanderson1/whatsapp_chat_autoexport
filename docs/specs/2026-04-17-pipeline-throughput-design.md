@@ -130,11 +130,16 @@ Pipeline phase (new)
             cleanup temp dir
 ```
 
-Discovery sweep cadence:
+Two distinct mechanisms work together:
 
-1. **Sweep 1:** pipeline start. Lists all matching files in Drive. Submits each.
-2. **Sweep N:** after each export phase completes a chat, the existing `pipeline.submit(chat_name)` hook fires. It now routes to `ParallelPipeline.submit_if_not_in_flight(chat_name)`. If the file isn't yet on Drive, the worker retries discovery every 2s up to 30s before erroring.
-3. **Final sweep:** after export phase signals completion, one last full discovery sweep catches any file that landed between sweeps.
+**A. Per-chat submission (existing hook).** The export phase already calls `pipeline.submit(chat_name)` as each chat finishes exporting. After the refactor, this routes to `ParallelPipeline.submit_if_not_in_flight(chat_name, file_metadata=None)`. The worker that picks up the task performs a small targeted discovery (list Drive, filter by `chat_name`). If the file isn't on Drive yet (upload still in flight), the worker retries the targeted discovery every 2s for up to 30s before erroring.
+
+**B. Full-folder discovery sweeps (new).**
+
+1. **Sweep 1:** at pipeline start. Lists all matching files in Drive. Submits any that aren't already in flight. Handles files that were left on Drive from a previous run.
+2. **Final sweep:** after the export phase's `export_chats_with_new_workflow()` (or the TUI's `_run_export`) returns, the caller invokes `pipeline.discovery_sweep_now()` once. This catches any file that landed between mechanism A's submissions and this moment. The pipeline then shuts down after its internal work queue drains.
+
+Mechanism A is the hot path during the run; mechanism B covers resume-from-previous-run and end-of-run catch-all. There are no periodic "every N chats" sweeps — mechanism A is per-chat already.
 
 Peak resource envelope:
 
