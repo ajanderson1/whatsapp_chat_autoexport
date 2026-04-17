@@ -99,6 +99,9 @@ class ChatListWidget(Widget):
         self.chat_statuses = {}  # Initialize empty statuses
         # Map chat names to their widget IDs (for efficient lookup)
         self._chat_to_widget_id: Dict[str, str] = {}
+        # Optional per-chat reason strings (failure/skip detail). Not reactive;
+        # read opportunistically via get_status_reasons() for retry/tooltip UX.
+        self._status_reasons: Dict[str, str] = {}
 
     @property
     def _listview_id(self) -> str:
@@ -441,20 +444,37 @@ class ChatListWidget(Widget):
         for chat in self._chats:
             self._update_item_display(chat)
 
-    def update_chat_status(self, name: str, status: ChatDisplayStatus) -> None:
+    def update_chat_status(
+        self,
+        name: str,
+        status: ChatDisplayStatus,
+        reason: str | None = None,
+    ) -> None:
         """
         Update the status of a specific chat.
 
         Args:
             name: Chat name to update
             status: New status for the chat
+            reason: Optional reason (e.g. "Verify failed", "Community chat").
+                    Passing None clears any previous reason for this chat.
         """
         # Create a new dict to trigger reactivity
         new_statuses = dict(self.chat_statuses)
         new_statuses[name] = status
         self.chat_statuses = new_statuses
+
+        if reason is None:
+            self._status_reasons.pop(name, None)
+        else:
+            self._status_reasons[name] = reason
+
         # Update the display
         self._update_item_display(name)
+
+    def get_status_reasons(self) -> Dict[str, str]:
+        """Return a shallow copy of per-chat status reasons (failure/skip detail)."""
+        return dict(self._status_reasons)
 
     def init_statuses_from_selection(self) -> None:
         """
