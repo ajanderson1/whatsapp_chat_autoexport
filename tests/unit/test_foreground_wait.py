@@ -44,7 +44,7 @@ def test_returns_true_after_transient_non_whatsapp_package():
 
 def test_returns_false_on_timeout():
     wrapper = FakeDriverWrapper(["com.google.android.apps.docs"])
-    assert wait_for_whatsapp_foreground(wrapper, timeout=0.1, poll_interval=0.01) is False
+    assert wait_for_whatsapp_foreground(wrapper, timeout=0.5, poll_interval=0.05) is False
 
 
 def test_exceptions_during_probe_are_treated_as_not_foreground():
