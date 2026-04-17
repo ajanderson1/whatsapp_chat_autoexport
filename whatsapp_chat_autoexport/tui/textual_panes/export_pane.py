@@ -392,7 +392,7 @@ class ExportPane(Container):
 
             try:
                 if driver:
-                    success = await asyncio.to_thread(
+                    outcome = await asyncio.to_thread(
                         self._export_single_chat,
                         driver,
                         chat_name,
@@ -401,17 +401,43 @@ class ExportPane(Container):
                         _export_progress_callback,
                     )
 
-                    if success:
+                    # Normalise legacy bool returns to ExportOutcome so the
+                    # tri-state branches below can be written uniformly.
+                    from ...export.chat_exporter import (
+                        ExportOutcome,
+                        ExportOutcomeKind,
+                    )
+                    if outcome is True:
+                        outcome = ExportOutcome(kind=ExportOutcomeKind.SUCCESS)
+                    elif outcome is False:
+                        outcome = ExportOutcome(
+                            kind=ExportOutcomeKind.FAILED,
+                            reason="Unknown failure",
+                        )
+
+                    if outcome.kind == ExportOutcomeKind.SUCCESS:
                         results["completed"].append(chat_name)
                         self._consecutive_failures = 0
                         self.app.call_from_thread(
                             self._complete_chat_export, chat_name
                         )
-                    else:
+                    elif outcome.kind == ExportOutcomeKind.SKIPPED_COMMUNITY:
+                        # Community chats must NOT count toward the consecutive
+                        # failure limit - they are an expected skip, not a
+                        # transient UI failure.
+                        results["skipped"].append(chat_name)
+                        self.app.call_from_thread(
+                            self._skip_chat_export,
+                            chat_name,
+                            outcome.reason or "Community chat - export unsupported",
+                        )
+                    else:  # FAILED
                         results["failed"].append(chat_name)
                         self._consecutive_failures += 1
                         self.app.call_from_thread(
-                            self._fail_chat_export, chat_name, "Export failed"
+                            self._fail_chat_export,
+                            chat_name,
+                            outcome.reason or "Export failed",
                         )
 
                         if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
@@ -492,7 +518,11 @@ class ExportPane(Container):
         Returns:
             True if successful, False otherwise
         """
-        from ...export.chat_exporter import ChatExporter
+        from ...export.chat_exporter import (
+            ChatExporter,
+            ExportOutcome,
+            ExportOutcomeKind,
+        )
 
         debug_mode = getattr(self.app, "debug_mode", False)
 
@@ -518,7 +548,10 @@ class ExportPane(Container):
             if not driver.verify_whatsapp_is_open():
                 if log_callback:
                     log_callback("WhatsApp verification failed", "error")
-                return False
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.FAILED,
+                    reason="WhatsApp verification failed",
+                )
 
             # Navigate to main screen and open the chat
             driver.navigate_to_main()
@@ -528,18 +561,21 @@ class ExportPane(Container):
             if not driver.click_chat(chat_name):
                 if log_callback:
                     log_callback(f"Could not open chat '{chat_name}'", "error")
-                return False
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.FAILED,
+                    reason=f"Could not open chat '{chat_name}'",
+                )
 
-            success = exporter.export_chat_to_google_drive(
+            outcome = exporter.export_chat_to_google_drive(
                 chat_name,
                 include_media=include_media,
                 on_progress=progress_callback,
             )
-            return success
+            return outcome
         except Exception as e:
             if log_callback:
                 log_callback(f"Export error: {e}", "error")
-            return False
+            return ExportOutcome(kind=ExportOutcomeKind.FAILED, reason=str(e))
 
     # ------------------------------------------------------------------
     # UI update helpers (called from worker thread via call_from_thread)

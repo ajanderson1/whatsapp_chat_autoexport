@@ -373,6 +373,99 @@ class TestExportPaneSettleWait:
                 driver, "ChatA", include_media=False, log_callback=None
             )
 
-        assert result is False
+        # _export_single_chat now returns ExportOutcome (falsy when not SUCCESS)
+        assert bool(result) is False
         driver.wait_for_whatsapp_foreground.assert_called_once()
         driver.verify_whatsapp_is_open.assert_called_once()
+
+
+# =============================================================================
+# ExportPane tri-state outcome routing (Task 7)
+# =============================================================================
+
+
+class TestExportPaneTriStateResult:
+    """Verify the TUI handles SKIPPED_COMMUNITY distinctly from FAILED."""
+
+    def _make_driver(self):
+        driver = MagicMock()
+        driver.wait_for_whatsapp_foreground = MagicMock(return_value=True)
+        driver.verify_whatsapp_is_open = MagicMock(return_value=True)
+        driver.navigate_to_main = MagicMock()
+        driver.click_chat = MagicMock(return_value=True)
+        driver.restart_app_to_top = MagicMock(return_value=True)
+        return driver
+
+    def test_export_single_chat_returns_outcome_for_community(self):
+        from whatsapp_chat_autoexport.export.chat_exporter import (
+            ExportOutcome,
+            ExportOutcomeKind,
+        )
+
+        pane = ExportPane()
+        driver = self._make_driver()
+        mock_app = MagicMock()
+        mock_app.debug_mode = False
+
+        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app), \
+             patch(
+                "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
+             ) as mock_exporter_cls:
+            mock_exporter = mock_exporter_cls.return_value
+            mock_exporter.export_chat_to_google_drive.return_value = ExportOutcome(
+                kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
+                reason="Community chat",
+            )
+            outcome = pane._export_single_chat(
+                driver, "ChatC", include_media=False, log_callback=None
+            )
+
+        assert isinstance(outcome, ExportOutcome)
+        assert outcome.kind == ExportOutcomeKind.SKIPPED_COMMUNITY
+
+    def test_run_real_export_marks_community_skipped_not_failed(self):
+        from whatsapp_chat_autoexport.export.chat_exporter import (
+            ExportOutcome,
+            ExportOutcomeKind,
+        )
+
+        pane = ExportPane()
+        driver = self._make_driver()
+
+        pane._skip_chat_export = MagicMock()
+        pane._fail_chat_export = MagicMock()
+        pane._complete_chat_export = MagicMock()
+        pane._start_chat_export = MagicMock()
+
+        mock_app = MagicMock()
+        mock_app.debug_mode = False
+        mock_app.driver = driver
+        mock_app.include_media = False
+        # call_from_thread should invoke the function synchronously for the test
+        mock_app.call_from_thread = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+
+        # query_one must return a mock progress pane to avoid widget lookup
+        mock_progress = MagicMock()
+        pane.query_one = MagicMock(return_value=mock_progress)
+
+        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app), \
+             patch(
+                "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
+             ) as mock_exporter_cls:
+            mock_exporter = mock_exporter_cls.return_value
+            mock_exporter.export_chat_to_google_drive.return_value = ExportOutcome(
+                kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
+                reason="Community chat",
+            )
+
+            import asyncio
+            results = asyncio.run(
+                pane._run_export(chats=["CommunityX"])
+            )
+
+        assert "CommunityX" in results["skipped"]
+        assert "CommunityX" not in results["failed"]
+        pane._skip_chat_export.assert_called()
+        pane._fail_chat_export.assert_not_called()
+        # Consecutive-failures counter must NOT have been incremented
+        assert pane._consecutive_failures == 0
