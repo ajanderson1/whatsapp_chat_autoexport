@@ -535,6 +535,11 @@ class TestExportPaneReasonPlumbing:
             len(args) >= 3 and args[2] == "Community chat"
         )
         assert pane._per_chat_reasons["ChatB"] == "Community chat"
+        # Progress pane must receive the "Skipped:" activity log line
+        progress.log_activity.assert_called_once()
+        log_args, _ = progress.log_activity.call_args
+        assert "ChatB" in log_args[0]
+        assert "Community chat" in log_args[0]
 
 
 # =============================================================================

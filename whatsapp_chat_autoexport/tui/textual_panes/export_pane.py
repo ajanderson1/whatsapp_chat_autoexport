@@ -680,6 +680,12 @@ class ExportPane(Container):
         except Exception:
             pass
 
+        try:
+            progress = self.query_one("#export-progress-pane", ProgressPane)
+            progress.log_activity(f"Skipped: {chat_name} ({reason})", "warning")
+        except Exception:
+            pass
+
     def _reconcile_chat_list_statuses(self) -> None:
         """
         Re-push authoritative per-chat status from self._export_results to the
@@ -708,12 +714,6 @@ class ExportPane(Container):
                 ChatDisplayStatus.SKIPPED,
                 reason=self._per_chat_reasons.get(chat, "Skipped"),
             )
-
-        try:
-            progress = self.query_one("#export-progress-pane", ProgressPane)
-            progress.log_activity(f"Skipped: {chat_name} ({reason})", "warning")
-        except Exception:
-            pass
 
     def _update_step(self, chat_name: str, step_idx: int) -> None:
         """Update step progress during dry-run export."""
