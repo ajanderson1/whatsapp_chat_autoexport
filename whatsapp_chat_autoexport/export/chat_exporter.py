@@ -463,6 +463,16 @@ class ChatExporter:
         for i, chat_name in enumerate(chat_names, 1):
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
 
+            # Settle wait absorbs the Drive-share-return window before we run
+            # the heavier WhatsApp verification. Failure here does NOT short-
+            # circuit verify; it falls through so real non-WhatsApp states
+            # still reach the existing recovery path.
+            settled = self.driver.wait_for_whatsapp_foreground(timeout=8.0)
+            if not settled:
+                self.logger.debug_msg(
+                    "Foreground settle timed out; falling through to verify"
+                )
+
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
             if not self.driver.verify_whatsapp_is_open():

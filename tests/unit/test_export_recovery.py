@@ -361,3 +361,35 @@ class TestExportChatsNewWorkflowRecovery:
 
         assert results["Chat A"] is True
         assert results["Chat B"] is True
+
+    def test_batch_loop_calls_settle_before_verify(self, exporter, mock_driver):
+        """wait_for_whatsapp_foreground() is called before verify_whatsapp_is_open() for each chat."""
+        mock_driver.wait_for_whatsapp_foreground.return_value = True
+        mock_driver.verify_whatsapp_is_open.return_value = True
+
+        exporter.export_with_new_workflow = MagicMock(return_value=(True, "ok"))
+
+        exporter.export_chats_with_new_workflow(["Chat A", "Chat B"], include_media=True)
+
+        # settle called once per chat
+        assert mock_driver.wait_for_whatsapp_foreground.call_count == 2
+        # verify still called (settle does not replace it)
+        assert mock_driver.verify_whatsapp_is_open.call_count >= 2
+
+    def test_batch_loop_still_triggers_recovery_when_settle_times_out(self, exporter, mock_driver):
+        """When settle times out, verify is still called and recovery still runs if verify fails."""
+        mock_driver.wait_for_whatsapp_foreground.return_value = False  # settle timed out
+        mock_driver.verify_whatsapp_is_open.side_effect = [False, True, True]
+        mock_driver.reconnect.return_value = True
+
+        exporter.export_with_new_workflow = MagicMock(return_value=(True, "ok"))
+
+        results, timings, total_time, skipped = exporter.export_chats_with_new_workflow(
+            ["Chat A", "Chat B"], include_media=True
+        )
+
+        # Settle timed out but recovery still ran for Chat A
+        mock_driver.reconnect.assert_called()
+        # Chat A skipped (recovery), Chat B succeeded
+        assert results["Chat A"] is False
+        assert results["Chat B"] is True
