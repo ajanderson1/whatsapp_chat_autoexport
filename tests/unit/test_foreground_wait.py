@@ -69,3 +69,26 @@ def test_logs_when_wait_occurs(caplog):
     wait_for_whatsapp_foreground(wrapper, timeout=0.5, poll_interval=0.01)
     # Logger is a MagicMock on the wrapper; ensure at least one debug/info call happened
     assert wrapper.logger.debug_msg.called or wrapper.logger.info.called
+
+
+from unittest.mock import patch
+
+
+def test_whatsappdriver_method_delegates_to_helper():
+    """WhatsAppDriver.wait_for_whatsapp_foreground should call the helper."""
+    from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+
+    # Build a WhatsAppDriver without actually connecting
+    wd = WhatsAppDriver.__new__(WhatsAppDriver)
+    wd.driver = MagicMock()
+    wd.driver.current_package = "com.whatsapp"
+    wd.logger = MagicMock()
+
+    with patch(
+        "whatsapp_chat_autoexport.export.whatsapp_driver.wait_for_whatsapp_foreground",
+        return_value=True,
+    ) as mock_helper:
+        result = wd.wait_for_whatsapp_foreground(timeout=2.0, poll_interval=0.05)
+
+    assert result is True
+    mock_helper.assert_called_once_with(wd, timeout=2.0, poll_interval=0.05)

@@ -22,6 +22,7 @@ from selenium.webdriver.common.by import By
 from ..config.timeouts import get_timeout_config
 from ..utils.logger import Logger
 from .models import ChatMetadata
+from .foreground_wait import wait_for_whatsapp_foreground
 
 
 # Precise Appium/WebDriver error signatures indicating a dead or crashed session.
@@ -510,6 +511,27 @@ class WhatsAppDriver:
         except Exception as e:
             self.logger.debug_msg(f"Session check failed: {e}")
             return False
+
+    def wait_for_whatsapp_foreground(
+        self, timeout: float = 8.0, poll_interval: float = 0.25
+    ) -> bool:
+        """
+        Wait up to `timeout` seconds for com.whatsapp to become the foreground package.
+
+        Call this before `verify_whatsapp_is_open()` when returning from an external
+        activity (e.g. the Google Drive share sheet) to absorb the 1-3 s hand-back
+        window on Android. Failure falls through to `verify_whatsapp_is_open()`.
+
+        Args:
+            timeout: Maximum seconds to wait.
+            poll_interval: Seconds between package probes.
+
+        Returns:
+            True if `com.whatsapp` was observed before the deadline, False otherwise.
+        """
+        return wait_for_whatsapp_foreground(
+            self, timeout=timeout, poll_interval=poll_interval
+        )
 
     def reconnect(self) -> bool:
         """
