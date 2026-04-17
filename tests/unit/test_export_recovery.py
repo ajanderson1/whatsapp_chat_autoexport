@@ -406,3 +406,39 @@ class TestExportChatsNewWorkflowRecovery:
         # Chat A skipped (recovery), Chat B succeeded
         assert results["Chat A"] is False
         assert results["Chat B"] is True
+
+
+# ---------------------------------------------------------------------------
+# Regression test for the 2026-04-16 Drive-return verify race (Fix 1)
+# See docs/failure-reports/2026-04-16-full-run-pause.md
+# ---------------------------------------------------------------------------
+
+
+def test_regression_drive_return_race_does_not_fail_chat(mock_driver, mock_logger, monkeypatch):
+    """Regression lock for docs/failure-reports/2026-04-16-full-run-pause.md Fix 1.
+
+    Scenario: on entering iteration N, current_package is briefly
+    'com.android.intentresolver' (Drive share return window), then flips to
+    'com.whatsapp'. The settle-wait must absorb the transition; the chat
+    must succeed, not fail.
+    """
+    # Simulate the race: settle-wait observes the package flip and returns True
+    # by the time it completes. verify_whatsapp_is_open then passes cleanly.
+    mock_driver.wait_for_whatsapp_foreground = MagicMock(return_value=True)
+    mock_driver.verify_whatsapp_is_open = MagicMock(return_value=True)
+    mock_driver.is_session_active = MagicMock(return_value=True)
+
+    exporter = ChatExporter(mock_driver, mock_logger)
+    monkeypatch.setattr(
+        exporter, "export_with_new_workflow", lambda **kw: (True, "ok")
+    )
+
+    results, _, _, _ = exporter.export_chats_with_new_workflow(
+        ["RaceChat"], include_media=False
+    )
+
+    assert results["RaceChat"] is True
+    mock_driver.wait_for_whatsapp_foreground.assert_called_once()
+    # reconnect() was NOT invoked because settle+verify both passed
+    mock_driver.reconnect.assert_not_called()
+
