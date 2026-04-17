@@ -18,6 +18,9 @@ class TestExportChatProgressCallbacks:
         from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
 
         mock_driver = MagicMock()
+        # Community probe added in Task 6 - default to "not a community chat"
+        # so the pre-Task-6 tests exercise the full flow unchanged.
+        mock_driver.is_community_chat.return_value = False
         mock_logger = MagicMock()
         # Give step method
         mock_logger.step = MagicMock()
@@ -115,7 +118,8 @@ class TestExportChatProgressCallbacks:
                 on_progress=recorder,
             )
 
-        assert result is True
+        # export_chat_to_google_drive returns an ExportOutcome that coerces to bool
+        assert bool(result) is True
 
         # Verify we got progress events
         assert len(events) >= 1
@@ -220,8 +224,8 @@ class TestExportChatProgressCallbacks:
                 "Community Chat", include_media=True, on_progress=recorder
             )
 
-        # Should return False (skipped)
-        assert result is False
+        # Should return a non-SUCCESS ExportOutcome (skipped/failed)
+        assert bool(result) is False
         # Should NOT have step 6 (upload complete)
         step_indices = [e[1] for e in events]
         assert 6 not in step_indices

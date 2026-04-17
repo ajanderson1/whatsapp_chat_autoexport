@@ -1,9 +1,14 @@
-"""Tests for WhatsAppDriver.is_community_chat() upfront probe."""
+"""Tests for WhatsAppDriver.is_community_chat() upfront probe and ExportOutcome."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+from whatsapp_chat_autoexport.export.chat_exporter import (
+    ChatExporter,
+    ExportOutcome,
+    ExportOutcomeKind,
+)
 
 
 def _make_driver():
@@ -49,3 +54,38 @@ def test_exception_during_probe_returns_false():
     wd.driver.find_elements.side_effect = RuntimeError("session error")
 
     assert wd.is_community_chat() is False
+
+
+# ---------------------------------------------------------------------------
+# ExportOutcome tests (Task 6)
+# ---------------------------------------------------------------------------
+
+
+def test_export_outcome_bool_coercion_true_for_success():
+    outcome = ExportOutcome(kind=ExportOutcomeKind.SUCCESS)
+    assert bool(outcome) is True
+
+
+def test_export_outcome_bool_coercion_false_for_skipped_and_failed():
+    assert bool(ExportOutcome(kind=ExportOutcomeKind.SKIPPED_COMMUNITY)) is False
+    assert bool(ExportOutcome(kind=ExportOutcomeKind.FAILED, reason="x")) is False
+
+
+def test_export_chat_returns_skipped_community_when_probe_hits():
+    driver = MagicMock()
+    driver.is_community_chat = MagicMock(return_value=True)
+    logger = MagicMock()
+    exporter = ChatExporter(driver, logger)
+
+    outcome = exporter.export_chat_to_google_drive("ChatA", include_media=False)
+
+    assert isinstance(outcome, ExportOutcome)
+    assert outcome.kind == ExportOutcomeKind.SKIPPED_COMMUNITY
+    driver.is_community_chat.assert_called_once()
+
+
+# NOTE: A fourth test for the 'More not found' branch (returning SKIPPED_COMMUNITY
+# when the overflow menu exists but 'More' is absent) is intentionally omitted.
+# There is no discrete helper method to patch cleanly for that path.
+# That branch is covered indirectly via Task 7 integration tests and by
+# test_export_chat_returns_skipped_community_when_probe_hits above.

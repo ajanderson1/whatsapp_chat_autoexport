@@ -8,6 +8,8 @@ and Google Drive upload.
 import subprocess
 import os
 import time
+from dataclasses import dataclass
+from enum import Enum
 from time import sleep
 from typing import Optional, Tuple, List, Dict, Set, Any, Callable
 from pathlib import Path
@@ -23,6 +25,27 @@ from ..automation.elements.element_cache import ElementCache
 from ..core.events import EventBus, get_event_bus
 from ..state.state_manager import StateManager
 from ..state.models import SessionStatus
+
+
+class ExportOutcomeKind(str, Enum):
+    SUCCESS = "success"
+    SKIPPED_COMMUNITY = "skipped_community"
+    FAILED = "failed"
+
+
+@dataclass
+class ExportOutcome:
+    """
+    Structured result of an attempt to export a single chat.
+
+    Coerces to bool: True only for SUCCESS. This preserves existing call sites
+    that check `if exporter.export_chat_to_google_drive(...)`.
+    """
+    kind: ExportOutcomeKind = ExportOutcomeKind.SUCCESS
+    reason: str = ""
+
+    def __bool__(self) -> bool:
+        return self.kind == ExportOutcomeKind.SUCCESS
 
 
 # Helper functions for resume functionality
@@ -806,7 +829,7 @@ class ChatExporter:
         return False
     
     def export_chat_to_google_drive(self, chat_name: str, include_media: bool = True,
-                                      on_progress: Optional[Callable] = None) -> bool:
+                                      on_progress: Optional[Callable] = None) -> "ExportOutcome":
         """
         Export a chat to Google Drive with or without media.
 
@@ -818,7 +841,7 @@ class ChatExporter:
             on_progress: Optional callback for progress updates.
                          Signature: on_progress(phase, message, current, total, item_name="")
 
-        Returns True if export initiated successfully, False if skipped (community chat).
+        Returns an ExportOutcome that coerces to bool: True for SUCCESS, False otherwise.
         """
 
         def _fire(step_index: int, total_steps: int, message: str) -> None:
@@ -828,6 +851,19 @@ class ChatExporter:
                     on_progress("export", message, step_index, total_steps, chat_name)
                 except Exception:
                     pass  # Never let callback errors crash the export
+
+        # Upfront community-chat probe - avoid opening the overflow menu at all.
+        try:
+            if self.driver.is_community_chat():
+                self.logger.warning(
+                    f"Skipped '{chat_name}' - community chat (detected up front)"
+                )
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
+                    reason="Community chat - export unsupported",
+                )
+        except Exception as e:
+            self.logger.debug_msg(f"Community probe failed: {e}")
 
         media_status = "with media" if include_media else "without media"
         self.logger.info(f"\n{'='*70}")
@@ -995,7 +1031,10 @@ class ChatExporter:
                 self.driver.driver.press_keycode(4)  # Go back to main screen
                 sleep(0.5)
                 self.logger.info("Returned to main screen (skipped community chat)")
-                return False  # Skip this chat
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
+                    reason="Community chat - 'More' option absent",
+                )
             
             more_option.click()
             sleep(0.5)  # Brief delay for submenu to appear
@@ -1037,7 +1076,10 @@ class ChatExporter:
                 self.driver.driver.press_keycode(4)  # Go back to main screen
                 sleep(0.5)
                 self.logger.info("Returned to main screen (skipped - export not available)")
-                return False  # Skip this chat
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.FAILED,
+                    reason="Export option not found",
+                )
             
             export_option.click()
             sleep(0.5)  # Brief delay for export dialog
@@ -1052,7 +1094,10 @@ class ChatExporter:
         # Check for advanced chat privacy error dialog
         if self._handle_advanced_chat_privacy_error(chat_name):
             # Error dialog was detected and handled - skip this chat
-            return False
+            return ExportOutcome(
+                kind=ExportOutcomeKind.FAILED,
+                reason="Advanced chat privacy restriction",
+            )
         
         # STEP 4: Select media option (Include or Without) OR detect text-only chat
         media_option_name = "Include media" if include_media else "Without media"
@@ -1552,8 +1597,8 @@ class ChatExporter:
         self.logger.info("📤 Google Drive should now be handling the export...")
         _fire(6, 6, "Export initiated - uploading to Google Drive")
 
-        return True
-    
+        return ExportOutcome(kind=ExportOutcomeKind.SUCCESS)
+
     def format_time(self, seconds: float) -> str:
         """Format seconds into a human-readable time string."""
         if seconds < 60:
