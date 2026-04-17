@@ -74,6 +74,10 @@ class ExportPane(Container):
             "failed": [],
             "skipped": [],
         }
+        # Authoritative per-chat reason strings, populated whenever
+        # _fail_chat_export / _skip_chat_export fire. Used by the
+        # end-of-run reconcile pass to re-assert widget state.
+        self._per_chat_reasons: dict[str, str] = {}
         self._consecutive_failures: int = 0
         self._cancel_after_current: bool = False
         self._paused: bool = False
@@ -125,6 +129,7 @@ class ExportPane(Container):
             "failed": [],
             "skipped": [],
         }
+        self._per_chat_reasons = {}
         self._consecutive_failures = 0
         self._cancel_after_current = False
         self._paused = False
@@ -392,7 +397,7 @@ class ExportPane(Container):
 
             try:
                 if driver:
-                    success = await asyncio.to_thread(
+                    outcome = await asyncio.to_thread(
                         self._export_single_chat,
                         driver,
                         chat_name,
@@ -401,17 +406,43 @@ class ExportPane(Container):
                         _export_progress_callback,
                     )
 
-                    if success:
+                    # Normalise legacy bool returns to ExportOutcome so the
+                    # tri-state branches below can be written uniformly.
+                    from ...export.chat_exporter import (
+                        ExportOutcome,
+                        ExportOutcomeKind,
+                    )
+                    if outcome is True:
+                        outcome = ExportOutcome(kind=ExportOutcomeKind.SUCCESS)
+                    elif outcome is False:
+                        outcome = ExportOutcome(
+                            kind=ExportOutcomeKind.FAILED,
+                            reason="Unknown failure",
+                        )
+
+                    if outcome.kind == ExportOutcomeKind.SUCCESS:
                         results["completed"].append(chat_name)
                         self._consecutive_failures = 0
                         self.app.call_from_thread(
                             self._complete_chat_export, chat_name
                         )
-                    else:
+                    elif outcome.kind == ExportOutcomeKind.SKIPPED_COMMUNITY:
+                        # Community chats must NOT count toward the consecutive
+                        # failure limit - they are an expected skip, not a
+                        # transient UI failure.
+                        results["skipped"].append(chat_name)
+                        self.app.call_from_thread(
+                            self._skip_chat_export,
+                            chat_name,
+                            outcome.reason or "Community chat - export unsupported",
+                        )
+                    else:  # FAILED
                         results["failed"].append(chat_name)
                         self._consecutive_failures += 1
                         self.app.call_from_thread(
-                            self._fail_chat_export, chat_name, "Export failed"
+                            self._fail_chat_export,
+                            chat_name,
+                            outcome.reason or "Export failed",
                         )
 
                         if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
@@ -469,6 +500,16 @@ class ExportPane(Container):
                             )
                         break
 
+        # Re-assert widget state from self._export_results at run end. Some
+        # per-chat widget updates during the loop may have silently failed
+        # (e.g. transient query_one misses on tab switches). This pass makes
+        # the chat-list panel the authoritative per-chat status record.
+        try:
+            self.app.call_from_thread(self._reconcile_chat_list_statuses)
+        except Exception:
+            # Fallback for test stubs that don't implement call_from_thread
+            self._reconcile_chat_list_statuses()
+
         return results
 
     def _export_single_chat(
@@ -492,7 +533,11 @@ class ExportPane(Container):
         Returns:
             True if successful, False otherwise
         """
-        from ...export.chat_exporter import ChatExporter
+        from ...export.chat_exporter import (
+            ChatExporter,
+            ExportOutcome,
+            ExportOutcomeKind,
+        )
 
         debug_mode = getattr(self.app, "debug_mode", False)
 
@@ -505,10 +550,23 @@ class ExportPane(Container):
         exporter = ChatExporter(driver, logger)
 
         try:
+            # Settle wait absorbs the Drive-share-return window before verify.
+            # Timeout here is not fatal - we fall through to verify so existing
+            # failure handling still triggers for genuine non-WhatsApp states.
+            if not driver.wait_for_whatsapp_foreground(timeout=8.0):
+                if log_callback:
+                    log_callback(
+                        "Foreground settle timed out; running full verify",
+                        "debug",
+                    )
+
             if not driver.verify_whatsapp_is_open():
                 if log_callback:
                     log_callback("WhatsApp verification failed", "error")
-                return False
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.FAILED,
+                    reason="WhatsApp verification failed",
+                )
 
             # Navigate to main screen and open the chat
             driver.navigate_to_main()
@@ -518,18 +576,21 @@ class ExportPane(Container):
             if not driver.click_chat(chat_name):
                 if log_callback:
                     log_callback(f"Could not open chat '{chat_name}'", "error")
-                return False
+                return ExportOutcome(
+                    kind=ExportOutcomeKind.FAILED,
+                    reason=f"Could not open chat '{chat_name}'",
+                )
 
-            success = exporter.export_chat_to_google_drive(
+            outcome = exporter.export_chat_to_google_drive(
                 chat_name,
                 include_media=include_media,
                 on_progress=progress_callback,
             )
-            return success
+            return outcome
         except Exception as e:
             if log_callback:
                 log_callback(f"Export error: {e}", "error")
-            return False
+            return ExportOutcome(kind=ExportOutcomeKind.FAILED, reason=str(e))
 
     # ------------------------------------------------------------------
     # UI update helpers (called from worker thread via call_from_thread)
@@ -590,10 +651,13 @@ class ExportPane(Container):
         """Mark a chat as failed."""
         self._current_chat = None
         self._export_results["failed"].append(chat_name)
+        self._per_chat_reasons[chat_name] = error
 
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
-            chat_list.update_chat_status(chat_name, ChatDisplayStatus.FAILED)
+            chat_list.update_chat_status(
+                chat_name, ChatDisplayStatus.FAILED, reason=error
+            )
         except Exception:
             pass
 
@@ -606,10 +670,13 @@ class ExportPane(Container):
     def _skip_chat_export(self, chat_name: str, reason: str) -> None:
         """Mark a chat as skipped."""
         self._export_results["skipped"].append(chat_name)
+        self._per_chat_reasons[chat_name] = reason
 
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
-            chat_list.update_chat_status(chat_name, ChatDisplayStatus.SKIPPED)
+            chat_list.update_chat_status(
+                chat_name, ChatDisplayStatus.SKIPPED, reason=reason
+            )
         except Exception:
             pass
 
@@ -618,6 +685,35 @@ class ExportPane(Container):
             progress.log_activity(f"Skipped: {chat_name} ({reason})", "warning")
         except Exception:
             pass
+
+    def _reconcile_chat_list_statuses(self) -> None:
+        """
+        Re-push authoritative per-chat status from self._export_results to the
+        ChatListWidget at end of run. Defensive: some widget updates during
+        the loop may have silently failed due to a transient query_one failure.
+        This ensures the chat list panel matches results exactly.
+        """
+        try:
+            chat_list = self.query_one("#chat-status-list", ChatListWidget)
+        except Exception:
+            return
+
+        for chat in self._export_results.get("completed", []):
+            chat_list.update_chat_status(
+                chat, ChatDisplayStatus.COMPLETED, reason=None
+            )
+        for chat in self._export_results.get("failed", []):
+            chat_list.update_chat_status(
+                chat,
+                ChatDisplayStatus.FAILED,
+                reason=self._per_chat_reasons.get(chat, "Failed"),
+            )
+        for chat in self._export_results.get("skipped", []):
+            chat_list.update_chat_status(
+                chat,
+                ChatDisplayStatus.SKIPPED,
+                reason=self._per_chat_reasons.get(chat, "Skipped"),
+            )
 
     def _update_step(self, chat_name: str, step_idx: int) -> None:
         """Update step progress during dry-run export."""

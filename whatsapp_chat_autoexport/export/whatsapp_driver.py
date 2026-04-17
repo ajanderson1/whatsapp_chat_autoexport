@@ -22,6 +22,7 @@ from selenium.webdriver.common.by import By
 from ..config.timeouts import get_timeout_config
 from ..utils.logger import Logger
 from .models import ChatMetadata
+from .foreground_wait import wait_for_whatsapp_foreground
 
 
 # Precise Appium/WebDriver error signatures indicating a dead or crashed session.
@@ -510,6 +511,27 @@ class WhatsAppDriver:
         except Exception as e:
             self.logger.debug_msg(f"Session check failed: {e}")
             return False
+
+    def wait_for_whatsapp_foreground(
+        self, timeout: float = 8.0, poll_interval: float = 0.25
+    ) -> bool:
+        """
+        Wait up to `timeout` seconds for com.whatsapp to become the foreground package.
+
+        Call this before `verify_whatsapp_is_open()` when returning from an external
+        activity (e.g. the Google Drive share sheet) to absorb the 1-3 s hand-back
+        window on Android. Failure falls through to `verify_whatsapp_is_open()`.
+
+        Args:
+            timeout: Maximum seconds to wait.
+            poll_interval: Seconds between package probes.
+
+        Returns:
+            True if `com.whatsapp` was observed before the deadline, False otherwise.
+        """
+        return wait_for_whatsapp_foreground(
+            self, timeout=timeout, poll_interval=poll_interval
+        )
 
     def reconnect(self) -> bool:
         """
@@ -1334,6 +1356,24 @@ class WhatsAppDriver:
             self.logger.error("")
             self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
             self.logger.error("=" * 70)
+            return False
+
+    def is_community_chat(self) -> bool:
+        """
+        Probe whether the currently open chat is a WhatsApp Community chat.
+
+        Community chats cannot be exported via the standard menu flow.
+        This probe checks for the presence of the ``community_pill`` resource ID
+        that WhatsApp renders in the chat toolbar for community-type chats.
+
+        Returns:
+            True  — community_pill element is present and visible.
+            False — element absent, hidden, or any exception occurred (fail-safe).
+        """
+        try:
+            elements = self.driver.find_elements("id", "com.whatsapp:id/community_pill")
+            return bool(elements) and any(el.is_displayed() for el in elements)
+        except Exception:
             return False
 
     def restart_app_to_top(self) -> bool:
