@@ -364,17 +364,30 @@ class TestExportChatsNewWorkflowRecovery:
 
     def test_batch_loop_calls_settle_before_verify(self, exporter, mock_driver):
         """wait_for_whatsapp_foreground() is called before verify_whatsapp_is_open() for each chat."""
+        from unittest.mock import Mock, call
+
         mock_driver.wait_for_whatsapp_foreground.return_value = True
         mock_driver.verify_whatsapp_is_open.return_value = True
 
         exporter.export_with_new_workflow = MagicMock(return_value=(True, "ok"))
 
+        # Track call ordering using parent mock
+        parent = Mock()
+        parent.attach_mock(mock_driver.wait_for_whatsapp_foreground, "settle")
+        parent.attach_mock(mock_driver.verify_whatsapp_is_open, "verify")
+
         exporter.export_chats_with_new_workflow(["Chat A", "Chat B"], include_media=True)
 
         # settle called once per chat
         assert mock_driver.wait_for_whatsapp_foreground.call_count == 2
-        # verify still called (settle does not replace it)
-        assert mock_driver.verify_whatsapp_is_open.call_count >= 2
+        # verify called exactly twice (once pre-verify per chat, no recovery needed)
+        assert mock_driver.verify_whatsapp_is_open.call_count == 2
+
+        # Verify settle happened before verify in call sequence
+        call_names = [c[0] for c in parent.mock_calls]
+        first_settle = call_names.index("settle")
+        first_verify = call_names.index("verify")
+        assert first_settle < first_verify, f"Expected settle BEFORE verify, got sequence: {call_names}"
 
     def test_batch_loop_still_triggers_recovery_when_settle_times_out(self, exporter, mock_driver):
         """When settle times out, verify is still called and recovery still runs if verify fails."""
@@ -388,8 +401,8 @@ class TestExportChatsNewWorkflowRecovery:
             ["Chat A", "Chat B"], include_media=True
         )
 
-        # Settle timed out but recovery still ran for Chat A
-        mock_driver.reconnect.assert_called()
+        # Settle timed out but recovery still ran exactly once for Chat A
+        mock_driver.reconnect.assert_called_once()
         # Chat A skipped (recovery), Chat B succeeded
         assert results["Chat A"] is False
         assert results["Chat B"] is True
