@@ -304,3 +304,75 @@ async def test_no_duplicate_listview_ids_with_both_panes(tui_app):
         ids = [lv.id for lv in listviews if lv.id and "listview" in lv.id]
         # Should have at least two distinct IDs (one from each ChatListWidget)
         assert len(ids) == len(set(ids)), f"Duplicate ListView IDs found: {ids}"
+
+
+# =============================================================================
+# ExportPane settle-wait integration
+# =============================================================================
+
+from unittest.mock import MagicMock, patch, PropertyMock
+
+
+class TestExportPaneSettleWait:
+    """Verify TUI calls wait_for_whatsapp_foreground before verify_whatsapp_is_open."""
+
+    def _make_driver(self, settle_return=True, verify_return=True):
+        driver = MagicMock()
+        driver.wait_for_whatsapp_foreground = MagicMock(return_value=settle_return)
+        driver.verify_whatsapp_is_open = MagicMock(return_value=verify_return)
+        driver.navigate_to_main = MagicMock()
+        driver.click_chat = MagicMock(return_value=True)
+        return driver
+
+    def _make_pane(self):
+        """Create an ExportPane with a mocked app property to avoid NoActiveAppError."""
+        pane = ExportPane()
+        mock_app = MagicMock()
+        mock_app.debug_mode = False
+        # Patch the app property on the instance's type to avoid Textual's ContextVar check
+        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app):
+            pass  # Just to confirm the patch works
+        return pane, mock_app
+
+    def test_settle_called_before_verify_on_tui_path(self):
+        pane = ExportPane()
+        driver = self._make_driver(settle_return=True, verify_return=True)
+        mock_app = MagicMock()
+        mock_app.debug_mode = False
+
+        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app), \
+             patch(
+                 "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
+             ) as mock_exporter_cls:
+            mock_exporter = mock_exporter_cls.return_value
+            mock_exporter.export_chat_to_google_drive.return_value = True
+
+            result = pane._export_single_chat(
+                driver, "ChatA", include_media=False, log_callback=None
+            )
+
+        assert result is True
+        driver.wait_for_whatsapp_foreground.assert_called_once()
+        driver.verify_whatsapp_is_open.assert_called_once()
+        # Settle must precede verify
+        order = [
+            c[0]
+            for c in driver.mock_calls
+            if c[0] in ("wait_for_whatsapp_foreground", "verify_whatsapp_is_open")
+        ]
+        assert order[0] == "wait_for_whatsapp_foreground"
+
+    def test_settle_timeout_still_calls_verify(self):
+        pane = ExportPane()
+        driver = self._make_driver(settle_return=False, verify_return=False)
+        mock_app = MagicMock()
+        mock_app.debug_mode = False
+
+        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app):
+            result = pane._export_single_chat(
+                driver, "ChatA", include_media=False, log_callback=None
+            )
+
+        assert result is False
+        driver.wait_for_whatsapp_foreground.assert_called_once()
+        driver.verify_whatsapp_is_open.assert_called_once()

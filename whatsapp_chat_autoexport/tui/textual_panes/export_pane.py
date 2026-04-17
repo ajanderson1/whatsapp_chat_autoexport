@@ -505,6 +505,16 @@ class ExportPane(Container):
         exporter = ChatExporter(driver, logger)
 
         try:
+            # Settle wait absorbs the Drive-share-return window before verify.
+            # Timeout here is not fatal - we fall through to verify so existing
+            # failure handling still triggers for genuine non-WhatsApp states.
+            if not driver.wait_for_whatsapp_foreground(timeout=8.0):
+                if log_callback:
+                    log_callback(
+                        "Foreground settle timed out; running full verify",
+                        "debug",
+                    )
+
             if not driver.verify_whatsapp_is_open():
                 if log_callback:
                     log_callback("WhatsApp verification failed", "error")
