@@ -1358,6 +1358,24 @@ class WhatsAppDriver:
             self.logger.error("=" * 70)
             return False
 
+    def is_community_chat(self) -> bool:
+        """
+        Probe whether the currently open chat is a WhatsApp Community chat.
+
+        Community chats cannot be exported via the standard menu flow.
+        This probe checks for the presence of the ``community_pill`` resource ID
+        that WhatsApp renders in the chat toolbar for community-type chats.
+
+        Returns:
+            True  — community_pill element is present and visible.
+            False — element absent, hidden, or any exception occurred (fail-safe).
+        """
+        try:
+            elements = self.driver.find_elements("id", "com.whatsapp:id/community_pill")
+            return bool(elements) and any(el.is_displayed() for el in elements)
+        except Exception:
+            return False
+
     def restart_app_to_top(self) -> bool:
         """
         Restart WhatsApp to reliably return to the top of the chat list.
