@@ -12,7 +12,10 @@ import pytest
 
 from whatsapp_chat_autoexport.tui.textual_panes.export_pane import ExportPane
 from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
-from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import ChatListWidget
+from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import (
+    ChatListWidget,
+    ChatDisplayStatus,
+)
 from whatsapp_chat_autoexport.tui.textual_widgets.progress_pane import ProgressPane
 
 from textual.containers import Container
@@ -469,3 +472,131 @@ class TestExportPaneTriStateResult:
         pane._fail_chat_export.assert_not_called()
         # Consecutive-failures counter must NOT have been incremented
         assert pane._consecutive_failures == 0
+
+
+# =============================================================================
+# ExportPane reason plumbing (Task 9)
+# =============================================================================
+
+
+class TestExportPaneReasonPlumbing:
+    """Reasons must reach ChatListWidget.update_chat_status."""
+
+    def test_fail_chat_export_forwards_reason_to_widget(self):
+        pane = ExportPane()
+        pane._export_results = {"completed": [], "failed": [], "skipped": []}
+        pane._per_chat_reasons = {}
+
+        chat_list = MagicMock()
+        progress = MagicMock()
+
+        def query_one(selector, cls):
+            if "chat-status-list" in selector:
+                return chat_list
+            if "export-progress-pane" in selector:
+                return progress
+            raise RuntimeError("unknown selector")
+
+        pane.query_one = query_one
+
+        pane._fail_chat_export("ChatA", "Verify failed")
+
+        chat_list.update_chat_status.assert_called_once()
+        args, kwargs = chat_list.update_chat_status.call_args
+        assert args[0] == "ChatA"
+        assert kwargs.get("reason") == "Verify failed" or (
+            len(args) >= 3 and args[2] == "Verify failed"
+        )
+        # Pane-local record also stored for end-of-run reconcile
+        assert pane._per_chat_reasons["ChatA"] == "Verify failed"
+
+    def test_skip_chat_export_forwards_reason_to_widget(self):
+        pane = ExportPane()
+        pane._export_results = {"completed": [], "failed": [], "skipped": []}
+        pane._per_chat_reasons = {}
+
+        chat_list = MagicMock()
+        progress = MagicMock()
+
+        def query_one(selector, cls):
+            if "chat-status-list" in selector:
+                return chat_list
+            if "export-progress-pane" in selector:
+                return progress
+            raise RuntimeError("unknown selector")
+
+        pane.query_one = query_one
+
+        pane._skip_chat_export("ChatB", "Community chat")
+
+        args, kwargs = chat_list.update_chat_status.call_args
+        assert args[0] == "ChatB"
+        assert kwargs.get("reason") == "Community chat" or (
+            len(args) >= 3 and args[2] == "Community chat"
+        )
+        assert pane._per_chat_reasons["ChatB"] == "Community chat"
+
+
+# =============================================================================
+# ExportPane end-of-run reconcile (Task 10)
+# =============================================================================
+
+
+class TestExportPaneReconcile:
+    """After a run, the widget must reflect every chat in results."""
+
+    def test_reconcile_marks_all_failed_chats(self):
+        pane = ExportPane()
+        pane._export_results = {
+            "completed": ["A"],
+            "failed": ["B", "C"],
+            "skipped": ["D"],
+        }
+        pane._per_chat_reasons = {
+            "B": "Verify failed",
+            "C": "Timeout",
+            "D": "Community",
+        }
+
+        chat_list = MagicMock()
+        def query_one(selector, cls):
+            if "chat-status-list" in selector:
+                return chat_list
+            raise RuntimeError()
+        pane.query_one = query_one
+
+        pane._reconcile_chat_list_statuses()
+
+        calls = chat_list.update_chat_status.call_args_list
+        names = {c.args[0] for c in calls}
+        assert names == {"A", "B", "C", "D"}
+
+        status_by_name = {c.args[0]: c.args[1] for c in calls}
+        assert status_by_name["A"] == ChatDisplayStatus.COMPLETED
+        assert status_by_name["B"] == ChatDisplayStatus.FAILED
+        assert status_by_name["C"] == ChatDisplayStatus.FAILED
+        assert status_by_name["D"] == ChatDisplayStatus.SKIPPED
+
+        # Reasons propagated on failure/skip entries
+        reason_by_name = {
+            c.args[0]: c.kwargs.get("reason") for c in calls
+        }
+        assert reason_by_name["B"] == "Verify failed"
+        assert reason_by_name["C"] == "Timeout"
+        assert reason_by_name["D"] == "Community"
+        # Completed entry clears reason
+        assert reason_by_name["A"] is None
+
+    def test_reconcile_noop_when_widget_missing(self):
+        """If the widget can't be queried, reconcile must not raise."""
+        pane = ExportPane()
+        pane._export_results = {"completed": ["A"], "failed": [], "skipped": []}
+        pane._per_chat_reasons = {}
+
+        def query_one(selector, cls):
+            raise RuntimeError("widget not mounted")
+
+        pane.query_one = query_one
+
+        # Must not raise
+        pane._reconcile_chat_list_statuses()

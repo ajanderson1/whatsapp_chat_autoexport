@@ -74,6 +74,10 @@ class ExportPane(Container):
             "failed": [],
             "skipped": [],
         }
+        # Authoritative per-chat reason strings, populated whenever
+        # _fail_chat_export / _skip_chat_export fire. Used by the
+        # end-of-run reconcile pass to re-assert widget state.
+        self._per_chat_reasons: dict[str, str] = {}
         self._consecutive_failures: int = 0
         self._cancel_after_current: bool = False
         self._paused: bool = False
@@ -125,6 +129,7 @@ class ExportPane(Container):
             "failed": [],
             "skipped": [],
         }
+        self._per_chat_reasons = {}
         self._consecutive_failures = 0
         self._cancel_after_current = False
         self._paused = False
@@ -495,6 +500,16 @@ class ExportPane(Container):
                             )
                         break
 
+        # Re-assert widget state from self._export_results at run end. Some
+        # per-chat widget updates during the loop may have silently failed
+        # (e.g. transient query_one misses on tab switches). This pass makes
+        # the chat-list panel the authoritative per-chat status record.
+        try:
+            self.app.call_from_thread(self._reconcile_chat_list_statuses)
+        except Exception:
+            # Fallback for test stubs that don't implement call_from_thread
+            self._reconcile_chat_list_statuses()
+
         return results
 
     def _export_single_chat(
@@ -636,10 +651,13 @@ class ExportPane(Container):
         """Mark a chat as failed."""
         self._current_chat = None
         self._export_results["failed"].append(chat_name)
+        self._per_chat_reasons[chat_name] = error
 
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
-            chat_list.update_chat_status(chat_name, ChatDisplayStatus.FAILED)
+            chat_list.update_chat_status(
+                chat_name, ChatDisplayStatus.FAILED, reason=error
+            )
         except Exception:
             pass
 
@@ -652,12 +670,44 @@ class ExportPane(Container):
     def _skip_chat_export(self, chat_name: str, reason: str) -> None:
         """Mark a chat as skipped."""
         self._export_results["skipped"].append(chat_name)
+        self._per_chat_reasons[chat_name] = reason
 
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
-            chat_list.update_chat_status(chat_name, ChatDisplayStatus.SKIPPED)
+            chat_list.update_chat_status(
+                chat_name, ChatDisplayStatus.SKIPPED, reason=reason
+            )
         except Exception:
             pass
+
+    def _reconcile_chat_list_statuses(self) -> None:
+        """
+        Re-push authoritative per-chat status from self._export_results to the
+        ChatListWidget at end of run. Defensive: some widget updates during
+        the loop may have silently failed due to a transient query_one failure.
+        This ensures the chat list panel matches results exactly.
+        """
+        try:
+            chat_list = self.query_one("#chat-status-list", ChatListWidget)
+        except Exception:
+            return
+
+        for chat in self._export_results.get("completed", []):
+            chat_list.update_chat_status(
+                chat, ChatDisplayStatus.COMPLETED, reason=None
+            )
+        for chat in self._export_results.get("failed", []):
+            chat_list.update_chat_status(
+                chat,
+                ChatDisplayStatus.FAILED,
+                reason=self._per_chat_reasons.get(chat, "Failed"),
+            )
+        for chat in self._export_results.get("skipped", []):
+            chat_list.update_chat_status(
+                chat,
+                ChatDisplayStatus.SKIPPED,
+                reason=self._per_chat_reasons.get(chat, "Skipped"),
+            )
 
         try:
             progress = self.query_one("#export-progress-pane", ProgressPane)
