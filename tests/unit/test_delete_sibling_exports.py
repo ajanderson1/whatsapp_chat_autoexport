@@ -128,3 +128,23 @@ class TestSubstringCollisionsRejected:
 
         assert removed == 0
         assert fake.deleted_ids == []
+
+
+class TestNonNumericSuffixesRejected:
+    def test_non_numeric_suffixes_are_not_deleted(self):
+        """`(abc)` or custom renames must be ignored."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            list_files=[
+                {"id": "x1", "name": "WhatsApp Chat with Daniel Cocking (abc).zip"},
+                {"id": "x2", "name": "WhatsApp Chat with Daniel Cocking (1) backup.zip"},
+            ],
+        )
+        c.service = fake
+
+        removed = c.delete_sibling_exports("Daniel Cocking")
+
+        assert removed == 0
+        assert fake.deleted_ids == []
