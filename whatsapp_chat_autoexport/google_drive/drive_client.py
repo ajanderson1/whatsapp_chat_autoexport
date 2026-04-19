@@ -83,35 +83,35 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return []
 
-        try:
-            # Build query
-            if folder_id and query:
-                full_query = f"'{folder_id}' in parents and {query}"
-            elif folder_id:
-                full_query = f"'{folder_id}' in parents"
-            elif query:
-                full_query = query
-            else:
-                full_query = None
+        # Build query
+        if folder_id and query:
+            full_query = f"'{folder_id}' in parents and {query}"
+        elif folder_id:
+            full_query = f"'{folder_id}' in parents"
+        elif query:
+            full_query = query
+        else:
+            full_query = None
 
-            # List files
-            results = self.service.files().list(
-                q=full_query,
-                pageSize=page_size,
-                fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
-            ).execute()
+        with self._service_lock:
+            try:
+                results = self.service.files().list(
+                    q=full_query,
+                    pageSize=page_size,
+                    fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
+                ).execute()
 
-            files = results.get('files', [])
-            self.logger.debug_msg(f"Found {len(files)} files")
+                files = results.get('files', [])
+                self.logger.debug_msg(f"Found {len(files)} files")
 
-            return files
+                return files
 
-        except HttpError as error:
-            self.logger.error(f"HTTP error listing files: {error}")
-            return []
-        except Exception as e:
-            self.logger.error(f"Error listing files: {e}")
-            return []
+            except HttpError as error:
+                self.logger.error(f"HTTP error listing files: {error}")
+                return []
+            except Exception as e:
+                self.logger.error(f"Error listing files: {e}")
+                return []
 
     def download_file(self,
                       file_id: str,
