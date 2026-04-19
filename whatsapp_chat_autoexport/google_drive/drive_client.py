@@ -2,9 +2,18 @@
 Google Drive API Client module.
 
 Low-level wrapper around Google Drive API for file operations.
+
+Thread-safety:
+    GoogleDriveClient serializes all access to self.service through
+    self._service_lock. Every public method that touches self.service
+    must acquire the lock for the full duration of its interaction with
+    the service. Methods MUST NOT call each other while holding the lock
+    (the lock is non-reentrant); any internal composition goes through
+    the public API, which acquires the lock itself.
 """
 
 import io
+import threading
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -32,6 +41,7 @@ class GoogleDriveClient:
         self.auth = auth
         self.logger = logger or Logger()
         self.service = None
+        self._service_lock = threading.Lock()
 
     def connect(self) -> bool:
         """
