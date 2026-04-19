@@ -279,3 +279,60 @@ class TestListingFailureReturnsZero:
             "Drive cleanup" in msg and "failed to list" in msg
             for msg in warning_messages
         ), f"expected listing-failure warning, got: {warning_messages!r}"
+
+
+class TestPerFileDeleteFailureContinues:
+    def test_one_delete_fails_others_still_succeed(self):
+        """A single failing delete must not stop the loop. Return count reflects
+        only successful deletes."""
+        from googleapiclient.errors import HttpError
+
+        class _FakeResp:
+            status = 500
+            reason = "Internal Server Error"
+
+        class _MixedService:
+            """list returns 3 matching files; delete raises on the first id,
+            succeeds on the rest."""
+
+            def __init__(self):
+                self.deleted_ok: list[str] = []
+
+            def files(self_inner):
+                return self_inner
+
+            def list(self_inner, **kwargs):
+                class _Exec:
+                    def execute(self_e):
+                        return {
+                            "files": [
+                                {"id": "fail", "name": "WhatsApp Chat with X"},
+                                {"id": "ok1", "name": "WhatsApp Chat with X.zip"},
+                                {"id": "ok2", "name": "WhatsApp Chat with X (1).zip"},
+                            ]
+                        }
+
+                return _Exec()
+
+            def delete(self_inner, fileId=None, **kwargs):
+                outer = self_inner
+
+                class _Exec:
+                    def execute(self_e):
+                        if fileId == "fail":
+                            raise HttpError(_FakeResp(), b"nope")
+                        outer.deleted_ok.append(fileId)
+                        return {}
+
+                return _Exec()
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        svc = _MixedService()
+        c.service = svc
+
+        removed = c.delete_sibling_exports("X")
+
+        assert removed == 2
+        assert svc.deleted_ok == ["ok1", "ok2"]
+        assert c._service_lock.locked() is False
