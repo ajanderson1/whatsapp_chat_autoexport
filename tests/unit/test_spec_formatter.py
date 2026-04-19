@@ -452,3 +452,191 @@ def test_index_timezone():
     result = formatter.format_index(msgs)
 
     assert "timezone: America/New_York" in result
+
+
+# ---------------------------------------------------------------------------
+# Transcription injection
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_voice_with_transcription_file(tmp_path):
+    """Voice message gets an indented [Transcription]: line when a file exists."""
+    transcription_content = (
+        "# Transcription of: PTT-20240115-WA0001.opus\n"
+        "# Transcribed at: 2026-04-19\n"
+        "# Language: en\n"
+        "# Processing time: 2.3s\n"
+        "# Model: scribe_v1\n"
+        "\n"
+        "Bring a frying pan, spatula, butter and stuff.\n"
+    )
+    (tmp_path / "PTT-20240115-WA0001_transcription.txt").write_text(transcription_content)
+
+    formatter = SpecFormatter(contact_name="Tim Cocking")
+    msgs = [
+        make_msg(
+            "2024-01-15", "10:15:00", "Tim Cocking",
+            "PTT-20240115-WA0001.opus (file attached)",
+            is_media=True, media_type="audio",
+        )
+    ]
+
+    result = formatter.format_transcript(msgs, media_dir=tmp_path)
+
+    assert "[10:15] Tim Cocking: <voice>" in result
+    assert "  [Transcription]: Bring a frying pan, spatula, butter and stuff." in result
+
+
+@pytest.mark.unit
+def test_voice_without_transcription_file(tmp_path):
+    """Voice message without a matching transcription file renders bare <voice> tag."""
+    formatter = SpecFormatter(contact_name="Alice")
+    msgs = [
+        make_msg(
+            "2024-01-15", "10:15:00", "Alice",
+            "PTT-20240115-WA0001.opus (file attached)",
+            is_media=True, media_type="audio",
+        )
+    ]
+
+    result = formatter.format_transcript(msgs, media_dir=tmp_path)
+
+    assert "<voice>" in result
+    assert "[Transcription]:" not in result
+
+
+@pytest.mark.unit
+def test_transcription_text_strips_metadata(tmp_path):
+    """_read_transcription skips # metadata header lines and returns only text."""
+    transcription_content = (
+        "# Transcription of: PTT-001.opus\n"
+        "# Model: whisper-1\n"
+        "\n"
+        "Hello there.\n"
+        "How are you?\n"
+    )
+    (tmp_path / "PTT-001_transcription.txt").write_text(transcription_content)
+
+    formatter = SpecFormatter(contact_name="Alice")
+    msg = make_msg(
+        "2024-01-15", "09:00:00", "Alice",
+        "PTT-001.opus (file attached)",
+        is_media=True, media_type="audio",
+    )
+
+    text = formatter._read_transcription(msg, tmp_path)
+
+    assert text == "Hello there. How are you?"
+    assert "#" not in text
+
+
+# ---------------------------------------------------------------------------
+# build_output
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_build_creates_index_and_transcript(tmp_path):
+    """build_output creates index.md and transcript.md inside a contact sub-directory."""
+    formatter = SpecFormatter(contact_name="Alice", chat_jid="alice@s.whatsapp.net")
+    msgs = [
+        make_msg("2024-01-15", "10:00:00", "Alice", "Hello"),
+        make_msg("2024-01-15", "10:05:00", "Bob", "Hi there"),
+    ]
+
+    result = formatter.build_output(msgs, dest_dir=tmp_path)
+
+    contact_dir = tmp_path / "Alice"
+    assert contact_dir.is_dir()
+    assert (contact_dir / "index.md").is_file()
+    assert (contact_dir / "transcript.md").is_file()
+
+    assert result["contact_name"] == "Alice"
+    assert result["output_dir"] == contact_dir
+    assert result["transcript_path"] == contact_dir / "transcript.md"
+    assert result["index_path"] == contact_dir / "index.md"
+    assert result["total_messages"] == 2
+    assert result["media_messages"] == 0
+    assert result["media_copied"] == 0
+    assert result["transcriptions_copied"] == 0
+
+
+@pytest.mark.unit
+def test_build_copies_transcriptions(tmp_path):
+    """build_output copies *_transcription.txt files to a transcriptions/ sub-directory."""
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    (media_dir / "PTT-001_transcription.txt").write_text("Hello world")
+    (media_dir / "PTT-002_transcription.txt").write_text("Another transcription")
+
+    formatter = SpecFormatter(contact_name="Alice")
+    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
+
+    result = formatter.build_output(msgs, dest_dir=tmp_path, media_dir=media_dir)
+
+    transcriptions_dir = tmp_path / "Alice" / "transcriptions"
+    assert transcriptions_dir.is_dir()
+    assert (transcriptions_dir / "PTT-001_transcription.txt").is_file()
+    assert (transcriptions_dir / "PTT-002_transcription.txt").is_file()
+    assert result["transcriptions_copied"] == 2
+    assert result["media_copied"] == 0
+
+
+@pytest.mark.unit
+def test_build_copies_media(tmp_path):
+    """build_output copies non-transcription files to a media/ sub-directory."""
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    (media_dir / "PTT-001.opus").write_bytes(b"\x00\x01\x02")
+    (media_dir / "IMG-001.jpg").write_bytes(b"\xff\xd8\xff")
+    (media_dir / "PTT-001_transcription.txt").write_text("A voice message")
+
+    formatter = SpecFormatter(contact_name="Alice")
+    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
+
+    result = formatter.build_output(msgs, dest_dir=tmp_path, media_dir=media_dir)
+
+    media_out_dir = tmp_path / "Alice" / "media"
+    assert media_out_dir.is_dir()
+    assert (media_out_dir / "PTT-001.opus").is_file()
+    assert (media_out_dir / "IMG-001.jpg").is_file()
+    # Transcription file must NOT be in media/
+    assert not (media_out_dir / "PTT-001_transcription.txt").exists()
+    assert result["media_copied"] == 2
+    assert result["transcriptions_copied"] == 1
+
+
+@pytest.mark.unit
+def test_build_no_media_flag(tmp_path):
+    """When copy_media=False, no media/ directory is created."""
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    (media_dir / "PTT-001.opus").write_bytes(b"\x00\x01\x02")
+    (media_dir / "IMG-001.jpg").write_bytes(b"\xff\xd8\xff")
+
+    formatter = SpecFormatter(contact_name="Alice")
+    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
+
+    result = formatter.build_output(
+        msgs, dest_dir=tmp_path, media_dir=media_dir, copy_media=False
+    )
+
+    assert not (tmp_path / "Alice" / "media").exists()
+    assert result["media_copied"] == 0
+
+
+@pytest.mark.unit
+def test_build_no_transcriptions_flag(tmp_path):
+    """When include_transcriptions=False, no transcriptions/ directory is created."""
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    (media_dir / "PTT-001_transcription.txt").write_text("Hello world")
+
+    formatter = SpecFormatter(contact_name="Alice")
+    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
+
+    result = formatter.build_output(
+        msgs, dest_dir=tmp_path, media_dir=media_dir, include_transcriptions=False
+    )
+
+    assert not (tmp_path / "Alice" / "transcriptions").exists()
+    assert result["transcriptions_copied"] == 0

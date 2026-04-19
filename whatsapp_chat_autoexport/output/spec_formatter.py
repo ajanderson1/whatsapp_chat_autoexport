@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Optional
 
 from ..processing.transcript_parser import Message
@@ -167,7 +169,7 @@ class SpecFormatter:
         frontmatter = "\n".join(lines)
         return frontmatter + "\n\n" + body + "\n"
 
-    def format_transcript(self, messages: List[Message]) -> str:
+    def format_transcript(self, messages: List[Message], media_dir: Optional[Path] = None) -> str:
         """
         Return complete transcript.md content for *messages*.
 
@@ -175,6 +177,10 @@ class SpecFormatter:
         ----------
         messages:
             Ordered list of Message objects.
+        media_dir:
+            Optional path to a directory containing ``*_transcription.txt``
+            files for voice messages.  When provided, each voice message line
+            is followed by an indented ``[Transcription]: …`` line.
 
         Returns
         -------
@@ -182,7 +188,7 @@ class SpecFormatter:
             Full Markdown string ready to be written to ``transcript.md``.
         """
         frontmatter = self._build_frontmatter()
-        body = self._format_message_body(messages)
+        body = self._format_message_body(messages, media_dir=media_dir)
         metadata = self._build_metadata(messages, body)
 
         parts = [frontmatter, metadata]
@@ -190,6 +196,116 @@ class SpecFormatter:
             parts.append(body)
 
         return "\n".join(parts) + "\n"
+
+    def build_output(
+        self,
+        messages: List[Message],
+        dest_dir: Path,
+        media_dir: Optional[Path] = None,
+        include_transcriptions: bool = True,
+        copy_media: bool = True,
+    ) -> dict:
+        """
+        Build a complete output directory for a chat.
+
+        Creates the following structure under *dest_dir*::
+
+            dest_dir/<contact_name>/
+                index.md
+                transcript.md
+                transcriptions/   (if include_transcriptions and transcription files exist)
+                media/            (if copy_media and non-transcription media files exist)
+
+        Parameters
+        ----------
+        messages:
+            Ordered list of Message objects.
+        dest_dir:
+            Parent directory under which the contact sub-directory is created.
+        media_dir:
+            Optional path to a directory containing media and transcription files.
+            When provided, files are conditionally copied to the output.
+        include_transcriptions:
+            When True (default), copy ``*_transcription.txt`` files from *media_dir*
+            to a ``transcriptions/`` sub-directory.  Existing files are skipped.
+        copy_media:
+            When True (default), copy non-transcription files from *media_dir* to a
+            ``media/`` sub-directory.  Existing files are skipped.
+
+        Returns
+        -------
+        dict
+            Summary dictionary with the following keys:
+
+            - ``contact_name`` (str)
+            - ``output_dir`` (Path): the contact sub-directory created
+            - ``transcript_path`` (Path)
+            - ``index_path`` (Path)
+            - ``total_messages`` (int)
+            - ``media_messages`` (int)
+            - ``media_copied`` (int)
+            - ``transcriptions_copied`` (int)
+        """
+        contact_dir = dest_dir / self.contact_name
+        contact_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write transcript.md
+        transcript_content = self.format_transcript(messages, media_dir=media_dir)
+        transcript_path = contact_dir / "transcript.md"
+        transcript_path.write_text(transcript_content, encoding="utf-8")
+
+        # Write index.md
+        index_content = self.format_index(messages)
+        index_path = contact_dir / "index.md"
+        index_path.write_text(index_content, encoding="utf-8")
+
+        media_copied = 0
+        transcriptions_copied = 0
+
+        if media_dir is not None and media_dir.is_dir():
+            media_files = list(media_dir.iterdir())
+
+            if include_transcriptions:
+                transcription_files = [
+                    f for f in media_files
+                    if f.is_file() and f.name.endswith("_transcription.txt")
+                ]
+                if transcription_files:
+                    transcriptions_dir = contact_dir / "transcriptions"
+                    transcriptions_dir.mkdir(exist_ok=True)
+                    for src in transcription_files:
+                        dest = transcriptions_dir / src.name
+                        if not dest.exists():
+                            shutil.copy2(src, dest)
+                            transcriptions_copied += 1
+
+            if copy_media:
+                non_transcription_files = [
+                    f for f in media_files
+                    if f.is_file() and not f.name.endswith("_transcription.txt")
+                ]
+                if non_transcription_files:
+                    media_out_dir = contact_dir / "media"
+                    media_out_dir.mkdir(exist_ok=True)
+                    for src in non_transcription_files:
+                        dest = media_out_dir / src.name
+                        if not dest.exists():
+                            shutil.copy2(src, dest)
+                            media_copied += 1
+
+        total_messages = len(messages)
+        media_messages = sum(1 for m in messages if m.is_media)
+
+        return {
+            "contact_name": self.contact_name,
+            "output_dir": contact_dir,
+            "transcript_path": transcript_path,
+            "index_path": index_path,
+            "total_messages": total_messages,
+            "media_messages": media_messages,
+            "media_copied": media_copied,
+            "transcriptions_copied": transcriptions_copied,
+        }
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -234,7 +350,7 @@ class SpecFormatter:
         ]
         return "\n".join(lines)
 
-    def _format_message_body(self, messages: List[Message]) -> str:
+    def _format_message_body(self, messages: List[Message], media_dir: Optional[Path] = None) -> str:
         """Build day-grouped message lines."""
         if not messages:
             return ""
@@ -250,12 +366,36 @@ class SpecFormatter:
                     sections.append(f"## {current_date}\n\n" + "\n".join(day_lines))
                 current_date = date_str
                 day_lines = []
-            day_lines.append(self._format_line(msg))
+            line = self._format_line(msg)
+            day_lines.append(line)
+            if media_dir is not None and msg.is_media and msg.media_type == "audio":
+                transcription = self._read_transcription(msg, media_dir)
+                if transcription:
+                    day_lines.append(f"  [Transcription]: {transcription}")
 
         if current_date is not None:
             sections.append(f"## {current_date}\n\n" + "\n".join(day_lines))
 
         return "\n\n".join(sections)
+
+    def _read_transcription(self, msg: Message, media_dir: Path) -> str:
+        """
+        Read a ``*_transcription.txt`` file for *msg* from *media_dir*.
+
+        Lines beginning with ``#`` (metadata headers) are skipped.  The
+        remaining non-empty lines are joined with a single space and returned.
+        Returns an empty string if no transcription file exists.
+        """
+        filename = self._extract_filename(msg.content)
+        if not filename:
+            return ""
+        stem = Path(filename).stem
+        transcription_path = media_dir / f"{stem}_transcription.txt"
+        if not transcription_path.exists():
+            return ""
+        lines = transcription_path.read_text(encoding="utf-8").splitlines()
+        text_lines = [ln for ln in lines if ln.strip() and not ln.startswith("#")]
+        return " ".join(text_lines)
 
     def _format_line(self, msg: Message) -> str:
         """Format a single message as ``[HH:MM] Sender: content``."""

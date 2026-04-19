@@ -116,6 +116,14 @@ Examples:
         action="store_true",
         help="Delete files from Google Drive after processing",
     )
+    output_group.add_argument(
+        "--format",
+        type=str,
+        choices=["legacy", "spec"],
+        default="legacy",
+        metavar="FORMAT",
+        help="Output format: 'legacy' (transcript.txt) or 'spec' (index.md + transcript.md)",
+    )
 
     # Transcription options
     transcribe_group = parser.add_argument_group("Transcription Options")
