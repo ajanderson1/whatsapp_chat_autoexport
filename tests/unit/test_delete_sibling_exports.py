@@ -108,3 +108,23 @@ class TestNumericSiblingsMatch:
 
         assert removed == 3
         assert set(fake.deleted_ids) == {"f1", "f2", "f3"}
+
+
+class TestSubstringCollisionsRejected:
+    def test_different_chat_with_same_prefix_is_not_deleted(self):
+        """Files whose chat portion extends past the target name must be ignored."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            list_files=[
+                {"id": "keep1", "name": "WhatsApp Chat with Daniel Cocking Jr.zip"},
+                {"id": "keep2", "name": "WhatsApp Chat with Daniel Cocking family"},
+            ],
+        )
+        c.service = fake
+
+        removed = c.delete_sibling_exports("Daniel Cocking")
+
+        assert removed == 0
+        assert fake.deleted_ids == []
