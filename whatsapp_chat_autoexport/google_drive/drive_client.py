@@ -396,56 +396,48 @@ class GoogleDriveClient:
             elapsed = time.time() - start_time
             poll_count += 1
 
-            # Check timeout
             if elapsed > timeout:
                 self.logger.error(f"Timeout after {timeout}s ({poll_count} polls){filter_desc}")
                 return None
 
-            try:
-                # Query for WhatsApp exports in root (no folder_id filter)
-                # NOTE: Files may not have .zip extension when first uploaded
-                query = "name contains 'WhatsApp Chat with' and 'root' in parents"
-                if chat_name:
-                    # Escape single quotes in chat name for Drive API query
-                    safe_name = chat_name.replace("'", "\\'")
-                    query += f" and name contains '{safe_name}'"
+            query = "name contains 'WhatsApp Chat with' and 'root' in parents"
+            if chat_name:
+                safe_name = chat_name.replace("'", "\\'")
+                query += f" and name contains '{safe_name}'"
 
-                results = self.service.files().list(
-                    q=query,
-                    pageSize=100,
-                    fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
-                    orderBy="createdTime desc"
-                ).execute()
+            files: List[Dict[str, Any]] = []
+            with self._service_lock:
+                try:
+                    results = self.service.files().list(
+                        q=query,
+                        pageSize=100,
+                        fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
+                        orderBy="createdTime desc"
+                    ).execute()
+                    files = results.get('files', [])
+                except HttpError as error:
+                    self.logger.error(f"HTTP error during polling: {error}")
+                    files = []
+                except Exception as e:
+                    self.logger.error(f"Error during polling: {e}")
+                    files = []
 
-                files = results.get('files', [])
+            for file in files:
+                created_time_str = file.get('createdTime')
+                if not created_time_str:
+                    continue
 
-                # Filter by creation time
-                for file in files:
-                    created_time_str = file.get('createdTime')
-                    if not created_time_str:
-                        continue
+                created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
 
-                    # Parse ISO 8601 timestamp
-                    created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
+                if created_time > cutoff_time:
+                    size_mb = int(file.get('size', 0)) / (1024 * 1024)
+                    self.logger.success(f"Found new export: {file['name']} ({size_mb:.2f} MB)")
+                    self.logger.success(f"Created: {created_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    return file
 
-                    if created_time > cutoff_time:
-                        size_mb = int(file.get('size', 0)) / (1024 * 1024)
-                        self.logger.success(f"Found new export: {file['name']} ({size_mb:.2f} MB)")
-                        self.logger.success(f"Created: {created_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-                        return file
+            remaining = timeout - elapsed
+            self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)")
+            time.sleep(current_interval)
 
-                # Not found yet - log progress and wait with adaptive backoff
-                remaining = timeout - elapsed
-                self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)")
-                time.sleep(current_interval)
-
-                # Progressive backoff: double interval every 2 polls, cap at max_interval
-                if poll_count % 2 == 0:
-                    current_interval = min(current_interval * 2, max_interval)
-
-            except HttpError as error:
-                self.logger.error(f"HTTP error during polling: {error}")
-                time.sleep(current_interval)  # Wait before retrying
-            except Exception as e:
-                self.logger.error(f"Error during polling: {e}")
-                time.sleep(current_interval)  # Wait before retrying
+            if poll_count % 2 == 0:
+                current_interval = min(current_interval * 2, max_interval)

@@ -142,6 +142,63 @@ class TestDeleteFileLocking:
         assert c._service_lock.locked() is False
 
 
+class TestPollForNewExportLocking:
+    def test_poll_for_new_export_locks_the_service_call_not_the_sleep(self, monkeypatch):
+        """poll_for_new_export must hold the lock during service.files().list(),
+        and release it before time.sleep()."""
+        from whatsapp_chat_autoexport.google_drive import drive_client as dc_module
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+
+        # A fake service that returns a file on first poll (so the loop exits).
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        fake = _LockObservingService(
+            c._service_lock,
+            return_values={
+                "list": {
+                    "files": [
+                        {
+                            "id": "abc",
+                            "name": "WhatsApp Chat with Test.zip",
+                            "createdTime": now_iso,
+                            "size": "0",
+                        }
+                    ]
+                }
+            },
+        )
+        c.service = fake
+
+        sleep_observations: list[bool] = []
+
+        def _fake_sleep(_seconds):
+            sleep_observations.append(c._service_lock.locked())
+
+        monkeypatch.setattr(dc_module.time, "sleep", _fake_sleep)
+
+        result = c.poll_for_new_export(
+            initial_interval=0,
+            max_interval=0,
+            timeout=5,
+            created_within_seconds=3600,
+        )
+
+        assert result is not None, "Expected the fake to return a file on first poll"
+        # Every service call observed the lock held.
+        assert fake.observations, "Expected service.files().list() to be called"
+        assert all(held for _, held in fake.observations), (
+            f"Expected all service calls under lock, got {fake.observations}"
+        )
+        # If sleep was called at all, it was outside the lock.
+        assert all(held is False for held in sleep_observations), (
+            f"time.sleep() must not hold the service lock; got {sleep_observations}"
+        )
+        # Lock released on return.
+        assert c._service_lock.locked() is False
+
+
 class _LockObservingDownloader:
     """Fake MediaIoBaseDownload that records lock state on each next_chunk()."""
 
