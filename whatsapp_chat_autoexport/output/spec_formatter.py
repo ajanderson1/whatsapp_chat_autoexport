@@ -67,6 +67,106 @@ class SpecFormatter:
     # Public API
     # ------------------------------------------------------------------
 
+    def format_index(self, messages: List[Message]) -> str:
+        """
+        Return complete index.md content for *messages*.
+
+        The index.md is a companion note to the transcript that stores metadata,
+        counts, provenance, and a summary in YAML frontmatter plus a short body.
+
+        Parameters
+        ----------
+        messages:
+            Ordered list of Message objects.
+
+        Returns
+        -------
+        str
+            Full Markdown string ready to be written to ``index.md``.
+        """
+        now = datetime.now(tz=timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        last_synced_str = now.strftime("%Y-%m-%dT%H:%M:%S")
+
+        message_count = len(messages)
+        media_count = sum(1 for m in messages if m.is_media)
+        voice_count = sum(1 for m in messages if m.is_media and m.media_type == "audio")
+
+        if messages:
+            date_first = messages[0].timestamp.date().isoformat()
+            date_last = messages[-1].timestamp.date().isoformat()
+        else:
+            date_first = today_str
+            date_last = today_str
+
+        # Build description based on chat type
+        if self.chat_type == "group":
+            description = f'WhatsApp group chat: {self.contact_name}'
+        else:
+            description = f'WhatsApp correspondence with {self.contact_name}'
+
+        lines: List[str] = ["---"]
+        lines.append("type: note")
+        lines.append(f'description: "{description}"')
+        lines.append("tags:")
+        lines.append("  - whatsapp")
+        lines.append("  - correspondence")
+        lines.append("cssclasses:")
+        lines.append("  - whatsapp-chat")
+        lines.append("")
+
+        lines.append(f"chat_type: {self.chat_type}")
+
+        if self.chat_type == "group":
+            lines.append(f"chat_name: {self.contact_name}")
+            lines.append("participants:")
+            for participant in self.participants:
+                lines.append(f'  - "[[{participant}]]"')
+        else:
+            lines.append(f'contact: "[[{self.contact_name}]]"')
+            if self.chat_jid:
+                lines.append(f"jid: {self.chat_jid}")
+
+        lines.append("")
+        lines.append(f"message_count: {message_count}")
+        lines.append(f"media_count: {media_count}")
+        lines.append(f"voice_count: {voice_count}")
+        lines.append(f"date_first: {date_first}")
+        lines.append(f"date_last: {date_last}")
+        lines.append(f"last_synced: {last_synced_str}")
+        lines.append("")
+        lines.append("sources:")
+        lines.append("  - type: appium_export")
+        lines.append(f"    date: {today_str}")
+        lines.append(f"    messages: {message_count}")
+        lines.append("coverage_gaps: 0")
+        lines.append("")
+        lines.append(f"timezone: {self.timezone}")
+        lines.append("---")
+
+        # Body
+        if self.chat_type == "group":
+            summary = f"> WhatsApp group chat: [[{self.contact_name}]]"
+        else:
+            summary = f"> WhatsApp correspondence with [[{self.contact_name}]]"
+
+        period_line = f"> Period: {date_first} to {date_last} | {message_count:,} messages"
+
+        if self.chat_type == "group":
+            transcript_link = (
+                f"[[People/Correspondence/Whatsapp/{self.contact_name}/transcript|Full Transcript]]"
+            )
+        else:
+            transcript_link = (
+                f"[[People/Correspondence/Whatsapp/{self.contact_name}/transcript|Full Transcript]]"
+            )
+
+        body_parts = [summary, period_line, "", transcript_link]
+        body = "\n".join(body_parts)
+
+        frontmatter = "\n".join(lines)
+        return frontmatter + "\n\n" + body + "\n"
+
     def format_transcript(self, messages: List[Message]) -> str:
         """
         Return complete transcript.md content for *messages*.

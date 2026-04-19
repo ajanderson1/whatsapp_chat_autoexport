@@ -258,3 +258,197 @@ def test_no_chat_jid():
     # Should still produce valid output; chat_jid line present but may be empty
     assert "contact: Alice" in result
     assert "<!-- TRANSCRIPT METADATA" in result
+
+
+# ---------------------------------------------------------------------------
+# format_index — direct chat
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_direct_chat_index():
+    """Direct chat index.md has correct frontmatter fields."""
+    formatter = SpecFormatter(
+        contact_name="Tim Cocking",
+        chat_jid="447956173473@s.whatsapp.net",
+        chat_type="direct",
+    )
+    msgs = [
+        make_msg("2015-07-29", "00:05:00", "AJ Anderson", "First message"),
+        make_msg("2026-03-25", "23:59:00", "Tim Cocking", "Last message"),
+    ]
+
+    result = formatter.format_index(msgs)
+
+    assert "type: note" in result
+    assert "chat_type: direct" in result
+    assert 'contact: "[[Tim Cocking]]"' in result
+    assert "jid: 447956173473@s.whatsapp.net" in result
+    assert "message_count: 2" in result
+    assert "date_first: 2015-07-29" in result
+    assert "date_last: 2026-03-25" in result
+    # Should NOT include participants for direct chat
+    assert "participants:" not in result
+
+
+@pytest.mark.unit
+def test_direct_chat_index_frontmatter_structure():
+    """Direct chat index frontmatter includes required keys in correct positions."""
+    formatter = SpecFormatter(
+        contact_name="Tim Cocking",
+        chat_jid="447956173473@s.whatsapp.net",
+        chat_type="direct",
+    )
+    msgs = [make_msg("2024-01-15", "10:00:00", "Tim Cocking", "Hello")]
+
+    result = formatter.format_index(msgs)
+
+    assert result.startswith("---\n")
+    assert "tags:" in result
+    assert "  - whatsapp" in result
+    assert "  - correspondence" in result
+    assert "cssclasses:" in result
+    assert "  - whatsapp-chat" in result
+    # Frontmatter is closed
+    first = result.index("---")
+    second = result.index("---", first + 3)
+    assert second > first
+
+
+# ---------------------------------------------------------------------------
+# format_index — group chat
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_group_chat_index():
+    """Group chat index.md uses chat_name and participants list instead of contact."""
+    formatter = SpecFormatter(
+        contact_name="Brothers",
+        chat_jid="12345@g.us",
+        chat_type="group",
+        participants=["Alice", "Bob", "Charlie"],
+    )
+    msgs = [
+        make_msg("2020-01-01", "09:00:00", "Alice", "Hi"),
+        make_msg("2020-06-15", "12:00:00", "Bob", "Bye"),
+    ]
+
+    result = formatter.format_index(msgs)
+
+    assert "chat_type: group" in result
+    assert "chat_name: Brothers" in result
+    assert "participants:" in result
+    assert '  - "[[Alice]]"' in result
+    assert '  - "[[Bob]]"' in result
+    assert '  - "[[Charlie]]"' in result
+    # Should NOT include contact for group chat
+    assert "contact:" not in result
+    assert "message_count: 2" in result
+    assert "date_first: 2020-01-01" in result
+    assert "date_last: 2020-06-15" in result
+
+
+# ---------------------------------------------------------------------------
+# format_index — body
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_index_body():
+    """index.md body contains a summary blockquote and a transcript WikiLink."""
+    formatter = SpecFormatter(
+        contact_name="Tim Cocking",
+        chat_jid="447956173473@s.whatsapp.net",
+        chat_type="direct",
+    )
+    msgs = [
+        make_msg("2015-07-29", "00:05:00", "AJ Anderson", "First"),
+        make_msg("2026-03-25", "23:59:00", "Tim Cocking", "Last"),
+    ]
+
+    result = formatter.format_index(msgs)
+
+    # Body appears after closing ---
+    fm_end = result.index("---", result.index("---") + 3) + 3
+    body = result[fm_end:]
+
+    assert "[[Tim Cocking]]" in body
+    assert "2015-07-29" in body
+    assert "2026-03-25" in body
+    # WikiLink to transcript
+    assert "transcript" in body.lower()
+    assert "[[" in body
+
+
+# ---------------------------------------------------------------------------
+# format_index — source provenance
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_index_source_provenance():
+    """index.md frontmatter includes sources: block with appium_export type."""
+    formatter = SpecFormatter(
+        contact_name="Alice",
+        chat_type="direct",
+    )
+    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
+
+    result = formatter.format_index(msgs)
+
+    assert "sources:" in result
+    assert "  - type: appium_export" in result
+    assert "    messages: 1" in result
+
+
+# ---------------------------------------------------------------------------
+# format_index — media and voice counts
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_index_media_and_voice_counts():
+    """index.md frontmatter includes correct media_count and voice_count."""
+    formatter = SpecFormatter(contact_name="Alice", chat_type="direct")
+    msgs = [
+        make_msg("2024-01-15", "10:00:00", "Alice", "Hi"),
+        make_msg("2024-01-15", "10:01:00", "Alice", "IMG-001.jpg (file attached)", is_media=True, media_type="image"),
+        make_msg("2024-01-15", "10:02:00", "Alice", "PTT-001.opus (file attached)", is_media=True, media_type="audio"),
+        make_msg("2024-01-15", "10:03:00", "Alice", "PTT-002.opus (file attached)", is_media=True, media_type="audio"),
+    ]
+
+    result = formatter.format_index(msgs)
+
+    assert "media_count: 3" in result
+    assert "voice_count: 2" in result
+
+
+# ---------------------------------------------------------------------------
+# format_index — empty messages
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_index_empty_messages():
+    """format_index with no messages produces valid output with zero counts."""
+    formatter = SpecFormatter(contact_name="Alice", chat_type="direct")
+
+    result = formatter.format_index([])
+
+    assert "message_count: 0" in result
+    assert "media_count: 0" in result
+    assert "voice_count: 0" in result
+
+
+# ---------------------------------------------------------------------------
+# format_index — timezone field
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_index_timezone():
+    """index.md frontmatter includes the configured timezone."""
+    formatter = SpecFormatter(
+        contact_name="Alice",
+        chat_type="direct",
+        timezone="America/New_York",
+    )
+    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
+
+    result = formatter.format_index(msgs)
+
+    assert "timezone: America/New_York" in result
