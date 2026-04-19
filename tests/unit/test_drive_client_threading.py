@@ -333,3 +333,28 @@ class TestLockReleasedOnException:
         # And the lock is still usable.
         assert c._service_lock.acquire(blocking=False) is True
         c._service_lock.release()
+
+
+class TestNoNestedLocking:
+    def test_list_whatsapp_exports_does_not_deadlock(self):
+        """list_whatsapp_exports calls list_files; must not hold the lock
+        before delegating."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            return_values={"list": {"files": [{"id": "1", "name": "WhatsApp Chat with X.zip", "size": "0"}]}},
+        )
+        c.service = fake
+
+        # If list_whatsapp_exports acquired the lock and then called list_files,
+        # this call would hang and the test timeout would fire. pytest.ini sets
+        # timeout=300 which is plenty short to notice a deadlock.
+        files = c.list_whatsapp_exports()
+
+        assert len(files) == 1
+        # Sanity: service was called, and the lock was held when it was.
+        assert all(held for _, held in fake.observations), (
+            f"service calls must still be locked; got {fake.observations}"
+        )
+        assert c._service_lock.locked() is False
