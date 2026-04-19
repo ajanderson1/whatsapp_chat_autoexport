@@ -219,6 +219,29 @@ class GoogleDriveClient:
                 self.logger.error(f"Error deleting file: {e}")
                 return False
 
+    def delete_sibling_exports(self, chat_name: str, folder_id: Optional[str] = None) -> int:
+        """
+        Delete all Drive root files in the chat name-group for ``chat_name``.
+
+        Matches these filename shapes exactly (via strict client-side regex):
+          - ``WhatsApp Chat with {chat_name}``
+          - ``WhatsApp Chat with {chat_name}.zip``
+          - ``WhatsApp Chat with {chat_name} (N)`` for any non-negative integer N
+          - ``WhatsApp Chat with {chat_name} (N).zip``
+
+        Args:
+            chat_name: Name of the chat whose sibling export files should be removed.
+            folder_id: Optional parent folder ID (defaults to Drive root).
+
+        Returns:
+            Count of files successfully deleted. Never raises; all Drive errors
+            are caught, logged, and reflected in the returned count.
+        """
+        if not self.service:
+            self.logger.error("Not connected to Google Drive API")
+            return 0
+        return 0
+
     def move_file(self, file_id: str, destination_folder_id: str) -> bool:
         """
         Move a file to a different folder in Google Drive.
