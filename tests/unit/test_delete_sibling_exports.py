@@ -148,3 +148,30 @@ class TestNonNumericSuffixesRejected:
 
         assert removed == 0
         assert fake.deleted_ids == []
+
+
+class TestSpecialCharsInChatName:
+    def test_period_and_apostrophe_match_literally(self):
+        """Chat name with ``.`` and ``'`` must match literally, not as regex meta-chars.
+
+        The trailing period in `O'Brien.` would otherwise match any character if
+        unescaped. And the apostrophe must be escaped in the Drive `contains` query.
+        """
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            list_files=[
+                {"id": "yes1", "name": "WhatsApp Chat with O'Brien."},
+                {"id": "yes2", "name": "WhatsApp Chat with O'Brien. (1).zip"},
+                # This one must NOT match — the '.' in chat name was escaped, so
+                # the literal 'X' following it means the name is different.
+                {"id": "no1", "name": "WhatsApp Chat with O'BrienX"},
+            ],
+        )
+        c.service = fake
+
+        removed = c.delete_sibling_exports("O'Brien.")
+
+        assert removed == 2
+        assert set(fake.deleted_ids) == {"yes1", "yes2"}
