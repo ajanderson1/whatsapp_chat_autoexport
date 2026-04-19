@@ -132,43 +132,50 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return False
 
+        file_handle = io.BytesIO()
+        file_name = "unknown"
+
+        with self._service_lock:
+            try:
+                # Get file metadata first
+                file_metadata = self.service.files().get(
+                    fileId=file_id,
+                    fields="name, size"
+                ).execute()
+
+                file_name = file_metadata.get('name', 'unknown')
+                file_size = int(file_metadata.get('size', 0))
+
+                self.logger.info(f"Downloading: {file_name} ({file_size} bytes)")
+
+                # Download file — ALL next_chunk() calls must stay under the lock
+                # because each re-enters the shared service/Http instance.
+                request = self.service.files().get_media(fileId=file_id)
+                downloader = MediaIoBaseDownload(file_handle, request)
+
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+                    if show_progress and status:
+                        progress = int(status.progress() * 100)
+                        self.logger.debug_msg(f"Download progress: {progress}%")
+
+            except HttpError as error:
+                self.logger.error(f"HTTP error downloading file: {error}")
+                return False
+            except Exception as e:
+                self.logger.error(f"Error downloading file: {e}")
+                return False
+
+        # Local filesystem I/O: safe to do without the Drive lock.
         try:
-            # Get file metadata first
-            file_metadata = self.service.files().get(
-                fileId=file_id,
-                fields="name, size"
-            ).execute()
-
-            file_name = file_metadata.get('name', 'unknown')
-            file_size = int(file_metadata.get('size', 0))
-
-            self.logger.info(f"Downloading: {file_name} ({file_size} bytes)")
-
-            # Download file
-            request = self.service.files().get_media(fileId=file_id)
-            file_handle = io.BytesIO()
-            downloader = MediaIoBaseDownload(file_handle, request)
-
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-                if show_progress and status:
-                    progress = int(status.progress() * 100)
-                    self.logger.debug_msg(f"Download progress: {progress}%")
-
-            # Write to file
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             with open(dest_path, 'wb') as f:
                 f.write(file_handle.getvalue())
-
             self.logger.success(f"Downloaded to: {dest_path}")
             return True
-
-        except HttpError as error:
-            self.logger.error(f"HTTP error downloading file: {error}")
-            return False
         except Exception as e:
-            self.logger.error(f"Error downloading file: {e}")
+            self.logger.error(f"Error writing downloaded file to disk: {e}")
             return False
 
     def delete_file(self, file_id: str) -> bool:

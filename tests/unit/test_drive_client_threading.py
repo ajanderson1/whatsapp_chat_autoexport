@@ -142,6 +142,61 @@ class TestDeleteFileLocking:
         assert c._service_lock.locked() is False
 
 
+class _LockObservingDownloader:
+    """Fake MediaIoBaseDownload that records lock state on each next_chunk()."""
+
+    def __init__(self, lock: threading.Lock, chunks: int = 3):
+        self.lock = lock
+        self.remaining = chunks
+        self.observations: list[bool] = []
+
+    def next_chunk(self):
+        self.observations.append(self.lock.locked())
+        self.remaining -= 1
+        status = MagicMock()
+        status.progress = lambda: 1.0 - (self.remaining / 3.0)
+        done = self.remaining <= 0
+        return status, done
+
+
+class TestDownloadFileLocking:
+    def test_download_file_holds_lock_for_entire_chunk_loop(self, tmp_path, monkeypatch):
+        """Every next_chunk() call must observe the lock as held."""
+        from whatsapp_chat_autoexport.google_drive import drive_client as dc_module
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake_service = _LockObservingService(
+            c._service_lock,
+            return_values={"get": {"name": "f.zip", "size": 3}},
+        )
+        c.service = fake_service
+
+        # Replace MediaIoBaseDownload so we don't need a real http stack.
+        fake_downloader_holder = {}
+
+        def _fake_downloader_factory(file_handle, request):
+            d = _LockObservingDownloader(c._service_lock, chunks=3)
+            fake_downloader_holder["d"] = d
+            return d
+
+        monkeypatch.setattr(dc_module, "MediaIoBaseDownload", _fake_downloader_factory)
+
+        dest = tmp_path / "out.zip"
+        ok = c.download_file("abc", dest, show_progress=False)
+
+        assert ok is True, "download should report success"
+        downloader = fake_downloader_holder["d"]
+        assert downloader.observations, "Expected next_chunk() to be called"
+        assert all(downloader.observations), (
+            f"next_chunk() observations must all be True (lock held); got {downloader.observations}"
+        )
+        # Service-side observations too.
+        assert all(held for _, held in fake_service.observations)
+        # Lock released after return.
+        assert c._service_lock.locked() is False
+
+
 class TestMoveFileLocking:
     def test_move_file_holds_lock_for_both_service_calls(self):
         auth = MagicMock()
