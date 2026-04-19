@@ -358,3 +358,53 @@ class TestNoNestedLocking:
             f"service calls must still be locked; got {fake.observations}"
         )
         assert c._service_lock.locked() is False
+
+
+class _SleepyLockProbeService:
+    """A fake service whose list() holds the 'service' for a short sleep,
+    and records the maximum observed concurrency under the lock."""
+
+    def __init__(self, lock: threading.Lock):
+        self.lock = lock
+        self._inflight = 0
+        self._inflight_lock = threading.Lock()
+        self.max_observed_inflight = 0
+
+    def files(self):
+        return self
+
+    def list(self, **kwargs):
+        return self
+
+    def execute(self):
+        import time as _t
+        with self._inflight_lock:
+            self._inflight += 1
+            if self._inflight > self.max_observed_inflight:
+                self.max_observed_inflight = self._inflight
+        try:
+            _t.sleep(0.02)  # encourage contention
+        finally:
+            with self._inflight_lock:
+                self._inflight -= 1
+        return {"files": []}
+
+
+class TestConcurrentCallsAreSerialized:
+    def test_ten_threads_calling_list_files_see_no_overlap(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        probe = _SleepyLockProbeService(c._service_lock)
+        c.service = probe
+
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            list(pool.map(lambda _: c.list_files(query="x"), range(10)))
+
+        # Because _service_lock serializes every list_files call, the probe's
+        # max_observed_inflight should be exactly 1.
+        assert probe.max_observed_inflight == 1, (
+            f"Expected serialized access (max 1 in-flight), observed "
+            f"{probe.max_observed_inflight} concurrent calls"
+        )
