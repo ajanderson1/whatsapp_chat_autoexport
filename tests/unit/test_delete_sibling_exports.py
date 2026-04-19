@@ -236,3 +236,46 @@ class TestLockHeldDuringCleanup:
             f"expected lock held for every call, got {fake.observations}"
         )
         assert c._service_lock.locked() is False
+
+
+class TestListingFailureReturnsZero:
+    def test_list_raises_returns_zero_and_logs_warning(self):
+        """If files().list().execute() raises, return 0 without attempting deletes
+        and log a warning via the client's logger."""
+        from googleapiclient.errors import HttpError
+
+        class _FakeResp:
+            status = 500
+            reason = "Internal Server Error"
+
+        class _RaisingService:
+            def files(self_inner):
+                return self_inner
+
+            def list(self_inner, **kwargs):
+                class _Exec:
+                    def execute(self_e):
+                        raise HttpError(_FakeResp(), b"boom")
+
+                return _Exec()
+
+            def delete(self_inner, **kwargs):
+                raise AssertionError("delete must not be called when list fails")
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        c.service = _RaisingService()
+        c.logger = MagicMock()  # spy on logger calls
+
+        removed = c.delete_sibling_exports("Daniel Cocking")
+
+        assert removed == 0
+        assert c._service_lock.locked() is False
+        # The implementation uses self.logger.warning; verify it was called with a
+        # message that identifies this as the listing-failure path.
+        assert c.logger.warning.called, "expected a warning log on listing failure"
+        warning_messages = [call.args[0] for call in c.logger.warning.call_args_list]
+        assert any(
+            "Drive cleanup" in msg and "failed to list" in msg
+            for msg in warning_messages
+        ), f"expected listing-failure warning, got: {warning_messages!r}"
