@@ -336,3 +336,20 @@ class TestPerFileDeleteFailureContinues:
         assert removed == 2
         assert svc.deleted_ok == ["ok1", "ok2"]
         assert c._service_lock.locked() is False
+
+
+class TestEmptySiblingSet:
+    def test_no_matches_returns_zero_and_no_deletes(self):
+        """If the list query returns nothing, no deletes are issued and return is 0."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(c._service_lock, list_files=[])
+        c.service = fake
+
+        removed = c.delete_sibling_exports("Daniel Cocking")
+
+        assert removed == 0
+        assert fake.deleted_ids == []
+        # A list call was still made under the lock.
+        assert fake.observations == [("list", True)]
+        assert c._service_lock.locked() is False
