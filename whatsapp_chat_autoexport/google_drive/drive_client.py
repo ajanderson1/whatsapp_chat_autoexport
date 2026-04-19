@@ -260,7 +260,7 @@ class GoogleDriveClient:
             try:
                 results = self.service.files().list(
                     q=query,
-                    pageSize=100,
+                    pageSize=1000,
                     fields="files(id, name)",
                 ).execute()
                 files = results.get("files", [])
