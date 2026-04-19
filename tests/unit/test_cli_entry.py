@@ -186,6 +186,21 @@ class TestR7FlagParsing:
         args = parse(["--output", "/tmp/exports"])
         assert args.output == "/tmp/exports"
 
+    def test_format_flag_default_is_legacy(self):
+        """--format defaults to 'legacy'."""
+        args = parse(["--headless", "--output", "/tmp/out", "--auto-select"])
+        assert args.format == "legacy"
+
+    def test_format_flag_spec(self):
+        """--format spec is accepted."""
+        args = parse(["--headless", "--output", "/tmp/out", "--auto-select", "--format", "spec"])
+        assert args.format == "spec"
+
+    def test_format_flag_invalid_rejected(self):
+        """--format with invalid value is rejected."""
+        with pytest.raises(SystemExit):
+            parse(["--headless", "--output", "/tmp/out", "--format", "xml"])
+
     def test_all_flags_combined(self):
         args = parse([
             "--headless",
