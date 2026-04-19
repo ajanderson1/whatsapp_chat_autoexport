@@ -296,3 +296,40 @@ class TestGetFileMetadataLocking:
             f"Expected all service calls under lock, got {fake.observations}"
         )
         assert c._service_lock.locked() is False
+
+
+class _RaisingService:
+    """A fake service whose files().list() call raises HttpError."""
+
+    def files(self):
+        return self
+
+    def list(self, **kwargs):
+        return self
+
+    def execute(self):
+        # Build a minimal HttpError without needing a real httplib2 response.
+        from googleapiclient.errors import HttpError
+
+        class _FakeResp:
+            status = 500
+            reason = "Internal Server Error"
+
+        raise HttpError(_FakeResp(), b"boom")
+
+
+class TestLockReleasedOnException:
+    def test_list_files_releases_lock_on_httperror(self):
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        c.service = _RaisingService()
+
+        result = c.list_files(query="anything")
+
+        # Error path returns []; the important assertion is that the lock
+        # was released so future callers don't hang.
+        assert result == []
+        assert c._service_lock.locked() is False
+        # And the lock is still usable.
+        assert c._service_lock.acquire(blocking=False) is True
+        c._service_lock.release()
