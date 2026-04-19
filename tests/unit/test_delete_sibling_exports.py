@@ -87,3 +87,24 @@ class TestBaseNameMatches:
 
         assert removed == 2
         assert set(fake.deleted_ids) == {"f1", "f2"}
+
+
+class TestNumericSiblingsMatch:
+    def test_numeric_siblings_are_deleted(self):
+        """All (N) and (N).zip variants must be deleted."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            list_files=[
+                {"id": "f1", "name": "WhatsApp Chat with Daniel Cocking (1)"},
+                {"id": "f2", "name": "WhatsApp Chat with Daniel Cocking (2).zip"},
+                {"id": "f3", "name": "WhatsApp Chat with Daniel Cocking (10).zip"},
+            ],
+        )
+        c.service = fake
+
+        removed = c.delete_sibling_exports("Daniel Cocking")
+
+        assert removed == 3
+        assert set(fake.deleted_ids) == {"f1", "f2", "f3"}
