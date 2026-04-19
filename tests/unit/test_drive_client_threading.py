@@ -142,6 +142,30 @@ class TestDeleteFileLocking:
         assert c._service_lock.locked() is False
 
 
+class TestMoveFileLocking:
+    def test_move_file_holds_lock_for_both_service_calls(self):
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            return_values={
+                "get": {"name": "f.zip", "parents": ["root"]},
+                "update": {"id": "abc", "parents": ["dest"]},
+            },
+        )
+        c.service = fake
+
+        ok = c.move_file("abc", "dest")
+
+        assert ok is True
+        names = [name for name, _ in fake.observations]
+        assert "get" in names and "update" in names, f"observations={fake.observations}"
+        assert all(held for _, held in fake.observations), (
+            f"Expected all service calls under lock, got {fake.observations}"
+        )
+        assert c._service_lock.locked() is False
+
+
 class TestGetFileMetadataLocking:
     def test_get_file_metadata_holds_lock(self):
         auth = MagicMock()

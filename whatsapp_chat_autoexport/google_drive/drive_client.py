@@ -226,38 +226,39 @@ class GoogleDriveClient:
         if not self.service:
             self.logger.error("Not connected to Google Drive API")
             return False
-        
-        try:
-            # Get current parents
-            file_metadata = self.service.files().get(
-                fileId=file_id,
-                fields='name, parents'
-            ).execute()
-            
-            file_name = file_metadata.get('name', file_id)
-            previous_parents = file_metadata.get('parents', [])
-            
-            # Move file to new folder (remove from old parents, add to new parent)
-            self.service.files().update(
-                fileId=file_id,
-                addParents=destination_folder_id,
-                removeParents=','.join(previous_parents) if previous_parents else None,
-                fields='id, parents'
-            ).execute()
-            
-            self.logger.success(f"Moved to folder: {file_name}")
-            return True
-            
-        except HttpError as error:
-            if error.resp.status == 404:
-                self.logger.error(f"File or folder not found: {file_id}")
+
+        with self._service_lock:
+            try:
+                # Get current parents
+                file_metadata = self.service.files().get(
+                    fileId=file_id,
+                    fields='name, parents'
+                ).execute()
+
+                file_name = file_metadata.get('name', file_id)
+                previous_parents = file_metadata.get('parents', [])
+
+                # Move file to new folder (remove from old parents, add to new parent)
+                self.service.files().update(
+                    fileId=file_id,
+                    addParents=destination_folder_id,
+                    removeParents=','.join(previous_parents) if previous_parents else None,
+                    fields='id, parents'
+                ).execute()
+
+                self.logger.success(f"Moved to folder: {file_name}")
+                return True
+
+            except HttpError as error:
+                if error.resp.status == 404:
+                    self.logger.error(f"File or folder not found: {file_id}")
+                    return False
+                else:
+                    self.logger.error(f"HTTP error moving file: {error}")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error moving file: {e}")
                 return False
-            else:
-                self.logger.error(f"HTTP error moving file: {error}")
-                return False
-        except Exception as e:
-            self.logger.error(f"Error moving file: {e}")
-            return False
 
     def get_file_metadata(self, file_id: str) -> Optional[Dict[str, Any]]:
         """
