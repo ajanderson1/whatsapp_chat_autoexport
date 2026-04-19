@@ -24,7 +24,7 @@ jobs:
         run: poetry install --with dev
 
       - name: Run tests
-        run: poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=xml -m "not requires_api and not requires_device"
+        run: poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=xml -m "not requires_api and not requires_device and not requires_drive"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
