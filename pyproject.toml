@@ -66,6 +66,7 @@ markers = [
     "integration: marks tests as integration tests",
     "requires_api: marks tests that require API keys",
     "requires_device: marks tests that require an Android device",
+    "requires_drive: marks tests that require live Google Drive credentials and the fixture folder env var",
     "unit: marks tests as unit tests",
 ]
 timeout = 300

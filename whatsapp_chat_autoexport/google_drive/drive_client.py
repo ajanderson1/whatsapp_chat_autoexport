@@ -2,9 +2,18 @@
 Google Drive API Client module.
 
 Low-level wrapper around Google Drive API for file operations.
+
+Thread-safety:
+    GoogleDriveClient serializes all access to self.service through
+    self._service_lock. Every public method that touches self.service
+    must acquire the lock for the full duration of its interaction with
+    the service. Methods MUST NOT call each other while holding the lock
+    (the lock is non-reentrant); any internal composition goes through
+    the public API, which acquires the lock itself.
 """
 
 import io
+import threading
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -32,6 +41,7 @@ class GoogleDriveClient:
         self.auth = auth
         self.logger = logger or Logger()
         self.service = None
+        self._service_lock = threading.Lock()
 
     def connect(self) -> bool:
         """
@@ -73,35 +83,35 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return []
 
-        try:
-            # Build query
-            if folder_id and query:
-                full_query = f"'{folder_id}' in parents and {query}"
-            elif folder_id:
-                full_query = f"'{folder_id}' in parents"
-            elif query:
-                full_query = query
-            else:
-                full_query = None
+        # Build query
+        if folder_id and query:
+            full_query = f"'{folder_id}' in parents and {query}"
+        elif folder_id:
+            full_query = f"'{folder_id}' in parents"
+        elif query:
+            full_query = query
+        else:
+            full_query = None
 
-            # List files
-            results = self.service.files().list(
-                q=full_query,
-                pageSize=page_size,
-                fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
-            ).execute()
+        with self._service_lock:
+            try:
+                results = self.service.files().list(
+                    q=full_query,
+                    pageSize=page_size,
+                    fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
+                ).execute()
 
-            files = results.get('files', [])
-            self.logger.debug_msg(f"Found {len(files)} files")
+                files = results.get('files', [])
+                self.logger.debug_msg(f"Found {len(files)} files")
 
-            return files
+                return files
 
-        except HttpError as error:
-            self.logger.error(f"HTTP error listing files: {error}")
-            return []
-        except Exception as e:
-            self.logger.error(f"Error listing files: {e}")
-            return []
+            except HttpError as error:
+                self.logger.error(f"HTTP error listing files: {error}")
+                return []
+            except Exception as e:
+                self.logger.error(f"Error listing files: {e}")
+                return []
 
     def download_file(self,
                       file_id: str,
@@ -122,43 +132,50 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return False
 
+        file_handle = io.BytesIO()
+        file_name = "unknown"
+
+        with self._service_lock:
+            try:
+                # Get file metadata first
+                file_metadata = self.service.files().get(
+                    fileId=file_id,
+                    fields="name, size"
+                ).execute()
+
+                file_name = file_metadata.get('name', 'unknown')
+                file_size = int(file_metadata.get('size', 0))
+
+                self.logger.info(f"Downloading: {file_name} ({file_size} bytes)")
+
+                # Download file — ALL next_chunk() calls must stay under the lock
+                # because each re-enters the shared service/Http instance.
+                request = self.service.files().get_media(fileId=file_id)
+                downloader = MediaIoBaseDownload(file_handle, request)
+
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+                    if show_progress and status:
+                        progress = int(status.progress() * 100)
+                        self.logger.debug_msg(f"Download progress: {progress}%")
+
+            except HttpError as error:
+                self.logger.error(f"HTTP error downloading file: {error}")
+                return False
+            except Exception as e:
+                self.logger.error(f"Error downloading file: {e}")
+                return False
+
+        # Local filesystem I/O: safe to do without the Drive lock.
         try:
-            # Get file metadata first
-            file_metadata = self.service.files().get(
-                fileId=file_id,
-                fields="name, size"
-            ).execute()
-
-            file_name = file_metadata.get('name', 'unknown')
-            file_size = int(file_metadata.get('size', 0))
-
-            self.logger.info(f"Downloading: {file_name} ({file_size} bytes)")
-
-            # Download file
-            request = self.service.files().get_media(fileId=file_id)
-            file_handle = io.BytesIO()
-            downloader = MediaIoBaseDownload(file_handle, request)
-
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-                if show_progress and status:
-                    progress = int(status.progress() * 100)
-                    self.logger.debug_msg(f"Download progress: {progress}%")
-
-            # Write to file
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             with open(dest_path, 'wb') as f:
                 f.write(file_handle.getvalue())
-
             self.logger.success(f"Downloaded to: {dest_path}")
             return True
-
-        except HttpError as error:
-            self.logger.error(f"HTTP error downloading file: {error}")
-            return False
         except Exception as e:
-            self.logger.error(f"Error downloading file: {e}")
+            self.logger.error(f"Error writing downloaded file to disk: {e}")
             return False
 
     def delete_file(self, file_id: str) -> bool:
@@ -175,7 +192,7 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return False
 
-        try:
+        with self._service_lock:
             # Get file name first for logging
             try:
                 file_metadata = self.service.files().get(
@@ -183,24 +200,24 @@ class GoogleDriveClient:
                     fields="name"
                 ).execute()
                 file_name = file_metadata.get('name', file_id)
-            except:
+            except Exception:
                 file_name = file_id
 
-            # Delete file
-            self.service.files().delete(fileId=file_id).execute()
-            self.logger.success(f"Deleted from Google Drive: {file_name}")
-            return True
+            try:
+                self.service.files().delete(fileId=file_id).execute()
+                self.logger.success(f"Deleted from Google Drive: {file_name}")
+                return True
 
-        except HttpError as error:
-            if error.resp.status == 404:
-                self.logger.warning(f"File not found (already deleted?): {file_id}")
-                return True  # Consider it success if already deleted
-            else:
-                self.logger.error(f"HTTP error deleting file: {error}")
+            except HttpError as error:
+                if error.resp.status == 404:
+                    self.logger.warning(f"File not found (already deleted?): {file_id}")
+                    return True  # Consider it success if already deleted
+                else:
+                    self.logger.error(f"HTTP error deleting file: {error}")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error deleting file: {e}")
                 return False
-        except Exception as e:
-            self.logger.error(f"Error deleting file: {e}")
-            return False
 
     def move_file(self, file_id: str, destination_folder_id: str) -> bool:
         """
@@ -216,38 +233,39 @@ class GoogleDriveClient:
         if not self.service:
             self.logger.error("Not connected to Google Drive API")
             return False
-        
-        try:
-            # Get current parents
-            file_metadata = self.service.files().get(
-                fileId=file_id,
-                fields='name, parents'
-            ).execute()
-            
-            file_name = file_metadata.get('name', file_id)
-            previous_parents = file_metadata.get('parents', [])
-            
-            # Move file to new folder (remove from old parents, add to new parent)
-            self.service.files().update(
-                fileId=file_id,
-                addParents=destination_folder_id,
-                removeParents=','.join(previous_parents) if previous_parents else None,
-                fields='id, parents'
-            ).execute()
-            
-            self.logger.success(f"Moved to folder: {file_name}")
-            return True
-            
-        except HttpError as error:
-            if error.resp.status == 404:
-                self.logger.error(f"File or folder not found: {file_id}")
+
+        with self._service_lock:
+            try:
+                # Get current parents
+                file_metadata = self.service.files().get(
+                    fileId=file_id,
+                    fields='name, parents'
+                ).execute()
+
+                file_name = file_metadata.get('name', file_id)
+                previous_parents = file_metadata.get('parents', [])
+
+                # Move file to new folder (remove from old parents, add to new parent)
+                self.service.files().update(
+                    fileId=file_id,
+                    addParents=destination_folder_id,
+                    removeParents=','.join(previous_parents) if previous_parents else None,
+                    fields='id, parents'
+                ).execute()
+
+                self.logger.success(f"Moved to folder: {file_name}")
+                return True
+
+            except HttpError as error:
+                if error.resp.status == 404:
+                    self.logger.error(f"File or folder not found: {file_id}")
+                    return False
+                else:
+                    self.logger.error(f"HTTP error moving file: {error}")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error moving file: {e}")
                 return False
-            else:
-                self.logger.error(f"HTTP error moving file: {error}")
-                return False
-        except Exception as e:
-            self.logger.error(f"Error moving file: {e}")
-            return False
 
     def get_file_metadata(self, file_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -263,20 +281,21 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return None
 
-        try:
-            metadata = self.service.files().get(
-                fileId=file_id,
-                fields="id, name, mimeType, size, modifiedTime, parents"
-            ).execute()
+        with self._service_lock:
+            try:
+                metadata = self.service.files().get(
+                    fileId=file_id,
+                    fields="id, name, mimeType, size, modifiedTime, parents"
+                ).execute()
 
-            return metadata
+                return metadata
 
-        except HttpError as error:
-            self.logger.error(f"HTTP error getting file metadata: {error}")
-            return None
-        except Exception as e:
-            self.logger.error(f"Error getting file metadata: {e}")
-            return None
+            except HttpError as error:
+                self.logger.error(f"HTTP error getting file metadata: {error}")
+                return None
+            except Exception as e:
+                self.logger.error(f"Error getting file metadata: {e}")
+                return None
 
     def find_folder_by_name(self, folder_name: str) -> Optional[str]:
         """
@@ -377,56 +396,48 @@ class GoogleDriveClient:
             elapsed = time.time() - start_time
             poll_count += 1
 
-            # Check timeout
             if elapsed > timeout:
                 self.logger.error(f"Timeout after {timeout}s ({poll_count} polls){filter_desc}")
                 return None
 
-            try:
-                # Query for WhatsApp exports in root (no folder_id filter)
-                # NOTE: Files may not have .zip extension when first uploaded
-                query = "name contains 'WhatsApp Chat with' and 'root' in parents"
-                if chat_name:
-                    # Escape single quotes in chat name for Drive API query
-                    safe_name = chat_name.replace("'", "\\'")
-                    query += f" and name contains '{safe_name}'"
+            query = "name contains 'WhatsApp Chat with' and 'root' in parents"
+            if chat_name:
+                safe_name = chat_name.replace("'", "\\'")
+                query += f" and name contains '{safe_name}'"
 
-                results = self.service.files().list(
-                    q=query,
-                    pageSize=100,
-                    fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
-                    orderBy="createdTime desc"
-                ).execute()
+            files: List[Dict[str, Any]] = []
+            with self._service_lock:
+                try:
+                    results = self.service.files().list(
+                        q=query,
+                        pageSize=100,
+                        fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
+                        orderBy="createdTime desc"
+                    ).execute()
+                    files = results.get('files', [])
+                except HttpError as error:
+                    self.logger.error(f"HTTP error during polling: {error}")
+                    files = []
+                except Exception as e:
+                    self.logger.error(f"Error during polling: {e}")
+                    files = []
 
-                files = results.get('files', [])
+            for file in files:
+                created_time_str = file.get('createdTime')
+                if not created_time_str:
+                    continue
 
-                # Filter by creation time
-                for file in files:
-                    created_time_str = file.get('createdTime')
-                    if not created_time_str:
-                        continue
+                created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
 
-                    # Parse ISO 8601 timestamp
-                    created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
+                if created_time > cutoff_time:
+                    size_mb = int(file.get('size', 0)) / (1024 * 1024)
+                    self.logger.success(f"Found new export: {file['name']} ({size_mb:.2f} MB)")
+                    self.logger.success(f"Created: {created_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    return file
 
-                    if created_time > cutoff_time:
-                        size_mb = int(file.get('size', 0)) / (1024 * 1024)
-                        self.logger.success(f"Found new export: {file['name']} ({size_mb:.2f} MB)")
-                        self.logger.success(f"Created: {created_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-                        return file
+            remaining = timeout - elapsed
+            self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)")
+            time.sleep(current_interval)
 
-                # Not found yet - log progress and wait with adaptive backoff
-                remaining = timeout - elapsed
-                self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)")
-                time.sleep(current_interval)
-
-                # Progressive backoff: double interval every 2 polls, cap at max_interval
-                if poll_count % 2 == 0:
-                    current_interval = min(current_interval * 2, max_interval)
-
-            except HttpError as error:
-                self.logger.error(f"HTTP error during polling: {error}")
-                time.sleep(current_interval)  # Wait before retrying
-            except Exception as e:
-                self.logger.error(f"Error during polling: {e}")
-                time.sleep(current_interval)  # Wait before retrying
+            if poll_count % 2 == 0:
+                current_interval = min(current_interval * 2, max_interval)

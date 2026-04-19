@@ -36,12 +36,20 @@ class TestMainCLI:
         assert "wizard" in result.output
 
     def test_version_in_help(self):
-        """Test that --version option is listed in help."""
-        result = runner.invoke(app, ["--help"])
+        """Test that --version option is listed in help.
 
-        # Version option should be listed
+        Typer may emit ANSI color escapes that split the flag across
+        styled runs (especially in CI without a TTY), so we strip ANSI
+        before checking the substring.
+        """
+        import re
+
+        result = runner.invoke(app, ["--help"])
+        # Strip ANSI escape sequences so "--version" matches even when
+        # typer colors '-' and '-version' as separate styled runs.
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
         assert result.exit_code == 0
-        assert "--version" in result.output
+        assert "--version" in plain, f"Expected --version in help; got {plain!r}"
 
     def test_status_command(self):
         """Test status command."""

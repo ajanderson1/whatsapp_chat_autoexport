@@ -49,10 +49,10 @@ class TestDiscoverSelectPaneInit:
         pane = DiscoverSelectPane()
         assert pane._discovery_generation == 0
 
-    def test_discovered_chats_defaults_empty(self):
-        """_discovered_chats should default to empty list."""
+    def test_discovered_count_defaults_zero(self):
+        """_discovered_count should default to 0."""
         pane = DiscoverSelectPane()
-        assert pane._discovered_chats == []
+        assert pane._discovered_count == 0
 
     def test_scanning_chats_defaults_false(self):
         """_scanning_chats should default to False."""
@@ -136,27 +136,6 @@ class TestDiscoverSelectPaneMessages:
 # =============================================================================
 # Widget Composition (mounted inside MainScreen via tui_app)
 # =============================================================================
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_discover_select_pane_mounts_discovery_inventory(tui_app):
-    """DiscoverSelectPane should contain a ListView with id 'discovery-inventory'."""
-    async with tui_app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        screen = tui_app.screen
-        assert isinstance(screen, MainScreen)
-
-        # Enable and switch to discover-select tab
-        screen._connected = True
-        await pilot.pause()
-        tabbed = screen.query_one(TabbedContent)
-        tabbed.active = "discover-select"
-        await pilot.pause()
-
-        pane = screen.query_one(DiscoverSelectPane)
-        inventory = pane.query_one("#discovery-inventory", ListView)
-        assert inventory is not None
 
 
 @pytest.mark.unit
