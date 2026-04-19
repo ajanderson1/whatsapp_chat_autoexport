@@ -82,8 +82,8 @@ class SpecFormatter:
             Full Markdown string ready to be written to ``transcript.md``.
         """
         frontmatter = self._build_frontmatter()
-        metadata = self._build_metadata(messages)
         body = self._format_message_body(messages)
+        metadata = self._build_metadata(messages, body)
 
         parts = [frontmatter, metadata]
         if body:
@@ -104,7 +104,7 @@ class SpecFormatter:
             "---"
         )
 
-    def _build_metadata(self, messages: List[Message]) -> str:
+    def _build_metadata(self, messages: List[Message], body: str = "") -> str:
         generated = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         message_count = len(messages)
         media_count = sum(1 for m in messages if m.is_media)
@@ -116,7 +116,7 @@ class SpecFormatter:
         else:
             date_range = ""
 
-        body_sha256 = self._compute_body_sha256(messages)
+        body_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
 
         chat_jid_line = f"chat_jid: {self.chat_jid}" if self.chat_jid else "chat_jid:"
 
@@ -196,10 +196,4 @@ class SpecFormatter:
         # Fallback: return content up to first space if no parenthesis pattern
         return content.split()[0] if content.split() else ""
 
-    def _compute_body_sha256(self, messages: List[Message]) -> str:
-        """Compute a SHA-256 hash of the raw message body for integrity checking."""
-        raw = "\n".join(
-            f"{m.timestamp.isoformat()} {m.sender}: {m.content}"
-            for m in messages
-        )
-        return hashlib.sha256(raw.encode()).hexdigest()
+
