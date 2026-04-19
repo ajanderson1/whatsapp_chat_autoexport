@@ -13,6 +13,7 @@ Thread-safety:
 """
 
 import io
+import re
 import threading
 import time
 from datetime import datetime, timezone, timedelta
@@ -240,7 +241,50 @@ class GoogleDriveClient:
         if not self.service:
             self.logger.error("Not connected to Google Drive API")
             return 0
-        return 0
+
+        # Drive query: escape single quotes for the contains filter.
+        safe_name = chat_name.replace("'", "\\'")
+        parent_clause = f"'{folder_id}' in parents" if folder_id else "'root' in parents"
+        query = (
+            f"name contains 'WhatsApp Chat with {safe_name}' and {parent_clause}"
+        )
+
+        # Client-side strict regex. We escape the chat name so characters like
+        # '.' or '(' in the chat name are treated literally.
+        pattern = re.compile(
+            rf"^WhatsApp Chat with {re.escape(chat_name)}(?: \(\d+\))?(?:\.zip)?$"
+        )
+
+        removed = 0
+        with self._service_lock:
+            try:
+                results = self.service.files().list(
+                    q=query,
+                    pageSize=100,
+                    fields="files(id, name)",
+                ).execute()
+                files = results.get("files", [])
+            except Exception as e:
+                self.logger.warning(
+                    f"Drive cleanup: failed to list siblings for '{chat_name}' — "
+                    f"skipping (Drive error: {e})"
+                )
+                return 0
+
+            for file in files:
+                name = file.get("name", "")
+                file_id = file.get("id")
+                if not file_id or not pattern.match(name):
+                    continue
+                try:
+                    self.service.files().delete(fileId=file_id).execute()
+                    removed += 1
+                except Exception as e:
+                    self.logger.warning(
+                        f"Drive cleanup: failed to delete '{name}' — {e}"
+                    )
+
+        return removed
 
     def move_file(self, file_id: str, destination_folder_id: str) -> bool:
         """

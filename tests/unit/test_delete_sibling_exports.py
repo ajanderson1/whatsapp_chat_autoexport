@@ -31,3 +31,59 @@ class TestMethodExists:
         """GoogleDriveClient must expose delete_sibling_exports(chat_name)."""
         assert hasattr(client, "delete_sibling_exports")
         assert callable(client.delete_sibling_exports)
+
+
+class _LockObservingService:
+    """A fake Drive service that records whether the lock is held during
+    each call, and returns caller-specified list results. Modeled on the
+    helper in tests/unit/test_drive_client_threading.py."""
+
+    def __init__(self, lock: threading.Lock, list_files: list[dict]):
+        self.lock = lock
+        self.list_files = list_files
+        self.observations: list[tuple[str, bool]] = []
+        self.deleted_ids: list[str] = []
+
+    def files(self):
+        return self
+
+    def list(self, **kwargs):
+        self.observations.append(("list", self.lock.locked()))
+        outer = self
+
+        class _Exec:
+            def execute(self_inner):
+                return {"files": outer.list_files}
+
+        return _Exec()
+
+    def delete(self, **kwargs):
+        self.observations.append(("delete", self.lock.locked()))
+        self.deleted_ids.append(kwargs.get("fileId"))
+        outer = self
+
+        class _Exec:
+            def execute(self_inner):
+                return {}
+
+        return _Exec()
+
+
+class TestBaseNameMatches:
+    def test_base_name_and_zip_variant_are_deleted(self):
+        """`WhatsApp Chat with X` and `WhatsApp Chat with X.zip` are both deleted."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            list_files=[
+                {"id": "f1", "name": "WhatsApp Chat with Daniel Cocking"},
+                {"id": "f2", "name": "WhatsApp Chat with Daniel Cocking.zip"},
+            ],
+        )
+        c.service = fake
+
+        removed = c.delete_sibling_exports("Daniel Cocking")
+
+        assert removed == 2
+        assert set(fake.deleted_ids) == {"f1", "f2"}
