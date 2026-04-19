@@ -279,6 +279,17 @@ class GoogleDriveClient:
                 try:
                     self.service.files().delete(fileId=file_id).execute()
                     removed += 1
+                except HttpError as e:
+                    # 404 means the file is already gone — that's the desired state.
+                    if getattr(getattr(e, "resp", None), "status", None) == 404:
+                        self.logger.debug_msg(
+                            f"Drive cleanup: '{name}' already gone (404)"
+                        )
+                        removed += 1
+                    else:
+                        self.logger.warning(
+                            f"Drive cleanup: failed to delete '{name}' — {e}"
+                        )
                 except Exception as e:
                     self.logger.warning(
                         f"Drive cleanup: failed to delete '{name}' — {e}"

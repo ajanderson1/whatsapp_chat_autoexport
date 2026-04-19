@@ -353,3 +353,45 @@ class TestEmptySiblingSet:
         # A list call was still made under the lock.
         assert fake.observations == [("list", True)]
         assert c._service_lock.locked() is False
+
+
+class TestStale404CountedAsSuccess:
+    def test_file_deleted_concurrently_is_counted_as_success(self):
+        """A 404 on delete means the file is already gone — that's success."""
+        from googleapiclient.errors import HttpError
+
+        class _FakeResp:
+            status = 404
+            reason = "Not Found"
+
+        class _StaleService:
+            def files(self_inner):
+                return self_inner
+
+            def list(self_inner, **kwargs):
+                class _Exec:
+                    def execute(self_e):
+                        return {"files": [
+                            {"id": "gone", "name": "WhatsApp Chat with X"},
+                            {"id": "present", "name": "WhatsApp Chat with X.zip"},
+                        ]}
+
+                return _Exec()
+
+            def delete(self_inner, fileId=None, **kwargs):
+                class _Exec:
+                    def execute(self_e):
+                        if fileId == "gone":
+                            raise HttpError(_FakeResp(), b"Not Found")
+                        return {}
+
+                return _Exec()
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        c.service = _StaleService()
+
+        removed = c.delete_sibling_exports("X")
+
+        # Both files are treated as successful: the 404 means "already gone".
+        assert removed == 2
