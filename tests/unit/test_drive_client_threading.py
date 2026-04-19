@@ -116,6 +116,32 @@ class TestListFilesLocking:
         assert c._service_lock.locked() is False
 
 
+class TestDeleteFileLocking:
+    def test_delete_file_holds_lock_for_both_service_calls(self):
+        """delete_file does a pre-fetch (get) for the file name, then delete.
+
+        Both must be under the lock.
+        """
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            return_values={"get": {"name": "f.zip"}, "delete": {}},
+        )
+        c.service = fake
+
+        ok = c.delete_file("abc")
+
+        assert ok is True
+        # Expect both a get and a delete, both with the lock held.
+        names = [name for name, _ in fake.observations]
+        assert "get" in names and "delete" in names, f"observations={fake.observations}"
+        assert all(held for _, held in fake.observations), (
+            f"Expected all service calls under lock, got {fake.observations}"
+        )
+        assert c._service_lock.locked() is False
+
+
 class TestGetFileMetadataLocking:
     def test_get_file_metadata_holds_lock(self):
         auth = MagicMock()

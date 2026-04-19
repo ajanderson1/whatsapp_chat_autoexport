@@ -185,7 +185,7 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return False
 
-        try:
+        with self._service_lock:
             # Get file name first for logging
             try:
                 file_metadata = self.service.files().get(
@@ -193,24 +193,24 @@ class GoogleDriveClient:
                     fields="name"
                 ).execute()
                 file_name = file_metadata.get('name', file_id)
-            except:
+            except Exception:
                 file_name = file_id
 
-            # Delete file
-            self.service.files().delete(fileId=file_id).execute()
-            self.logger.success(f"Deleted from Google Drive: {file_name}")
-            return True
+            try:
+                self.service.files().delete(fileId=file_id).execute()
+                self.logger.success(f"Deleted from Google Drive: {file_name}")
+                return True
 
-        except HttpError as error:
-            if error.resp.status == 404:
-                self.logger.warning(f"File not found (already deleted?): {file_id}")
-                return True  # Consider it success if already deleted
-            else:
-                self.logger.error(f"HTTP error deleting file: {error}")
+            except HttpError as error:
+                if error.resp.status == 404:
+                    self.logger.warning(f"File not found (already deleted?): {file_id}")
+                    return True  # Consider it success if already deleted
+                else:
+                    self.logger.error(f"HTTP error deleting file: {error}")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error deleting file: {e}")
                 return False
-        except Exception as e:
-            self.logger.error(f"Error deleting file: {e}")
-            return False
 
     def move_file(self, file_id: str, destination_folder_id: str) -> bool:
         """
