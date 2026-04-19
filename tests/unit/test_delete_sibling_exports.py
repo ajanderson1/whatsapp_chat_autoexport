@@ -209,3 +209,30 @@ class TestRootOnlyScope:
             f"expected root-scope clause in query, got: {captured['q']!r}"
         )
         assert "WhatsApp Chat with Daniel Cocking" in captured["q"]
+
+
+class TestLockHeldDuringCleanup:
+    def test_lock_held_for_list_and_each_delete(self):
+        """Every service call made by delete_sibling_exports must run under the lock."""
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            list_files=[
+                {"id": "f1", "name": "WhatsApp Chat with X"},
+                {"id": "f2", "name": "WhatsApp Chat with X.zip"},
+                {"id": "f3", "name": "WhatsApp Chat with X (1).zip"},
+            ],
+        )
+        c.service = fake
+
+        c.delete_sibling_exports("X")
+
+        assert fake.observations, "expected service calls"
+        names = [name for name, _ in fake.observations]
+        assert "list" in names
+        assert names.count("delete") == 3
+        assert all(held for _, held in fake.observations), (
+            f"expected lock held for every call, got {fake.observations}"
+        )
+        assert c._service_lock.locked() is False
