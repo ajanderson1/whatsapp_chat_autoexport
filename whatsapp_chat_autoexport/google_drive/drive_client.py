@@ -273,20 +273,21 @@ class GoogleDriveClient:
             self.logger.error("Not connected to Google Drive API")
             return None
 
-        try:
-            metadata = self.service.files().get(
-                fileId=file_id,
-                fields="id, name, mimeType, size, modifiedTime, parents"
-            ).execute()
+        with self._service_lock:
+            try:
+                metadata = self.service.files().get(
+                    fileId=file_id,
+                    fields="id, name, mimeType, size, modifiedTime, parents"
+                ).execute()
 
-            return metadata
+                return metadata
 
-        except HttpError as error:
-            self.logger.error(f"HTTP error getting file metadata: {error}")
-            return None
-        except Exception as e:
-            self.logger.error(f"Error getting file metadata: {e}")
-            return None
+            except HttpError as error:
+                self.logger.error(f"HTTP error getting file metadata: {error}")
+                return None
+            except Exception as e:
+                self.logger.error(f"Error getting file metadata: {e}")
+                return None
 
     def find_folder_by_name(self, folder_name: str) -> Optional[str]:
         """

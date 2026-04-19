@@ -114,3 +114,23 @@ class TestListFilesLocking:
         )
         # And the lock is released again afterwards.
         assert c._service_lock.locked() is False
+
+
+class TestGetFileMetadataLocking:
+    def test_get_file_metadata_holds_lock(self):
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        fake = _LockObservingService(
+            c._service_lock,
+            return_values={"get": {"id": "abc", "name": "f.zip", "size": 10}},
+        )
+        c.service = fake
+
+        result = c.get_file_metadata("abc")
+
+        assert result == {"id": "abc", "name": "f.zip", "size": 10}
+        assert fake.observations, "Expected service.files().get() to be called"
+        assert all(held for _, held in fake.observations), (
+            f"Expected all service calls under lock, got {fake.observations}"
+        )
+        assert c._service_lock.locked() is False
