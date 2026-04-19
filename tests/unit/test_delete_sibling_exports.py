@@ -175,3 +175,37 @@ class TestSpecialCharsInChatName:
 
         assert removed == 2
         assert set(fake.deleted_ids) == {"yes1", "yes2"}
+
+
+class TestRootOnlyScope:
+    def test_query_includes_root_parents_clause(self):
+        """The Drive query passed to files().list() must include 'root' in parents."""
+        captured = {}
+
+        class _CapturingService:
+            def files(self_inner):
+                return self_inner
+
+            def list(self_inner, **kwargs):
+                captured["q"] = kwargs.get("q")
+
+                class _Exec:
+                    def execute(self_e):
+                        return {"files": []}
+
+                return _Exec()
+
+            def delete(self_inner, **kwargs):
+                raise AssertionError("should not delete when list is empty")
+
+        auth = MagicMock()
+        c = GoogleDriveClient(auth=auth)
+        c.service = _CapturingService()
+
+        c.delete_sibling_exports("Daniel Cocking")
+
+        assert captured["q"], "expected a query to be passed to files().list()"
+        assert "'root' in parents" in captured["q"], (
+            f"expected root-scope clause in query, got: {captured['q']!r}"
+        )
+        assert "WhatsApp Chat with Daniel Cocking" in captured["q"]
