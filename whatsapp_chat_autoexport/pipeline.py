@@ -32,6 +32,7 @@ class PipelineConfig:
     # Google Drive settings
     google_drive_folder: Optional[str] = None
     delete_from_drive: bool = False
+    cleanup_drive_duplicates: bool = True
     skip_download: bool = False
     
     # Google Drive polling settings (for waiting after phone export)

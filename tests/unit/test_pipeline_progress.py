@@ -315,3 +315,19 @@ class TestOutputBuilderProgressCallbacks:
             transcript_files, tmp_path / "output", on_progress=bad_cb
         )
         assert len(results) == 1
+
+
+class TestCleanupDuplicatesConfig:
+    """Tests for the cleanup_drive_duplicates config flag on PipelineConfig."""
+
+    def test_pipeline_config_default_is_true(self):
+        """PipelineConfig.cleanup_drive_duplicates defaults to True."""
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig
+        cfg = PipelineConfig()
+        assert cfg.cleanup_drive_duplicates is True
+
+    def test_pipeline_config_can_be_disabled(self):
+        """PipelineConfig accepts cleanup_drive_duplicates=False."""
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig
+        cfg = PipelineConfig(cleanup_drive_duplicates=False)
+        assert cfg.cleanup_drive_duplicates is False
