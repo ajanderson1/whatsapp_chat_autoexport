@@ -331,3 +331,62 @@ class TestCleanupDuplicatesConfig:
         from whatsapp_chat_autoexport.pipeline import PipelineConfig
         cfg = PipelineConfig(cleanup_drive_duplicates=False)
         assert cfg.cleanup_drive_duplicates is False
+
+    def test_pipeline_calls_cleanup_after_successful_download(self, tmp_path):
+        """When cleanup_drive_duplicates=True, process_single_export calls
+        drive_manager.delete_sibling_exports(chat_name) after a successful download."""
+        from unittest.mock import patch, MagicMock
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
+
+        config = PipelineConfig(
+            skip_download=False,
+            transcribe_audio_video=False,
+            cleanup_temp=False,
+            output_dir=tmp_path / "output",
+            cleanup_drive_duplicates=True,
+        )
+        pipeline = WhatsAppPipeline(config=config)
+
+        mock_drive = MagicMock()
+        mock_drive.connect.return_value = True
+        mock_drive.wait_for_new_export.return_value = {"id": "abc", "name": "WhatsApp Chat with Test"}
+        download_dir = tmp_path / "downloads"
+        download_dir.mkdir()
+        fake_zip = download_dir / "WhatsApp Chat with Test"
+        fake_zip.write_text("fake")
+        mock_drive.batch_download_exports.return_value = [fake_zip]
+
+        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
+            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+                pipeline.process_single_export("Test")
+
+        mock_drive.delete_sibling_exports.assert_called_once_with("Test")
+
+    def test_pipeline_skips_cleanup_when_flag_off(self, tmp_path):
+        """When cleanup_drive_duplicates=False, cleanup is not called."""
+        from unittest.mock import patch, MagicMock
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
+
+        config = PipelineConfig(
+            skip_download=False,
+            transcribe_audio_video=False,
+            cleanup_temp=False,
+            output_dir=tmp_path / "output",
+            cleanup_drive_duplicates=False,
+        )
+        pipeline = WhatsAppPipeline(config=config)
+
+        mock_drive = MagicMock()
+        mock_drive.connect.return_value = True
+        mock_drive.wait_for_new_export.return_value = {"id": "abc", "name": "WhatsApp Chat with Test"}
+        download_dir = tmp_path / "downloads"
+        download_dir.mkdir()
+        fake_zip = download_dir / "WhatsApp Chat with Test"
+        fake_zip.write_text("fake")
+        mock_drive.batch_download_exports.return_value = [fake_zip]
+
+        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
+            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+                pipeline.process_single_export("Test")
+
+        mock_drive.delete_sibling_exports.assert_not_called()

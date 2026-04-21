@@ -190,7 +190,26 @@ class WhatsAppPipeline:
             
             if not downloaded:
                 raise RuntimeError(f"Failed to download export for '{chat_name}'")
-            
+
+            if self.config.cleanup_drive_duplicates:
+                try:
+                    removed = self.drive_manager.delete_sibling_exports(chat_name)
+                    if removed:
+                        self.logger.info(
+                            f"Drive cleanup: removed {removed} duplicate(s) for "
+                            f"'{chat_name}' from Drive root"
+                        )
+                    else:
+                        self.logger.debug_msg(
+                            f"Drive cleanup: nothing to prune for '{chat_name}'"
+                        )
+                except Exception as e:
+                    # delete_sibling_exports is not supposed to raise, but if it does,
+                    # don't fail the chat — we already have the file on local disk.
+                    self.logger.warning(
+                        f"Drive cleanup: unexpected error for '{chat_name}' — {e}"
+                    )
+
             self.logger.success(f"Downloaded: {matching_file['name']}")
             self._fire_progress("download", "Download complete", 1, 1, chat_name)
             results['phases_completed'].append('download')
