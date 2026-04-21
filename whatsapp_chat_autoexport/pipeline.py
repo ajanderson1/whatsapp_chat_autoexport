@@ -121,12 +121,12 @@ class WhatsAppPipeline:
         
         This method:
         1. Waits for and downloads the specific chat export from Google Drive
+           (and deletes the just-downloaded file from Drive if delete_from_drive is set)
         2. Prunes same-name sibling exports from Drive root (if cleanup_drive_duplicates)
         3. Extracts and organizes the content
         4. Transcribes audio/video (if enabled)
         5. Builds the final organized output
-        6. Deletes from Drive (if configured)
-        7. Cleans up temporary files
+        6. Cleans up temporary files
         
         Args:
             chat_name: Name of the chat that was just exported
