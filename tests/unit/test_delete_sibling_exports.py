@@ -395,3 +395,21 @@ class TestStale404CountedAsSuccess:
 
         # Both files are treated as successful: the 404 means "already gone".
         assert removed == 2
+
+
+class TestManagerPassthrough:
+    def test_manager_delegates_to_client(self):
+        """GoogleDriveManager.delete_sibling_exports calls client.delete_sibling_exports."""
+        from whatsapp_chat_autoexport.google_drive.drive_manager import GoogleDriveManager
+
+        mgr = GoogleDriveManager.__new__(GoogleDriveManager)  # skip __init__ so we don't auth
+        mgr.logger = MagicMock()
+        mgr.client = MagicMock()
+        mgr.client.delete_sibling_exports.return_value = 2
+
+        result = mgr.delete_sibling_exports("Daniel Cocking")
+
+        assert result == 2
+        mgr.client.delete_sibling_exports.assert_called_once_with(
+            "Daniel Cocking", folder_id=None
+        )
