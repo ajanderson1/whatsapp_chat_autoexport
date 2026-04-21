@@ -32,6 +32,7 @@ class PipelineConfig:
     # Google Drive settings
     google_drive_folder: Optional[str] = None
     delete_from_drive: bool = False
+    cleanup_drive_duplicates: bool = True
     skip_download: bool = False
     
     # Google Drive polling settings (for waiting after phone export)
@@ -120,10 +121,11 @@ class WhatsAppPipeline:
         
         This method:
         1. Waits for and downloads the specific chat export from Google Drive
-        2. Extracts and organizes the content
-        3. Transcribes audio/video (if enabled)
-        4. Builds the final organized output
-        5. Deletes from Drive (if configured)
+           (and deletes the just-downloaded file from Drive if delete_from_drive is set)
+        2. Prunes same-name sibling exports from Drive root (if cleanup_drive_duplicates)
+        3. Extracts and organizes the content
+        4. Transcribes audio/video (if enabled)
+        5. Builds the final organized output
         6. Cleans up temporary files
         
         Args:
@@ -189,7 +191,30 @@ class WhatsAppPipeline:
             
             if not downloaded:
                 raise RuntimeError(f"Failed to download export for '{chat_name}'")
-            
+
+            if self.config.cleanup_drive_duplicates:
+                # Safe when delete_from_drive=True: that flag removes the primary
+                # file by ID inside batch_download_exports; delete_sibling_exports
+                # then only sees the (N) siblings, or nothing if Drive's index
+                # already reflects the prior delete.
+                try:
+                    removed = self.drive_manager.delete_sibling_exports(chat_name)
+                    if removed:
+                        self.logger.info(
+                            f"Drive cleanup: removed {removed} duplicate(s) for "
+                            f"'{chat_name}' from Drive root"
+                        )
+                    else:
+                        self.logger.debug_msg(
+                            f"Drive cleanup: nothing to prune for '{chat_name}'"
+                        )
+                except Exception as e:
+                    # delete_sibling_exports is not supposed to raise, but if it does,
+                    # don't fail the chat — we already have the file on local disk.
+                    self.logger.warning(
+                        f"Drive cleanup: unexpected error for '{chat_name}' — {e}"
+                    )
+
             self.logger.success(f"Downloaded: {matching_file['name']}")
             self._fire_progress("download", "Download complete", 1, 1, chat_name)
             results['phases_completed'].append('download')

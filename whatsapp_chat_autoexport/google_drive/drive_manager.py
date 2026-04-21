@@ -343,3 +343,19 @@ class GoogleDriveManager:
         }
 
         return summary
+
+    def delete_sibling_exports(self, chat_name: str, folder_id: Optional[str] = None) -> int:
+        """
+        Delete Drive root files in the chat name-group for ``chat_name``.
+
+        Thin passthrough to ``GoogleDriveClient.delete_sibling_exports``. See that
+        method for match semantics, error handling, and the folder_id default.
+
+        Args:
+            chat_name: Name of the chat whose sibling export files should be removed.
+            folder_id: Optional parent folder ID (defaults to Drive root).
+
+        Returns:
+            Count of files successfully deleted.
+        """
+        return self.client.delete_sibling_exports(chat_name, folder_id=folder_id)

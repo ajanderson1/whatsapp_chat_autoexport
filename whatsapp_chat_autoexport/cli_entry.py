@@ -116,6 +116,13 @@ Examples:
         action="store_true",
         help="Delete files from Google Drive after processing",
     )
+    output_group.add_argument(
+        "--keep-drive-duplicates",
+        action="store_true",
+        default=False,
+        help="Skip deleting Drive root duplicates after each per-chat download "
+             "(default: duplicates are removed).",
+    )
 
     # Transcription options
     transcribe_group = parser.add_argument_group("Transcription Options")

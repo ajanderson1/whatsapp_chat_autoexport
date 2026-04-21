@@ -315,3 +315,115 @@ class TestOutputBuilderProgressCallbacks:
             transcript_files, tmp_path / "output", on_progress=bad_cb
         )
         assert len(results) == 1
+
+
+class TestCleanupDuplicatesConfig:
+    """Tests for the cleanup_drive_duplicates config flag on PipelineConfig."""
+
+    def test_pipeline_config_default_is_true(self):
+        """PipelineConfig.cleanup_drive_duplicates defaults to True."""
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig
+        cfg = PipelineConfig()
+        assert cfg.cleanup_drive_duplicates is True
+
+    def test_pipeline_config_can_be_disabled(self):
+        """PipelineConfig accepts cleanup_drive_duplicates=False."""
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig
+        cfg = PipelineConfig(cleanup_drive_duplicates=False)
+        assert cfg.cleanup_drive_duplicates is False
+
+    def test_pipeline_calls_cleanup_after_successful_download(self, tmp_path):
+        """When cleanup_drive_duplicates=True, process_single_export calls
+        drive_manager.delete_sibling_exports(chat_name) after a successful download."""
+        from unittest.mock import patch, MagicMock
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
+
+        config = PipelineConfig(
+            skip_download=False,
+            transcribe_audio_video=False,
+            cleanup_temp=False,
+            output_dir=tmp_path / "output",
+            cleanup_drive_duplicates=True,
+        )
+        pipeline = WhatsAppPipeline(config=config)
+
+        mock_drive = MagicMock()
+        mock_drive.connect.return_value = True
+        mock_drive.wait_for_new_export.return_value = {"id": "abc", "name": "WhatsApp Chat with Test"}
+        download_dir = tmp_path / "downloads"
+        download_dir.mkdir()
+        fake_zip = download_dir / "WhatsApp Chat with Test"
+        fake_zip.write_text("fake")
+        mock_drive.batch_download_exports.return_value = [fake_zip]
+
+        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
+            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+                pipeline.process_single_export("Test")
+
+        mock_drive.delete_sibling_exports.assert_called_once_with("Test")
+
+    def test_pipeline_skips_cleanup_when_flag_off(self, tmp_path):
+        """When cleanup_drive_duplicates=False, cleanup is not called."""
+        from unittest.mock import patch, MagicMock
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
+
+        config = PipelineConfig(
+            skip_download=False,
+            transcribe_audio_video=False,
+            cleanup_temp=False,
+            output_dir=tmp_path / "output",
+            cleanup_drive_duplicates=False,
+        )
+        pipeline = WhatsAppPipeline(config=config)
+
+        mock_drive = MagicMock()
+        mock_drive.connect.return_value = True
+        mock_drive.wait_for_new_export.return_value = {"id": "abc", "name": "WhatsApp Chat with Test"}
+        download_dir = tmp_path / "downloads"
+        download_dir.mkdir()
+        fake_zip = download_dir / "WhatsApp Chat with Test"
+        fake_zip.write_text("fake")
+        mock_drive.batch_download_exports.return_value = [fake_zip]
+
+        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
+            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+                pipeline.process_single_export("Test")
+
+        mock_drive.delete_sibling_exports.assert_not_called()
+
+
+class TestCleanupFailureDoesNotFailChat:
+    def test_cleanup_raising_does_not_abort_pipeline(self, tmp_path):
+        """Defensive: even if delete_sibling_exports raises (it shouldn't), the
+        chat's pipeline run continues. We guard with try/except in the call site."""
+        from unittest.mock import patch, MagicMock
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
+
+        config = PipelineConfig(
+            skip_download=False,
+            transcribe_audio_video=False,
+            cleanup_temp=False,
+            output_dir=tmp_path / "output",
+            cleanup_drive_duplicates=True,
+        )
+        pipeline = WhatsAppPipeline(config=config)
+
+        mock_drive = MagicMock()
+        mock_drive.connect.return_value = True
+        mock_drive.wait_for_new_export.return_value = {"id": "abc", "name": "WhatsApp Chat with Test"}
+        download_dir = tmp_path / "downloads"
+        download_dir.mkdir()
+        fake_zip = download_dir / "WhatsApp Chat with Test"
+        fake_zip.write_text("fake")
+        mock_drive.batch_download_exports.return_value = [fake_zip]
+        mock_drive.delete_sibling_exports.side_effect = RuntimeError("boom")
+
+        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
+            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+                # Should NOT raise — the RuntimeError from cleanup must be caught.
+                result = pipeline.process_single_export("Test")
+
+        # Phase 1 (download) should be marked completed even though cleanup raised.
+        assert result is not None
+        # Depending on _phase2 mocks this may or may not be "success", but the
+        # run did not propagate the cleanup exception.
