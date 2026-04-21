@@ -354,3 +354,17 @@ class TestRunTui:
         assert call_kwargs["transcription_provider"] == "elevenlabs"
         assert call_kwargs["limit"] == 10
         assert call_kwargs["debug"] is True
+
+
+class TestKeepDriveDuplicatesFlag:
+    """Tests for the --keep-drive-duplicates CLI flag."""
+
+    def test_flag_defaults_to_not_keeping_duplicates(self):
+        """Without the flag, args.keep_drive_duplicates is False (cleanup enabled)."""
+        args = parse([])
+        assert getattr(args, "keep_drive_duplicates", None) is False
+
+    def test_flag_sets_keep_to_true(self):
+        """--keep-drive-duplicates sets args.keep_drive_duplicates=True."""
+        args = parse(["--keep-drive-duplicates"])
+        assert args.keep_drive_duplicates is True

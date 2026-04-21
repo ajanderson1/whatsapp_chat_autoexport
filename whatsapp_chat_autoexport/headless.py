@@ -194,6 +194,7 @@ def run_headless(args: Namespace) -> int:
         pipeline_config = PipelineConfig(
             google_drive_folder=getattr(args, "google_drive_folder", None),
             delete_from_drive=getattr(args, "delete_from_drive", False),
+            cleanup_drive_duplicates=not getattr(args, "keep_drive_duplicates", False),
             skip_download=False,
             poll_interval=getattr(args, "poll_interval", 8),
             poll_timeout=getattr(args, "poll_timeout", 300),
@@ -319,6 +320,7 @@ def run_pipeline_only(args: Namespace) -> int:
         skip_download=True,
         download_dir=source_dir,
         delete_from_drive=getattr(args, "delete_from_drive", False),
+        cleanup_drive_duplicates=not getattr(args, "keep_drive_duplicates", False),
 
         # Output
         output_dir=output_dir,
