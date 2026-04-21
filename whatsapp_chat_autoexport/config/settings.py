@@ -124,6 +124,7 @@ class PipelineConfig(BaseModel):
 
     # Google Drive settings
     delete_from_drive: bool = False
+    cleanup_drive_duplicates: bool = True
     drive_folder_name: str = "WhatsApp"
 
     # Paths

@@ -442,3 +442,11 @@ class TestTimeoutConfig:
         set_timeout_profile(TimeoutProfile.SLOW)
         config = get_timeout_config()
         assert config.element_find_timeout > 5.0
+
+
+class TestCleanupDriveDuplicatesSetting:
+    def test_default_is_true(self):
+        """PipelineConfig.cleanup_drive_duplicates defaults to True."""
+        config = PipelineConfig()
+        assert config.cleanup_drive_duplicates is True
+
