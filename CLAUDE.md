@@ -101,6 +101,7 @@ poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-dr
 --debug                   Enable debug output
 --resume PATH             Skip already-exported chats (scans Drive folder)
 --delete-from-drive       Delete exports from Drive after processing
+--keep-drive-duplicates   Skip deleting Drive root duplicates after download
 --transcription-provider  Choose whisper (default) or elevenlabs
 --skip-drive-download     Process local files without Drive download
 --auto-select             Export all chats (required for --headless without --resume)
@@ -262,6 +263,19 @@ poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --witho
 - **Example**: `whatsapp --headless --output ~/exports --auto-select --no-output-media`
 
 **Key Insight**: Always export WITH media (default), then use `--no-output-media` or `--no-media` to exclude media from final output while preserving transcription functionality.
+
+## Drive Duplicate Cleanup
+
+By default, after each successful per-chat download the pipeline deletes any
+`WhatsApp Chat with <chat>` and `WhatsApp Chat with <chat> (N)` siblings from
+Drive root so duplicates don't accumulate across runs.
+
+- Default: **ON** — no flag needed.
+- Opt out: `--keep-drive-duplicates` (leaves all Drive files alone).
+- Orthogonal to `--delete-from-drive`: that flag only removes the
+  just-downloaded file; duplicate cleanup removes the whole sibling group.
+- Only affects Drive root. Does not touch subfolders.
+- Cleanup failures never fail a chat — worst case, the next run retries.
 
 ## Transcription Behavior
 
