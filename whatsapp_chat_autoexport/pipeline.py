@@ -121,11 +121,12 @@ class WhatsAppPipeline:
         
         This method:
         1. Waits for and downloads the specific chat export from Google Drive
-        2. Extracts and organizes the content
-        3. Transcribes audio/video (if enabled)
-        4. Builds the final organized output
-        5. Deletes from Drive (if configured)
-        6. Cleans up temporary files
+        2. Prunes same-name sibling exports from Drive root (if cleanup_drive_duplicates)
+        3. Extracts and organizes the content
+        4. Transcribes audio/video (if enabled)
+        5. Builds the final organized output
+        6. Deletes from Drive (if configured)
+        7. Cleans up temporary files
         
         Args:
             chat_name: Name of the chat that was just exported
@@ -192,6 +193,10 @@ class WhatsAppPipeline:
                 raise RuntimeError(f"Failed to download export for '{chat_name}'")
 
             if self.config.cleanup_drive_duplicates:
+                # Safe when delete_from_drive=True: that flag removes the primary
+                # file by ID inside batch_download_exports; delete_sibling_exports
+                # then only sees the (N) siblings, or nothing if Drive's index
+                # already reflects the prior delete.
                 try:
                     removed = self.drive_manager.delete_sibling_exports(chat_name)
                     if removed:
