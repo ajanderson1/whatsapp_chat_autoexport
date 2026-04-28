@@ -123,6 +123,14 @@ Examples:
         help="Skip deleting Drive root duplicates after each per-chat download "
              "(default: duplicates are removed).",
     )
+    output_group.add_argument(
+        "--format",
+        type=str,
+        choices=["legacy", "spec"],
+        default="legacy",
+        metavar="FORMAT",
+        help="Output format: 'legacy' (transcript.txt) or 'spec' (index.md + transcript.md)",
+    )
 
     # Transcription options
     transcribe_group = parser.add_argument_group("Transcription Options")

@@ -60,6 +60,7 @@ class PipelineConfig:
     output_dir: Path = Path("~/whatsapp_exports").expanduser()
     include_media: bool = True
     include_transcriptions: bool = True
+    output_format: str = "legacy"  # "legacy" or "spec"
 
     # General settings
     cleanup_temp: bool = True
@@ -631,7 +632,10 @@ class WhatsAppPipeline:
         # Create output directory
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build outputs
+        if self.config.output_format == "spec":
+            return self._phase4_build_spec_outputs(transcript_files)
+
+        # Legacy format (default)
         results = self.output_builder.batch_build_outputs(
             transcript_files,
             self.config.output_dir,
@@ -643,6 +647,34 @@ class WhatsAppPipeline:
         output_dirs = [r['output_dir'] for r in results]
 
         self.logger.success(f"Created {len(output_dirs)} output(s) in: {self.config.output_dir}")
+        return output_dirs
+
+    def _phase4_build_spec_outputs(self, transcript_files: List[tuple]) -> List[Path]:
+        """Build outputs in spec format (index.md + transcript.md)."""
+        from .output.spec_formatter import SpecFormatter
+
+        output_dirs = []
+        total = len(transcript_files)
+
+        for i, (transcript_path, media_dir) in enumerate(transcript_files, 1):
+            contact_name = self.output_builder._extract_contact_name(transcript_path)
+            self.logger.info(f"\n[{i}/{total}] Building spec output: {contact_name}")
+
+            messages, media_refs = self.output_builder.parser.parse_transcript(transcript_path)
+
+            formatter = SpecFormatter(contact_name=contact_name)
+            summary = formatter.build_output(
+                messages=messages,
+                dest_dir=self.config.output_dir,
+                media_dir=media_dir if media_dir.exists() else None,
+                include_transcriptions=self.config.include_transcriptions,
+                copy_media=self.config.include_media,
+            )
+
+            output_dirs.append(summary["output_dir"])
+            self._fire_progress("build_output", f"Built spec output for {contact_name}", i, total, contact_name)
+
+        self.logger.success(f"Created {len(output_dirs)} spec output(s) in: {self.config.output_dir}")
         return output_dirs
 
     def _phase5_cleanup(self):

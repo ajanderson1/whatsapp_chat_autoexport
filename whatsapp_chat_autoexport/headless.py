@@ -215,6 +215,7 @@ def run_headless(args: Namespace) -> int:
             output_dir=output_dir,
             include_media=not getattr(args, "no_output_media", False),
             include_transcriptions=True,
+            output_format=getattr(args, "format", "legacy"),
             cleanup_temp=True,
             dry_run=False,
         )
@@ -343,6 +344,7 @@ def run_pipeline_only(args: Namespace) -> int:
         output_dir=output_dir,
         include_media=not getattr(args, "no_output_media", False),
         include_transcriptions=True,
+        output_format=getattr(args, "format", "legacy"),
 
         # Transcription
         transcribe_audio_video=not no_transcribe,
