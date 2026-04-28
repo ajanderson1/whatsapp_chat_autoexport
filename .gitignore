@@ -37,3 +37,6 @@ test_tui_flow.py
 
 # PRPs (code review artifacts)
 PRPs/
+
+# MkDocs build output
+site/
