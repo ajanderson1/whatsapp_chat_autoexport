@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from .pipeline import WhatsAppPipeline, PipelineConfig
+from .preflight import format_report_for_stderr, run_preflight
 from .utils.logger import Logger
 
 
@@ -113,6 +114,14 @@ def run_headless(args: Namespace) -> int:
                 "Cannot proceed without a valid API key for transcription. "
                 "Set the key or use --no-transcribe to skip."
             )
+            logger.close()
+            return 2
+
+    # --- Preflight gate ---------------------------------------------------
+    if not getattr(args, "skip_preflight", False):
+        report = run_preflight()
+        print(format_report_for_stderr(report), file=sys.stderr)
+        if report.has_hard_fail:
             logger.close()
             return 2
 
