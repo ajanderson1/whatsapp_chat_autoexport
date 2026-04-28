@@ -80,3 +80,126 @@ class TestWhisperProbe:
         result = check_whisper("sk-test", _client=httpx.Client(transport=_mock_transport(handler)))
         assert result.status == Status.HARD_FAIL
         assert result.error  # non-empty
+
+
+# ---------------------------------------------------------------------------
+# ElevenLabs
+# ---------------------------------------------------------------------------
+
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "preflight"
+
+
+def _load_fixture(name: str) -> dict[str, Any]:
+    return json.loads((FIXTURES / name).read_text())
+
+
+class TestElevenLabsProbe:
+    def test_no_key_skipped(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        result = check_elevenlabs(None)
+        assert result.status == Status.SKIPPED
+        assert result.provider == "elevenlabs"
+
+    def test_full_quota_ok(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        body = _load_fixture("elevenlabs_subscription_full.json")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/v1/user/subscription"
+            assert request.headers["xi-api-key"] == "el-test"
+            return httpx.Response(200, json=body)
+
+        result = check_elevenlabs(
+            "el-test",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.OK
+        assert result.details["character_count"] == 1000
+        assert result.details["character_limit"] == 100000
+        assert result.details["characters_remaining"] == 99000
+        assert result.details["tier"] == "creator"
+        assert result.details["next_reset_unix"] == 1746057600
+
+    def test_low_quota_warn(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        body = _load_fixture("elevenlabs_subscription_low.json")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=body)
+
+        result = check_elevenlabs(
+            "el-test",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.WARN
+        assert result.details["characters_remaining"] == 5000
+
+    def test_exhausted_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        body = _load_fixture("elevenlabs_subscription_exhausted.json")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=body)
+
+        result = check_elevenlabs(
+            "el-test",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.HARD_FAIL
+        assert result.details["characters_remaining"] == 0
+
+    def test_invalid_key_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"detail": "Unauthorized"})
+
+        result = check_elevenlabs(
+            "bad",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.HARD_FAIL
+        assert result.error  # non-empty
+
+    def test_network_error_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ReadTimeout("Timed out")
+
+        result = check_elevenlabs(
+            "el-test",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.HARD_FAIL
+
+    def test_malformed_response_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.elevenlabs import (
+            check_elevenlabs,
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"unexpected": "shape"})
+
+        result = check_elevenlabs(
+            "el-test",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.HARD_FAIL
+        assert result.error

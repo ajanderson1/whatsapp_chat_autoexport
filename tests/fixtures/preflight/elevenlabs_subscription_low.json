@@ -1,0 +1,9 @@
+{
+  "tier": "creator",
+  "character_count": 95000,
+  "character_limit": 100000,
+  "can_extend_character_limit": true,
+  "next_character_count_reset_unix": 1746057600,
+  "currency": "usd",
+  "status": "active"
+}
