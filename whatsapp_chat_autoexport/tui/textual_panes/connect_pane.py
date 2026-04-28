@@ -165,7 +165,8 @@ class ConnectPane(Container):
 
         # Launch preflight check unless user opted out
         if not getattr(self.app, "skip_preflight", False):
-            self.run_worker(self._run_preflight, thread=True, name="preflight")
+            panel = self.query_one("#preflight-panel", PreflightPanel)
+            self._launch_preflight_worker(panel)
 
     # ------------------------------------------------------------------
     # Workers: device scanning
@@ -517,13 +518,15 @@ class ConnectPane(Container):
         """Re-run the preflight check manually."""
         panel = self.query_one("#preflight-panel", PreflightPanel)
         panel.clear()
-        self.run_worker(self._run_preflight, thread=True, name="preflight")
+        self._launch_preflight_worker(panel)
 
-    def _run_preflight(self) -> None:
-        """Run preflight in a background thread and update the panel."""
-        report = run_preflight()
-        panel = self.query_one("#preflight-panel", PreflightPanel)
-        self.call_from_thread(panel.set_report, report)
+    def _launch_preflight_worker(self, panel: PreflightPanel) -> None:
+        """Resolve panel on the main thread, then start the background worker."""
+        def _worker() -> None:
+            report = run_preflight()
+            self.call_from_thread(panel.set_report, report)
+
+        self.run_worker(_worker, thread=True, name="preflight")
 
     def _preflight_allows_continue(self) -> bool:
         """Return True if preflight passes (or was skipped)."""
