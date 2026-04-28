@@ -89,3 +89,55 @@ async def test_no_hard_fail_property_initial():
     async with _PanelHost(panel).run_test() as pilot:
         await pilot.pause()
         assert panel.has_hard_fail is False
+
+
+@pytest.mark.asyncio
+async def test_clear_resets_to_pending():
+    panel = PreflightPanel()
+    async with _PanelHost(panel).run_test() as pilot:
+        await pilot.pause()
+        panel.set_report(
+            _report(
+                ("whisper", "OpenAI (Whisper)", Status.OK, "Key valid"),
+            )
+        )
+        await pilot.pause()
+        # Verify the report row is visible first
+        assert "OpenAI (Whisper)" in panel.render_text()
+
+        panel.clear()
+        await pilot.pause()
+        text = panel.render_text()
+        assert "OpenAI (Whisper)" not in text
+        assert "Preflight" in text
+        assert panel.has_hard_fail is False
+
+
+@pytest.mark.asyncio
+async def test_shrink_hides_surplus_rows():
+    """Setting a smaller report after a larger one must hide the surplus rows."""
+    panel = PreflightPanel()
+    async with _PanelHost(panel).run_test() as pilot:
+        await pilot.pause()
+        panel.set_report(
+            _report(
+                ("whisper", "OpenAI (Whisper)", Status.OK, "x"),
+                ("elevenlabs", "ElevenLabs", Status.OK, "y"),
+                ("drive", "Google Drive", Status.OK, "z"),
+            )
+        )
+        await pilot.pause()
+        text_three = panel.render_text()
+        assert "Google Drive" in text_three
+
+        panel.set_report(
+            _report(
+                ("whisper", "OpenAI (Whisper)", Status.OK, "x"),
+                ("elevenlabs", "ElevenLabs", Status.OK, "y"),
+            )
+        )
+        await pilot.pause()
+        text_two = panel.render_text()
+        assert "Google Drive" not in text_two
+        assert "OpenAI (Whisper)" in text_two
+        assert "ElevenLabs" in text_two

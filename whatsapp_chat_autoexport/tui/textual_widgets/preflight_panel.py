@@ -9,6 +9,7 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Static
 
 from ...preflight.report import PreflightReport, Status
@@ -119,7 +120,7 @@ class PreflightPanel(Vertical):
         try:
             summary_widget = self.query_one("#preflight-summary", Static)
             summary_widget.update(_PENDING_TEXT)
-        except Exception:
+        except NoMatches:
             pass
 
     def render_text(self) -> str:
