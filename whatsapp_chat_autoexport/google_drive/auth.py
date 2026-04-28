@@ -351,3 +351,31 @@ class GoogleDriveAuth:
             pass
 
         return status
+
+    def has_credentials(self) -> bool:
+        """Lightweight check used by preflight: token file exists and is loadable.
+
+        Does NOT trigger an OAuth flow. Returns False if no token,
+        if pickle load fails, or if credentials lack a refresh token.
+        """
+        if not self.token_file.exists():
+            return False
+        try:
+            creds = self.load_token()
+        except Exception:
+            return False
+        return creds is not None
+
+    def get_service(self):
+        """Build a Drive v3 API service using the cached credentials.
+
+        Used by preflight (and any caller that needs a quick about() lookup
+        without re-running auth). Raises if no credentials are loaded.
+        """
+        from googleapiclient.discovery import build
+
+        if not self.credentials:
+            self.credentials = self.load_token()
+        if not self.credentials:
+            raise RuntimeError("No Drive credentials available")
+        return build("drive", "v3", credentials=self.credentials, cache_discovery=False)

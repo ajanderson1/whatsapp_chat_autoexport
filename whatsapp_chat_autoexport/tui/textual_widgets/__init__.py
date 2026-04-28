@@ -11,6 +11,7 @@ from .progress_pane import ProgressPane
 from .cancel_modal import CancelModal
 from .secret_settings_modal import SecretSettingsModal
 from .color_scheme_modal import ColorSchemeModal
+from .preflight_panel import PreflightPanel
 
 __all__ = [
     "ChatListWidget",
@@ -23,4 +24,5 @@ __all__ = [
     "CancelModal",
     "SecretSettingsModal",
     "ColorSchemeModal",
+    "PreflightPanel",
 ]

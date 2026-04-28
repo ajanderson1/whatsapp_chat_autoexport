@@ -47,6 +47,7 @@ _EXPORTER = "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
 _VALIDATE_RESUME = "whatsapp_chat_autoexport.export.chat_exporter.validate_resume_directory"
 _PIPELINE = "whatsapp_chat_autoexport.headless.WhatsAppPipeline"
 _VALIDATE_API = "whatsapp_chat_autoexport.headless._validate_api_key"
+_PREFLIGHT = "whatsapp_chat_autoexport.headless.run_preflight"
 
 
 # ---------------------------------------------------------------------------
@@ -60,8 +61,11 @@ class TestHappyPath:
     @patch(_EXPORTER)
     @patch(_DRIVER)
     @patch(_APPIUM)
-    def test_full_success_returns_0(self, MockAppium, MockDriver, MockExporter, MockPipeline):
+    @patch(_PREFLIGHT)
+    def test_full_success_returns_0(self, MockPreflight, MockAppium, MockDriver, MockExporter, MockPipeline):
         from whatsapp_chat_autoexport.headless import run_headless
+
+        MockPreflight.return_value.has_hard_fail = False
 
         # Appium
         appium = MockAppium.return_value
@@ -97,8 +101,11 @@ class TestHappyPath:
     @patch(_EXPORTER)
     @patch(_DRIVER)
     @patch(_APPIUM)
-    def test_cleanup_called_on_success(self, MockAppium, MockDriver, MockExporter, MockPipeline):
+    @patch(_PREFLIGHT)
+    def test_cleanup_called_on_success(self, MockPreflight, MockAppium, MockDriver, MockExporter, MockPipeline):
         from whatsapp_chat_autoexport.headless import run_headless
+
+        MockPreflight.return_value.has_hard_fail = False
 
         appium = MockAppium.return_value
         appium.start_appium.return_value = True
@@ -129,8 +136,11 @@ class TestPartialFailure:
     @patch(_EXPORTER)
     @patch(_DRIVER)
     @patch(_APPIUM)
-    def test_partial_failure_returns_1(self, MockAppium, MockDriver, MockExporter, MockPipeline):
+    @patch(_PREFLIGHT)
+    def test_partial_failure_returns_1(self, MockPreflight, MockAppium, MockDriver, MockExporter, MockPipeline):
         from whatsapp_chat_autoexport.headless import run_headless
+
+        MockPreflight.return_value.has_hard_fail = False
 
         appium = MockAppium.return_value
         appium.start_appium.return_value = True
@@ -302,8 +312,11 @@ class TestCleanup:
     @patch(_EXPORTER)
     @patch(_DRIVER)
     @patch(_APPIUM)
-    def test_cleanup_on_exception(self, MockAppium, MockDriver, MockExporter, MockPipeline):
+    @patch(_PREFLIGHT)
+    def test_cleanup_on_exception(self, MockPreflight, MockAppium, MockDriver, MockExporter, MockPipeline):
         from whatsapp_chat_autoexport.headless import run_headless
+
+        MockPreflight.return_value.has_hard_fail = False
 
         MockAppium.return_value.start_appium.return_value = True
         driver = MockDriver.return_value
@@ -372,11 +385,13 @@ class TestResumeMode:
     @patch(_DRIVER)
     @patch(_APPIUM)
     @patch(_VALIDATE_RESUME)
+    @patch(_PREFLIGHT)
     def test_resume_folder_passed_to_exporter(
-        self, mock_validate, MockAppium, MockDriver, MockExporter, MockPipeline,
+        self, MockPreflight, mock_validate, MockAppium, MockDriver, MockExporter, MockPipeline,
     ):
         from whatsapp_chat_autoexport.headless import run_headless
 
+        MockPreflight.return_value.has_hard_fail = False
         resume_dir = Path("/valid/resume")
         mock_validate.return_value = resume_dir
 
@@ -433,8 +448,11 @@ class TestPipelineConfigWiring:
     @patch(_EXPORTER)
     @patch(_DRIVER)
     @patch(_APPIUM)
-    def test_pipeline_receives_correct_config(self, MockAppium, MockDriver, MockExporter, MockPipeline):
+    @patch(_PREFLIGHT)
+    def test_pipeline_receives_correct_config(self, MockPreflight, MockAppium, MockDriver, MockExporter, MockPipeline):
         from whatsapp_chat_autoexport.headless import run_headless
+
+        MockPreflight.return_value.has_hard_fail = False
 
         MockAppium.return_value.start_appium.return_value = True
         driver = MockDriver.return_value

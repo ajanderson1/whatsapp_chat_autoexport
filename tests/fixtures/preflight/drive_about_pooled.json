@@ -1,0 +1,6 @@
+{
+  "user": {"emailAddress": "user@workspace.example.com", "displayName": "Workspace User"},
+  "storageQuota": {
+    "usage": "5368709120"
+  }
+}

@@ -93,6 +93,7 @@ class WhatsAppExporterApp(App):
         limit: Optional[int] = None,
         debug: bool = False,
         dry_run: bool = False,
+        skip_preflight: bool = False,
     ):
         """
         Initialize the WhatsApp Exporter TUI application.
@@ -108,6 +109,7 @@ class WhatsAppExporterApp(App):
             limit: Maximum number of chats to export
             debug: Enable debug mode
             dry_run: Run in dry-run mode (no actual exports)
+            skip_preflight: Skip the credential capacity preflight check
         """
         super().__init__()
 
@@ -120,6 +122,7 @@ class WhatsAppExporterApp(App):
         self.limit = limit
         self.debug_mode = debug
         self.dry_run = dry_run
+        self.skip_preflight = skip_preflight
 
         # State management
         self._state_manager = state_manager or StateManager()

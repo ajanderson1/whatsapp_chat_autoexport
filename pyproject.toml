@@ -18,6 +18,7 @@ openai = "^1.0.0"
 elevenlabs = "^1.0.0"
 pydantic-settings = "^2.12.0"
 python-dotenv = "^1.1.0"
+httpx = "^0.28.1"
 pyyaml = "^6.0.3"
 rich = "^14.3.1"
 typer = "^0.21.1"
@@ -68,6 +69,7 @@ markers = [
     "requires_device: marks tests that require an Android device",
     "requires_drive: marks tests that require live Google Drive credentials and the fixture folder env var",
     "unit: marks tests as unit tests",
+    "manual: marks tests that must be run by a human with real credentials (skipped in CI)",
 ]
 timeout = 300
 filterwarnings = [

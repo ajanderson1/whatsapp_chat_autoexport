@@ -152,6 +152,11 @@ Examples:
         action="store_true",
         help="Skip Google Drive download, process local files only",
     )
+    pipeline_group.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the credential capacity preflight (default: run)",
+    )
 
     # General options
     parser.add_argument(
@@ -214,6 +219,7 @@ def run_tui(args: argparse.Namespace) -> int:
         transcription_provider=args.transcription_provider,
         limit=args.limit,
         debug=args.debug,
+        skip_preflight=args.skip_preflight,
     )
     app.run()
     return 0

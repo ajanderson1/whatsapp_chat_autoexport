@@ -105,6 +105,7 @@ poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-dr
 --transcription-provider  Choose whisper (default) or elevenlabs
 --skip-drive-download     Process local files without Drive download
 --auto-select             Export all chats (required for --headless without --resume)
+--skip-preflight          Skip credential capacity checks at startup (default: run)
 ```
 
 ### Deprecated Commands
@@ -276,6 +277,34 @@ Drive root so duplicates don't accumulate across runs.
   just-downloaded file; duplicate cleanup removes the whole sibling group.
 - Only affects Drive root. Does not touch subfolders.
 - Cleanup failures never fail a chat — worst case, the next run retries.
+
+## Credential Preflight
+
+Before each run, the tool checks that configured API keys are valid and have sufficient capacity. This avoids wasted time when a key is missing, expired, or over-quota.
+
+### Probes
+
+| Provider | Check | WARN threshold | HARD FAIL threshold |
+|---|---|---|---|
+| OpenAI (Whisper) | `GET /v1/models` | — | No key / invalid key |
+| ElevenLabs | `GET /v1/user/subscription` | < 50 000 chars remaining | 0 chars remaining |
+| Google Drive | `about().get()` storage quota | < 5 GB free | < 500 MB free |
+
+### Behaviour
+
+- **HARD FAIL**: run is blocked. Fix the credential issue and retry.
+- **WARN**: run continues with a warning logged.
+- **SKIPPED**: no key configured for that provider — probe is skipped.
+- **TUI**: `PreflightPanel` is the first widget on the Connect tab. Pressing `p` re-runs the check.
+- **Headless / pipeline-only**: report printed to stderr before chat selection. Exit code 2 on hard fail.
+
+### Opting out
+
+```bash
+poetry run whatsapp --headless --output ~/exports --auto-select --skip-preflight
+```
+
+Use `--skip-preflight` to bypass all checks (e.g. offline testing, known-good credentials).
 
 ## Transcription Behavior
 
