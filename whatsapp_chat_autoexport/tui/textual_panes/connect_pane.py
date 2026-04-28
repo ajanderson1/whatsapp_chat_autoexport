@@ -21,6 +21,8 @@ from textual.binding import Binding
 from textual.worker import Worker, WorkerState
 
 from ..textual_widgets.activity_log import ActivityLog
+from ..textual_widgets.preflight_panel import PreflightPanel
+from ...preflight import run_preflight
 from ...export.appium_manager import AppiumManager
 
 
@@ -55,6 +57,7 @@ class ConnectPane(Container):
         Binding("r", "refresh_devices", "Refresh", show=True),
         Binding("enter", "connect_device", "Connect", show=True),
         Binding("d", "use_dry_run", "Dry Run", show=False),
+        Binding("p", "rerun_preflight", "Re-run Preflight", show=True),
     ]
 
     # ------------------------------------------------------------------
@@ -79,6 +82,7 @@ class ConnectPane(Container):
     # ------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
+        yield PreflightPanel(id="preflight-panel")
         yield Static(
             "[bold]Device Discovery[/bold]\n\n"
             "Scanning for connected Android devices...",
@@ -158,6 +162,10 @@ class ConnectPane(Container):
             ip_port_input = self.query_one("#wireless-ip-port", Input)
             if isinstance(wireless_adb, str) and wireless_adb not in ("True", "true"):
                 ip_port_input.value = wireless_adb
+
+        # Launch preflight check unless user opted out
+        if not getattr(self.app, "skip_preflight", False):
+            self.run_worker(self._run_preflight, thread=True, name="preflight")
 
     # ------------------------------------------------------------------
     # Workers: device scanning
@@ -498,8 +506,31 @@ class ConnectPane(Container):
 
         activity.log_success("Dry-run connected")
 
+        if not self._preflight_allows_continue():
+            activity.log_error("Preflight failed — fix credential issues before connecting")
+            return
+
         # Emit Connected with no real driver
         self.post_message(self.Connected(driver=None))
+
+    def action_rerun_preflight(self) -> None:
+        """Re-run the preflight check manually."""
+        panel = self.query_one("#preflight-panel", PreflightPanel)
+        panel.clear()
+        self.run_worker(self._run_preflight, thread=True, name="preflight")
+
+    def _run_preflight(self) -> None:
+        """Run preflight in a background thread and update the panel."""
+        report = run_preflight()
+        panel = self.query_one("#preflight-panel", PreflightPanel)
+        self.call_from_thread(panel.set_report, report)
+
+    def _preflight_allows_continue(self) -> bool:
+        """Return True if preflight passes (or was skipped)."""
+        if getattr(self.app, "skip_preflight", False):
+            return True
+        panel = self.query_one("#preflight-panel", PreflightPanel)
+        return not panel.has_hard_fail
 
     # ------------------------------------------------------------------
     # Workers: Appium + device connection
@@ -554,6 +585,12 @@ class ConnectPane(Container):
             driver = result["driver"]
             activity.log_success("Connected to device")
             status.update("[green]Connected![/green]")
+
+            if not self._preflight_allows_continue():
+                activity.log_error("Preflight failed — fix credential issues before connecting")
+                refresh_btn.disabled = False
+                connect_btn.disabled = False
+                return
 
             # Emit Connected so MainScreen can advance the workflow
             self.post_message(self.Connected(driver=driver))
