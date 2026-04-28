@@ -1,12 +1,21 @@
-"""API credential preflight package.
-
-Exports:
-    run_preflight   — entry point used by headless and TUI modes
-    PreflightReport — aggregate of all CheckResults
-    CheckResult     — single probe result
-    Status          — OK / WARN / HARD_FAIL / SKIPPED
-"""
+"""API credential preflight package."""
 
 from .report import CheckResult, PreflightReport, Status
+from .runner import (
+    DRIVE_HARD_FAIL_BYTES,
+    DRIVE_WARN_BYTES,
+    ELEVENLABS_HARD_THRESHOLD,
+    ELEVENLABS_WARN_THRESHOLD,
+    run_preflight,
+)
 
-__all__ = ["CheckResult", "PreflightReport", "Status"]
+__all__ = [
+    "CheckResult",
+    "PreflightReport",
+    "Status",
+    "run_preflight",
+    "DRIVE_HARD_FAIL_BYTES",
+    "DRIVE_WARN_BYTES",
+    "ELEVENLABS_HARD_THRESHOLD",
+    "ELEVENLABS_WARN_THRESHOLD",
+]
