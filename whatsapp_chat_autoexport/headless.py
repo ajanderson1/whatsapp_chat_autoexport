@@ -323,6 +323,14 @@ def run_pipeline_only(args: Namespace) -> int:
         if not _validate_api_key(provider, logger):
             return 2
 
+    # --- Preflight gate ---------------------------------------------------
+    if not getattr(args, "skip_preflight", False):
+        skip_drive = getattr(args, "skip_drive_download", False)
+        report = run_preflight(skip_drive=skip_drive)
+        print(format_report_for_stderr(report), file=sys.stderr)
+        if report.has_hard_fail:
+            return 2
+
     # Build PipelineConfig mirroring pipeline_cli/cli.py
     config = PipelineConfig(
         # Source — pipeline-only always skips Drive download
