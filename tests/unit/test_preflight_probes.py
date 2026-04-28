@@ -203,3 +203,134 @@ class TestElevenLabsProbe:
         )
         assert result.status == Status.HARD_FAIL
         assert result.error
+
+
+# ---------------------------------------------------------------------------
+# Drive
+# ---------------------------------------------------------------------------
+
+class _FakeAbout:
+    """Minimal stand-in for googleapiclient about() resource."""
+
+    def __init__(self, response_or_exc):
+        self._response_or_exc = response_or_exc
+
+    def get(self, fields):
+        return self  # `.execute()` is the next call
+
+    def execute(self):
+        if isinstance(self._response_or_exc, Exception):
+            raise self._response_or_exc
+        return self._response_or_exc
+
+
+class _FakeService:
+    def __init__(self, response_or_exc):
+        self._inner = _FakeAbout(response_or_exc)
+
+    def about(self):
+        return self._inner
+
+
+class _FakeAuth:
+    """Stand-in for GoogleDriveAuth used by check_drive."""
+
+    def __init__(self, has_creds: bool, response_or_exc=None):
+        self._has = has_creds
+        self._response_or_exc = response_or_exc
+
+    def has_credentials(self) -> bool:
+        return self._has
+
+    def get_service(self):
+        return _FakeService(self._response_or_exc)
+
+
+class TestDriveProbe:
+    def test_no_auth_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        result = check_drive(None)
+        assert result.status == Status.HARD_FAIL
+        assert result.provider == "drive"
+
+    def test_no_creds_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        auth = _FakeAuth(has_creds=False)
+        result = check_drive(auth)
+        assert result.status == Status.HARD_FAIL
+
+    def test_token_expired_hard_fail(self):
+        from google.auth.exceptions import RefreshError
+
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        auth = _FakeAuth(
+            has_creds=True,
+            response_or_exc=RefreshError("Token expired"),
+        )
+        result = check_drive(auth)
+        assert result.status == Status.HARD_FAIL
+        assert "expired" in result.error.lower() or "revoked" in result.error.lower()
+
+    def test_full_storage_ok(self):
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        auth = _FakeAuth(
+            has_creds=True,
+            response_or_exc=_load_fixture("drive_about_full.json"),
+        )
+        result = check_drive(auth)
+        assert result.status == Status.OK
+        assert result.details["storage_limit_bytes"] == 16106127360
+        assert result.details["storage_used_bytes"] == 3221225472
+
+    def test_low_storage_warn(self):
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        auth = _FakeAuth(
+            has_creds=True,
+            response_or_exc=_load_fixture("drive_about_low.json"),
+        )
+        result = check_drive(auth)
+        assert result.status == Status.WARN
+
+    def test_exhausted_storage_hard_fail(self):
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        auth = _FakeAuth(
+            has_creds=True,
+            response_or_exc=_load_fixture("drive_about_exhausted.json"),
+        )
+        result = check_drive(auth)
+        assert result.status == Status.HARD_FAIL
+
+    def test_pooled_no_limit_ok(self):
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        auth = _FakeAuth(
+            has_creds=True,
+            response_or_exc=_load_fixture("drive_about_pooled.json"),
+        )
+        result = check_drive(auth)
+        assert result.status == Status.OK
+        assert result.details["storage_limit_bytes"] is None
+        assert "limit not reported" in result.summary.lower()
+
+    def test_http_error_hard_fail(self):
+        from googleapiclient.errors import HttpError
+
+        from whatsapp_chat_autoexport.preflight.probes.drive import check_drive
+
+        # HttpError requires (resp, content); use a minimal stand-in
+        class _FakeResp:
+            status = 503
+            reason = "Service Unavailable"
+
+        auth = _FakeAuth(
+            has_creds=True,
+            response_or_exc=HttpError(_FakeResp(), b"err"),
+        )
+        result = check_drive(auth)
+        assert result.status == Status.HARD_FAIL

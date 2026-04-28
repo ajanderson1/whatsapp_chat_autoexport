@@ -1,0 +1,7 @@
+{
+  "user": {"emailAddress": "user@example.com", "displayName": "User"},
+  "storageQuota": {
+    "limit": "16106127360",
+    "usage": "3221225472"
+  }
+}
