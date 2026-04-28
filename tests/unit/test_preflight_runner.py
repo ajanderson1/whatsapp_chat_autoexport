@@ -111,3 +111,66 @@ class TestRunner:
             report = run_preflight()
 
         assert report.has_hard_fail is True
+
+
+from datetime import datetime as _dt
+
+from whatsapp_chat_autoexport.preflight.report import CheckResult, PreflightReport, Status
+from whatsapp_chat_autoexport.preflight.runner import format_report_for_stderr
+
+
+def _report(*statuses_and_summaries):
+    results = []
+    for provider, name, status, summary in statuses_and_summaries:
+        results.append(
+            CheckResult(
+                provider=provider,
+                display_name=name,
+                status=status,
+                summary=summary,
+            )
+        )
+    return PreflightReport(results=results, started_at=_dt(2026, 1, 1), duration_ms=370)
+
+
+class TestFormatReport:
+    def test_all_ok(self):
+        report = _report(
+            ("whisper", "OpenAI (Whisper)", Status.OK, "Key valid"),
+            ("elevenlabs", "ElevenLabs", Status.OK, "99,000/100,000 chars left (creator)"),
+            ("drive", "Google Drive", Status.OK, "12.4 GB free of 15.0 GB"),
+        )
+        lines = format_report_for_stderr(report).splitlines()
+
+        # One row per provider plus one summary line
+        assert len(lines) == 4
+        assert "[preflight] OpenAI (Whisper)" in lines[0]
+        assert " OK " in lines[0]
+        assert "Key valid" in lines[0]
+        assert "0 warnings, 0 hard failures" in lines[3]
+        assert "proceeding" in lines[3]
+        assert "370 ms" in lines[3]
+
+    def test_warn_displays_warn_token(self):
+        report = _report(
+            ("elevenlabs", "ElevenLabs", Status.WARN, "8,420 chars left"),
+        )
+        out = format_report_for_stderr(report)
+        assert " WARN " in out
+        assert "1 warning" in out
+
+    def test_hard_fail_displays_fail_and_aborts(self):
+        report = _report(
+            ("elevenlabs", "ElevenLabs", Status.HARD_FAIL, "Quota exhausted"),
+        )
+        out = format_report_for_stderr(report)
+        assert " FAIL " in out
+        assert "Aborting" in out
+        assert "--skip-preflight" in out
+
+    def test_skipped_displays_skip(self):
+        report = _report(
+            ("whisper", "OpenAI (Whisper)", Status.SKIPPED, "No key configured"),
+        )
+        out = format_report_for_stderr(report)
+        assert " SKIP " in out
