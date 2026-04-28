@@ -152,6 +152,11 @@ Examples:
         action="store_true",
         help="Skip Google Drive download, process local files only",
     )
+    pipeline_group.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the credential capacity preflight (default: run)",
+    )
 
     # General options
     parser.add_argument(

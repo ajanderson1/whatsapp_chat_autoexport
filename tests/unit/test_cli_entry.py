@@ -368,3 +368,24 @@ class TestKeepDriveDuplicatesFlag:
         """--keep-drive-duplicates sets args.keep_drive_duplicates=True."""
         args = parse(["--keep-drive-duplicates"])
         assert args.keep_drive_duplicates is True
+
+
+class TestSkipPreflightFlag:
+    """Tests for the --skip-preflight CLI flag."""
+
+    def test_skip_preflight_default_false(self):
+        from whatsapp_chat_autoexport.cli_entry import create_parser
+
+        parser = create_parser()
+        args = parser.parse_args(["--headless", "--output", "/tmp/out", "--auto-select"])
+        assert args.skip_preflight is False
+
+    def test_skip_preflight_set_true(self):
+        from whatsapp_chat_autoexport.cli_entry import create_parser
+
+        parser = create_parser()
+        args = parser.parse_args(
+            ["--headless", "--output", "/tmp/out", "--auto-select", "--skip-preflight"]
+        )
+        assert args.skip_preflight is True
+
