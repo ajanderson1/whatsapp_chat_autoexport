@@ -43,6 +43,12 @@ whatsapp-drive = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_drive_main"
 whatsapp-pipeline = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_pipeline_main"
 whatsapp-logs = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_logs_main"
 
+# MCP sync CLI
+whatsapp-sync = "whatsapp_chat_autoexport.cli.commands.sync:main"
+whatsapp-ingest = "whatsapp_chat_autoexport.cli.commands.ingest:main"
+whatsapp-migrate = "whatsapp_chat_autoexport.cli.commands.migrate:main"
+whatsapp-rebuild = "whatsapp_chat_autoexport.cli.commands.rebuild:main"
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

@@ -24,6 +24,8 @@ class Message:
     media_type: Optional[str] = None  # 'image', 'audio', 'video', 'document', etc.
     raw_line: str = ""
     line_number: int = 0
+    message_id: Optional[str] = None
+    source: str = "unknown"
 
 
 @dataclass(frozen=True)

@@ -218,12 +218,13 @@ def run_headless(args: Namespace) -> int:
             output_format=getattr(args, "format", "legacy"),
             cleanup_temp=True,
             dry_run=False,
+            format_version=getattr(args, "format_version", "v2"),
         )
 
         pipeline = WhatsAppPipeline(
             pipeline_config, logger=logger, on_progress=_log_progress,
         )
-        logger.success(f"Pipeline configured — output: {output_dir}")
+        logger.success(f"Pipeline configured — output: {output_dir} (format: {pipeline_config.format_version})")
 
         # Step 7: Export + pipeline ----------------------------------------
         logger.step(7, "Exporting chats...")
@@ -353,6 +354,9 @@ def run_pipeline_only(args: Namespace) -> int:
 
         # General
         limit=getattr(args, "limit", None),
+
+        # Format
+        format_version=getattr(args, "format_version", "v2"),
     )
 
     pipeline = WhatsAppPipeline(config, logger=logger, on_progress=_log_progress)

@@ -166,6 +166,17 @@ Examples:
         help="Skip the credential capacity preflight (default: run)",
     )
 
+    # Format options
+    format_group = parser.add_argument_group("Format Options")
+    format_group.add_argument(
+        "--format-version",
+        type=str,
+        choices=["v2", "legacy"],
+        default="v2",
+        metavar="VERSION",
+        help="Output format: v2 (default, companion notes + day headers) or legacy (old transcript.txt)",
+    )
+
     # General options
     parser.add_argument(
         "--debug",

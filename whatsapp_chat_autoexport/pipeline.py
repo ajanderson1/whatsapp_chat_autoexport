@@ -68,6 +68,9 @@ class PipelineConfig:
     limit: Optional[int] = None  # Limit number of files to download/process
     chat_names: Optional[List[str]] = None  # Specific chat names to download (filters by name)
 
+    # Output format
+    format_version: str = "v2"  # "v2" (default) or "legacy"
+
     # Debug/testing settings
     video_test_mode: bool = False  # Only process videos, keep extracted audio files
 
@@ -105,7 +108,7 @@ class WhatsAppPipeline:
         self.drive_manager = None
         self.transcriber = None
         self.transcription_manager = None
-        self.output_builder = OutputBuilder(logger=self.logger)
+        self.output_builder = OutputBuilder(logger=self.logger, format_version=config.format_version)
 
     def _fire_progress(self, phase: str, message: str, current: int, total: int,
                        item_name: str = "") -> None:
@@ -570,7 +573,7 @@ class WhatsAppPipeline:
 
         # Import OutputBuilder to get contact name extractor
         from .output.output_builder import OutputBuilder
-        output_builder = OutputBuilder(logger=self.logger)
+        output_builder = OutputBuilder(logger=self.logger, format_version=self.config.format_version)
 
         self.transcription_manager = TranscriptionManager(
             self.transcriber,

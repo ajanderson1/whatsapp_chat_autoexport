@@ -2,8 +2,13 @@
 Output Builder module for WhatsApp Chat Auto-Export.
 
 Creates organized output structure with transcripts, media, and transcriptions.
+
+Supports two output formats:
+- ``"legacy"`` (default): original transcript.txt with plain-text header
+- ``"v2"``: spec-conformant transcript.md + index.md companion notes
 """
 
+import os
 import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Callable
@@ -11,27 +16,45 @@ from datetime import datetime
 
 from ..processing.transcript_parser import TranscriptParser, Message, MediaReference
 from ..utils.logger import Logger
+from .spec_formatter import SpecFormatter
+from .index_builder import IndexBuilder
 
 
 class OutputBuilder:
     """
     Builds organized output structure for WhatsApp chat exports.
 
-    Creates:
+    Creates (legacy mode):
     - destination/Contact Name/transcript.txt (merged conversation)
+    - destination/Contact Name/media/ (all media files)
+    - destination/Contact Name/transcriptions/ (audio/video transcriptions)
+
+    Creates (v2 mode):
+    - destination/Contact Name/transcript.md (spec-conformant transcript)
+    - destination/Contact Name/index.md (companion note with frontmatter)
     - destination/Contact Name/media/ (all media files)
     - destination/Contact Name/transcriptions/ (audio/video transcriptions)
     """
 
-    def __init__(self, logger: Optional[Logger] = None):
+    def __init__(
+        self,
+        logger: Optional[Logger] = None,
+        format_version: str = "v2",
+    ):
         """
         Initialize output builder.
 
         Args:
             logger: Optional logger for output
+            format_version: ``"legacy"`` (default) or ``"v2"``
         """
+        if format_version not in ("legacy", "v2"):
+            raise ValueError(f"Unsupported format_version: {format_version!r} (expected 'legacy' or 'v2')")
         self.logger = logger or Logger()
         self.parser = TranscriptParser(logger=logger)
+        self.format_version = format_version
+        self._spec_formatter = SpecFormatter()
+        self._index_builder = IndexBuilder()
 
     def build_output(
         self,
@@ -40,7 +63,9 @@ class OutputBuilder:
         dest_dir: Path,
         contact_name: Optional[str] = None,
         include_transcriptions: bool = True,
-        copy_media: bool = True
+        copy_media: bool = True,
+        format_version: Optional[str] = None,
+        chat_jid: Optional[str] = None,
     ) -> Dict:
         """
         Build complete output structure for a chat.
@@ -52,10 +77,16 @@ class OutputBuilder:
             contact_name: Contact name (extracted from transcript filename if None)
             include_transcriptions: Include audio/video transcriptions in output
             copy_media: Copy media files to output (if False, only transcript is created)
+            format_version: Override instance-level format_version for this call.
+                            ``"legacy"`` or ``"v2"``.  ``None`` uses instance default.
+            chat_jid: WhatsApp JID for the chat (required for v2 format; defaults
+                      to ``"unknown@s.whatsapp.net"`` if omitted).
 
         Returns:
             Dictionary with output paths and statistics
         """
+        effective_format = format_version or self.format_version
+
         # Extract contact name from transcript filename if not provided
         if not contact_name:
             contact_name = self._extract_contact_name(transcript_path)
@@ -81,17 +112,28 @@ class OutputBuilder:
         self.logger.info(f"Parsing transcript: {transcript_path.name}")
         messages, media_refs = self.parser.parse_transcript(transcript_path)
 
-        # Build merged transcript
-        transcript_out_path = contact_dir / "transcript.txt"
-        self._build_merged_transcript(
-            messages,
-            media_refs,
-            transcript_out_path,
-            contact_name,
-            include_transcriptions,
-            transcriptions_out_dir if include_transcriptions else None,
-            media_dir  # Pass source media_dir to read transcriptions from
-        )
+        # -----------------------------------------------------------------
+        # Build transcript (format-dependent)
+        # -----------------------------------------------------------------
+        if effective_format == "v2":
+            transcript_out_path = self._build_v2_transcript(
+                messages=messages,
+                contact_dir=contact_dir,
+                contact_name=contact_name,
+                chat_jid=chat_jid or "unknown@s.whatsapp.net",
+            )
+        else:
+            # Legacy path — completely unchanged
+            transcript_out_path = contact_dir / "transcript.txt"
+            self._build_merged_transcript(
+                messages,
+                media_refs,
+                transcript_out_path,
+                contact_name,
+                include_transcriptions,
+                transcriptions_out_dir if include_transcriptions else None,
+                media_dir  # Pass source media_dir to read transcriptions from
+            )
 
         # Copy media files and/or transcriptions
         copied_media = []
@@ -138,7 +180,8 @@ class OutputBuilder:
             'total_messages': len(messages),
             'media_messages': len(media_refs),
             'media_copied': len(copied_media),
-            'transcriptions_copied': len(copied_transcriptions)
+            'transcriptions_copied': len(copied_transcriptions),
+            'format_version': effective_format,
         }
 
         self.logger.info("=" * 70)
@@ -244,6 +287,73 @@ class OutputBuilder:
                                 f.write(f"  → Transcription file: transcriptions/{transcription_ref}\n")
 
         self.logger.success(f"Merged transcript created: {output_path.name}")
+
+    # ------------------------------------------------------------------
+    # V2 format helpers
+    # ------------------------------------------------------------------
+
+    def _build_v2_transcript(
+        self,
+        messages: List[Message],
+        contact_dir: Path,
+        contact_name: str,
+        chat_jid: str,
+    ) -> Path:
+        """
+        Build v2 spec-conformant transcript.md + index.md using atomic writes.
+
+        Args:
+            messages: Parsed message list.
+            contact_dir: Output directory for this contact.
+            contact_name: Display name.
+            chat_jid: WhatsApp JID.
+
+        Returns:
+            Path to the written transcript.md file.
+        """
+        transcript_path = contact_dir / "transcript.md"
+        index_path = contact_dir / "index.md"
+
+        # Format content via delegates
+        transcript_content = self._spec_formatter.format_transcript(
+            messages=messages,
+            chat_jid=chat_jid,
+            contact_name=contact_name,
+        )
+        index_content = self._index_builder.build_index(
+            messages=messages,
+            chat_jid=chat_jid,
+            contact_name=contact_name,
+        )
+
+        # Atomic writes: write to .tmp, then rename
+        self._atomic_write(transcript_path, transcript_content)
+        self._atomic_write(index_path, index_content)
+
+        self.logger.success(f"V2 transcript created: {transcript_path.name}")
+        self.logger.success(f"V2 index created: {index_path.name}")
+
+        return transcript_path
+
+    @staticmethod
+    def _atomic_write(target: Path, content: str) -> None:
+        """
+        Write *content* to *target* atomically.
+
+        Strategy: write to ``<target>.tmp``, then ``os.replace`` so the
+        operation is atomic on POSIX (and best-effort on Windows).  If the
+        write or rename fails, the original file (if any) is preserved and
+        the temp file is cleaned up.
+        """
+        tmp_path = target.with_suffix(target.suffix + ".tmp")
+        try:
+            tmp_path.write_text(content, encoding="utf-8")
+            os.replace(str(tmp_path), str(target))
+        except Exception:
+            # Clean up temp file on failure; preserve original
+            if tmp_path.exists():
+                tmp_path.unlink()
+            raise
 
     def _format_transcription_reference(self, content: str, media_type: str) -> Optional[str]:
         """
@@ -419,7 +529,8 @@ class OutputBuilder:
         dest_dir: Path,
         include_transcriptions: bool = True,
         copy_media: bool = True,
-        on_progress: Optional[Callable] = None
+        on_progress: Optional[Callable] = None,
+        format_version: Optional[str] = None,
     ) -> List[Dict]:
         """
         Build outputs for multiple chats.
@@ -431,6 +542,8 @@ class OutputBuilder:
             copy_media: Copy media files
             on_progress: Optional callback for progress updates.
                          Signature: on_progress(phase, message, current, total, item_name="")
+            format_version: Override instance-level format_version.
+                            ``"legacy"`` or ``"v2"``.  ``None`` uses instance default.
 
         Returns:
             List of summary dictionaries
@@ -449,7 +562,8 @@ class OutputBuilder:
                     media_dir,
                     dest_dir,
                     include_transcriptions=include_transcriptions,
-                    copy_media=copy_media
+                    copy_media=copy_media,
+                    format_version=format_version,
                 )
                 results.append(summary)
             except Exception as e:
