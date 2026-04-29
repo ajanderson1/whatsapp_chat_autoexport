@@ -152,15 +152,11 @@ def run_headless(args: Namespace) -> int:
 
     try:
         # Step 1: Appium ---------------------------------------------------
-        skip_appium = getattr(args, "skip_appium", False)
-        if not skip_appium:
-            logger.step(1, "Starting Appium server...")
-            appium_manager = AppiumManager(logger)
-            if not appium_manager.start_appium():
-                logger.error("Failed to start Appium. Is it installed?")
-                return 2
-        else:
-            logger.info("Skipping Appium startup (--skip-appium)")
+        logger.step(1, "Starting Appium server...")
+        appium_manager = AppiumManager(logger)
+        if not appium_manager.start_appium():
+            logger.error("Failed to start Appium. Is it installed?")
+            return 2
 
         # Step 2: Device connection ----------------------------------------
         logger.step(2, "Connecting to device...")
@@ -201,17 +197,16 @@ def run_headless(args: Namespace) -> int:
         logger.step(6, "Configuring pipeline...")
 
         pipeline_config = PipelineConfig(
-            google_drive_folder=getattr(args, "google_drive_folder", None),
+            google_drive_folder=None,  # not exposed; subfolder support is unused
             delete_from_drive=getattr(args, "delete_from_drive", False),
             cleanup_drive_duplicates=not getattr(args, "keep_drive_duplicates", False),
             skip_download=False,
-            poll_interval=getattr(args, "poll_interval", 8),
-            poll_timeout=getattr(args, "poll_timeout", 300),
+            # poll_interval/timeout: pipeline uses adaptive backoff; defaults are fine
             transcribe_audio_video=not no_transcribe,
-            transcription_language=getattr(args, "transcription_language", None),
+            transcription_language=None,  # auto-detect; flag never existed publicly
             transcription_provider=getattr(args, "transcription_provider", "whisper"),
             skip_existing_transcriptions=not getattr(args, "force_transcribe", False),
-            convert_opus_to_m4a=not getattr(args, "skip_opus_conversion", False),
+            convert_opus_to_m4a=True,  # always convert; required for transcription
             output_dir=output_dir,
             include_media=not getattr(args, "no_output_media", False),
             include_transcriptions=True,
@@ -229,7 +224,7 @@ def run_headless(args: Namespace) -> int:
         # Step 7: Export + pipeline ----------------------------------------
         logger.step(7, "Exporting chats...")
         include_media = not getattr(args, "without_media", False)
-        google_drive_folder = getattr(args, "google_drive_folder", None)
+        google_drive_folder = None  # not exposed; subfolder support is unused
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
 
