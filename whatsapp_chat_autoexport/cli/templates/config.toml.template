@@ -1,0 +1,30 @@
+# whatsapp-autoexport — user defaults
+#
+# Located at: ~/.config/whatsapp-autoexport/config.toml
+# Project override: ./.whatsapp-autoexport.toml (loaded after user config)
+# Per-run override: --config PATH
+#
+# Any flag passed on the command line wins over values in this file.
+
+[defaults]
+# Transcription provider: "whisper" or "elevenlabs"
+transcription_provider = "whisper"
+
+# Include media files in the final output directory
+# (false = transcriptions are still produced; media is used during the run
+#  but not copied to output). Equivalent to --no-output-media when false.
+output_media = true
+
+# Delete files from Google Drive after they have been processed locally
+delete_from_drive = false
+
+# Use wireless ADB by default (the CLI will still prompt for IP:PORT if needed)
+wireless_adb = false
+
+# Automatically select all chats when running headlessly
+# (only meaningful for `whatsapp run`; ignored by the TUI)
+auto_select = false
+
+[paths]
+# Default output directory for processed exports
+# output = "/Users/you/whatsapp_exports"
