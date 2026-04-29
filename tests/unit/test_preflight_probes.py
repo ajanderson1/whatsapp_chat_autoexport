@@ -81,6 +81,70 @@ class TestWhisperProbe:
         assert result.status == Status.HARD_FAIL
         assert result.error  # non-empty
 
+    def test_valid_key_with_org_header(self):
+        """When OpenAI-Organization header is present, capture org id + last-4 of key."""
+        from whatsapp_chat_autoexport.preflight.probes.whisper import check_whisper
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"data": []},
+                headers={"OpenAI-Organization": "org-abc123"},
+            )
+
+        result = check_whisper(
+            "sk-test-key-1234",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.OK
+        assert result.details["organization_id"] == "org-abc123"
+        assert result.details["key_last4"] == "1234"
+        assert result.details["quota_introspected"] is False
+        # Identity surfaced in the user-visible summary
+        assert "1234" in result.summary
+        assert "org-abc123" in result.summary
+        assert "quota" in result.summary.lower()
+
+    def test_valid_key_without_org_header(self):
+        """Legacy / personal keys may not return OpenAI-Organization — render gracefully."""
+        from whatsapp_chat_autoexport.preflight.probes.whisper import check_whisper
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"data": []})  # no header
+
+        result = check_whisper(
+            "sk-old-style-key-9999",
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        assert result.status == Status.OK
+        assert result.details["organization_id"] is None
+        assert result.details["key_last4"] == "9999"
+        assert "9999" in result.summary
+        assert "org not in response" in result.summary
+
+    def test_full_key_never_leaks_into_summary(self):
+        """Defensive: only the last 4 chars of the key may appear in summary."""
+        from whatsapp_chat_autoexport.preflight.probes.whisper import check_whisper
+
+        full_key = "sk-secret-AAAAAAAAAAAAAAAAAAAA-LAST"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"data": []},
+                headers={"OpenAI-Organization": "org-x"},
+            )
+
+        result = check_whisper(
+            full_key,
+            _client=httpx.Client(transport=_mock_transport(handler)),
+        )
+        # The full key must not appear anywhere in summary or stringified details.
+        assert full_key not in result.summary
+        assert full_key not in str(result.details)
+        # Last-4 is fine.
+        assert "LAST" in result.summary
+
 
 # ---------------------------------------------------------------------------
 # ElevenLabs
