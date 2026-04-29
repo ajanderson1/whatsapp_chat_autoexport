@@ -69,6 +69,7 @@ class WhatsAppExporterApp(App):
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("escape", "go_back", "Back", show=False),
         Binding("slash", "show_secret_settings", "Settings", show=False),
+        Binding("c", "edit_config", "Edit config", show=False),
         Binding("1", "switch_tab('connect')", show=False),
         Binding("2", "switch_tab('discover-select')", show=False),
         Binding("3", "switch_tab('export')", show=False),
@@ -318,6 +319,30 @@ class WhatsAppExporterApp(App):
         from .textual_screens.main_screen import MainScreen
         if isinstance(self.screen, MainScreen):
             self.screen.action_switch_tab(tab_id)
+
+    def action_edit_config(self) -> None:
+        """Open the user config file in $EDITOR.
+
+        If the config does not yet exist, scaffolds it first using the
+        same template as `whatsapp config init`.
+        """
+        import os
+        import subprocess
+        from importlib.resources import files
+
+        from ..cli.config import _user_config_path
+
+        config_path = _user_config_path()
+        if not config_path.exists():
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            template = files("whatsapp_chat_autoexport.cli.templates").joinpath(
+                "config.toml.template"
+            ).read_text()
+            config_path.write_text(template)
+
+        editor = os.environ.get("EDITOR", "vi")
+        with self.suspend():
+            subprocess.run([editor, str(config_path)])
 
     # =========================================================================
     # Stage transitions
