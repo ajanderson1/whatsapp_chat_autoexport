@@ -2,7 +2,6 @@ EXECUTIVE_SUMMARY.md
 .venv
 *.xml
 .serena
-.claude
 upload_error_*.xml
 
 # Testing
@@ -25,7 +24,13 @@ whatsapp_chat_autoexport.code-workspace
 
 # Log files
 .logs/
-.claude/
+
+# .claude/ is mostly local agent state — only specific files are tracked
+.claude/*
+!.claude/agents/
+!.claude/commands/
+!.claude/testing.md
+
 .mcp.json
 
 # Scratch / one-off scripts
