@@ -9,7 +9,8 @@ Resolution order (low → high precedence):
   5. Explicit CLI flags (handled by argparse)
 
 This module loads (2) and (3) and exposes a `CliConfig` dataclass that
-subcommand modules use to fill in defaults *before* parsing CLI flags.
+``cli_entry.main()`` merges into the parsed argparse Namespace, filling
+in defaults for flags the user did not pass on the command line.
 """
 from __future__ import annotations
 
@@ -56,11 +57,19 @@ class CliConfig:
     output: Optional[str] = None
 
     # Tracks which fields were sourced from a config file (for --help annotation)
-    sourced_from_config: Dict[str, Path] = field(default_factory=dict)
+    sourced_from_config: Dict[str, Path] = field(
+        default_factory=dict, repr=False, compare=False,
+    )
 
     @classmethod
     def load(cls, explicit_path: Optional[Path] = None) -> "CliConfig":
-        """Load config, merging user → project → explicit (highest wins)."""
+        """Load config.
+
+        Without ``explicit_path``: merges user config and project config,
+        with project values winning over user values.
+        With ``explicit_path``: loads only that file (user and project
+        configs are bypassed).
+        """
         cfg = cls()
         for path in cls._candidate_paths(explicit_path):
             if path.is_file():
@@ -74,8 +83,13 @@ class CliConfig:
         return [_user_config_path(), _project_config_path()]
 
     def _merge(self, path: Path) -> None:
-        with path.open("rb") as fh:
-            data = tomllib.load(fh)
+        try:
+            with path.open("rb") as fh:
+                data = tomllib.load(fh)
+        except tomllib.TOMLDecodeError as exc:
+            raise ValueError(
+                f"Config file {path} contains invalid TOML: {exc}"
+            ) from exc
         defaults = data.get("defaults", {})
         paths = data.get("paths", {})
 
@@ -101,9 +115,10 @@ class CliConfig:
             out["no_output_media"] = not self.output_media
         if self.delete_from_drive is not None:
             out["delete_from_drive"] = self.delete_from_drive
-        if self.wireless_adb is not None:
+        if self.wireless_adb:
             # Config flag is bool; CLI accepts optional IP:PORT.
-            out["wireless_adb"] = True if self.wireless_adb else None
+            # Only emit when truthy — False means "use the parser default".
+            out["wireless_adb"] = True
         if self.auto_select is not None:
             out["auto_select"] = self.auto_select
         if self.output is not None:
