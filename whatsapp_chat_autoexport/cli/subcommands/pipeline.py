@@ -17,6 +17,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentPa
     p.add_argument("--keep-drive-duplicates", action="store_true", default=False)
     p.add_argument(
         "--format", choices=["v2", "legacy"], default="v2", metavar="FORMAT",
+        help="Output format: v2 (default) or legacy.",
     )
     p.add_argument("--no-transcribe", action="store_true")
     p.add_argument("--force-transcribe", action="store_true")

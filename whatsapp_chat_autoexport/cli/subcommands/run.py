@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
@@ -47,8 +48,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentPa
 
 
 def run(args: argparse.Namespace) -> int:
-    import sys
-
     if not args.output:
         print("error: `whatsapp run` requires --output DIR (or `output` in config).",
               file=sys.stderr)
@@ -62,8 +61,10 @@ def run(args: argparse.Namespace) -> int:
         )
 
     # Map new --format to legacy headless.py expectation:
-    #   - args.format       → format_version (the "real" format choice)
-    #   - args.output_format → always "legacy" (old --format=spec is removed)
+    #   - args.format_version  ← "real" format choice (v2/legacy) from --format
+    #   - args.format          → forced to "legacy" so headless.py's
+    #                            getattr(args, "format", "legacy") yields "legacy"
+    #                            (the removed --format=spec branch is dead)
     args.format_version = args.format
     args.format = "legacy"
 
