@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import sys
 from importlib.resources import files
-from pathlib import Path
 
 from ..config import _user_config_path
 
@@ -26,7 +25,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentPa
 
 def run(args: argparse.Namespace) -> int:
     target = _user_config_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
 
     if target.exists() and not getattr(args, "force", False):
         print(
@@ -35,6 +33,8 @@ def run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+
+    target.parent.mkdir(parents=True, exist_ok=True)
 
     template = files("whatsapp_chat_autoexport.cli.templates").joinpath(
         "config.toml.template"
