@@ -48,7 +48,9 @@ class TestWhisperProbe:
 
         result = check_whisper("sk-test", _client=httpx.Client(transport=_mock_transport(handler)))
         assert result.status == Status.OK
-        assert "Key valid" in result.summary
+        # New summary format: "Key …<last4> · org … · quota not exposed by OpenAI"
+        assert "Key …" in result.summary
+        assert "quota" in result.summary.lower()
         assert result.details["key_valid"] is True
         assert result.details["models_endpoint_ok"] is True
 
