@@ -59,12 +59,22 @@ def check_whisper(
             )
 
         if response.status_code == 200:
+            org_id = response.headers.get("openai-organization")
+            key_last4 = api_key[-4:] if len(api_key) >= 4 else api_key
+            org_part = f"org {org_id}" if org_id else "org not in response"
+            summary = f"Key …{key_last4} · {org_part} · quota not exposed by OpenAI"
             return CheckResult(
                 provider="whisper",
                 display_name=_DISPLAY,
                 status=Status.OK,
-                summary="Key valid (quota not introspectable)",
-                details={"key_valid": True, "models_endpoint_ok": True},
+                summary=summary,
+                details={
+                    "key_valid": True,
+                    "models_endpoint_ok": True,
+                    "key_last4": key_last4,
+                    "organization_id": org_id,
+                    "quota_introspected": False,
+                },
             )
         if response.status_code == 401:
             return CheckResult(
