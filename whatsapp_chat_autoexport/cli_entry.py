@@ -13,18 +13,17 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence
 
 from .cli.config import CliConfig
 from .cli.subcommands import config_init, pipeline, run, tui
-
 
 # ---------------------------------------------------------------------------
 # Deprecation shim: rewrite legacy flag forms to subcommand forms before parse
 # ---------------------------------------------------------------------------
 
-def _rewrite_legacy_flags(argv: List[str]) -> List[str]:
+def _rewrite_legacy_flags(argv: list[str]) -> list[str]:
     """Map legacy `--headless` / `--pipeline-only` invocations to subcommands.
 
     Emits a stderr deprecation notice when a rewrite happens.
@@ -94,6 +93,12 @@ def _apply_config_defaults(
     be overridable from the config file; that lets us treat ``None`` as
     "not provided." For boolean ``store_true`` flags, ``False`` plays the
     same role.
+
+    Known limitation: A user with a ``store_true`` flag set to ``true`` in
+    config cannot opt out by simply omitting the flag on the command line —
+    there is no negative form (``--no-delete-from-drive``). To override a
+    ``true`` config value back to ``false`` for a single run, edit or
+    rename the config file (or pass ``--config /dev/null``).
     """
     overrides = cfg.to_argparse_defaults()
     for key, value in overrides.items():
@@ -115,7 +120,7 @@ def _apply_config_defaults(
 # Entry point
 # ---------------------------------------------------------------------------
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     rewritten = _rewrite_legacy_flags(raw)
 

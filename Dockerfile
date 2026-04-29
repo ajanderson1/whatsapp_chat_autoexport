@@ -31,7 +31,7 @@ RUN poetry install --no-interaction --no-ansi --without dev
 ENV OPENAI_API_KEY=""
 ENV ELEVENLABS_API_KEY=""
 
-# Default: headless mode. Additional args (--output, --limit, etc.) are appended.
-# Interactive TUI: docker run -it IMAGE whatsapp (overrides entrypoint to drop --headless)
-ENTRYPOINT ["whatsapp", "--headless"]
+# Default: headless export. To launch the TUI, override the entrypoint:
+#   docker run -it --entrypoint whatsapp IMAGE
+ENTRYPOINT ["whatsapp", "run"]
 CMD []

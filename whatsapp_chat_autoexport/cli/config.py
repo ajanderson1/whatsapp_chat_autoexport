@@ -18,8 +18,7 @@ import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 CONFIG_FILENAME = "config.toml"
 CONFIG_DIRNAME = "whatsapp-autoexport"
@@ -33,7 +32,7 @@ def _user_config_path() -> Path:
     return base / CONFIG_DIRNAME / CONFIG_FILENAME
 
 
-def _project_config_path(start: Optional[Path] = None) -> Path:
+def _project_config_path(start: Path | None = None) -> Path:
     """Return the project-level config path (cwd-relative)."""
     return (start or Path.cwd()) / PROJECT_CONFIG_FILENAME
 
@@ -47,22 +46,22 @@ class CliConfig:
     """
 
     # [defaults] section
-    transcription_provider: Optional[str] = None
-    output_media: Optional[bool] = None       # maps to --no-output-media (inverted)
-    delete_from_drive: Optional[bool] = None
-    wireless_adb: Optional[bool] = None
-    auto_select: Optional[bool] = None
+    transcription_provider: str | None = None
+    output_media: bool | None = None       # maps to --no-output-media (inverted)
+    delete_from_drive: bool | None = None
+    wireless_adb: bool | None = None
+    auto_select: bool | None = None
 
     # [paths] section
-    output: Optional[str] = None
+    output: str | None = None
 
     # Tracks which fields were sourced from a config file (for --help annotation)
-    sourced_from_config: Dict[str, Path] = field(
+    sourced_from_config: dict[str, Path] = field(
         default_factory=dict, repr=False, compare=False,
     )
 
     @classmethod
-    def load(cls, explicit_path: Optional[Path] = None) -> "CliConfig":
+    def load(cls, explicit_path: Path | None = None) -> CliConfig:
         """Load config.
 
         Without ``explicit_path``: merges user config and project config,
@@ -77,7 +76,7 @@ class CliConfig:
         return cfg
 
     @staticmethod
-    def _candidate_paths(explicit: Optional[Path]) -> list[Path]:
+    def _candidate_paths(explicit: Path | None) -> list[Path]:
         if explicit is not None:
             return [explicit]
         return [_user_config_path(), _project_config_path()]
@@ -105,9 +104,9 @@ class CliConfig:
             self.output = paths["output"]
             self.sourced_from_config["output"] = path
 
-    def to_argparse_defaults(self) -> Dict[str, Any]:
+    def to_argparse_defaults(self) -> dict[str, Any]:
         """Map config fields to argparse dest names, skipping None."""
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         if self.transcription_provider is not None:
             out["transcription_provider"] = self.transcription_provider
         if self.output_media is not None:

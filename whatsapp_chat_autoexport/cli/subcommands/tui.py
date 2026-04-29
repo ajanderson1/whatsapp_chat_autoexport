@@ -4,8 +4,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..config import CliConfig
-
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
     # The TUI is the *default* (no subcommand). We still register a hidden

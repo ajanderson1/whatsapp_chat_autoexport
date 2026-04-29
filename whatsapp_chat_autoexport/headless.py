@@ -134,7 +134,7 @@ def run_headless(args: Namespace) -> int:
             "Headless mode requires either --auto-select (export all chats) "
             "or --resume PATH (skip already-exported chats)."
         )
-        logger.error("Example: whatsapp --headless --output DIR --auto-select")
+        logger.error("Example: whatsapp run --output DIR --auto-select")
         logger.close()
         return 2
 
