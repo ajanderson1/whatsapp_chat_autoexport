@@ -48,7 +48,6 @@ which whatsapp >/dev/null || { echo "whatsapp not on PATH"; exit 1; }
 trigger:
   - "whatsapp_chat_autoexport/**"
   - "tests/unit/**"
-  - "tests/integration/**"
   - "pyproject.toml"
   - ".claude/testing.md"
 tool: terminal
@@ -59,7 +58,7 @@ pass: exit 0, all collected tests passed
 
 **Steps:**
 
-1. `poetry run pytest tests/unit/ -m "not slow and not requires_api and not requires_device and not requires_drive" -q --tb=short --no-cov > assets/verification/<N>/unit-fast/pytest.log 2>&1`
+1. `poetry run pytest tests/unit/ -m "not slow and not requires_api and not requires_device and not requires_drive and not manual" -q --tb=short --no-cov > assets/verification/<N>/unit-fast/pytest.log 2>&1`
 2. Pass iff exit 0.
 
 ### `integration-cli`
@@ -115,7 +114,7 @@ tool: terminal
 artifacts:
   - pipeline.log
   - output-tree.txt
-pass: exit 0 and at least one non-empty file under <out>/transcripts/
+pass: pipeline command exits 0 AND `find <out>/transcripts -type f -size +0c -name "*.txt"` finds ≥1 match
 ```
 
 **Steps:**
@@ -170,7 +169,7 @@ poetry run whatsapp --headless \
 **Pass criteria:**
 
 - Exit code 0.
-- `~/whatsapp_test/transcripts/` contains exactly 2 `.txt` files matching the chosen chat names.
+- `~/whatsapp_test/transcripts/` contains up to 2 `.txt` files matching the chosen chat names (community-incompatible chats are skipped — fewer is allowed; zero indicates a regression).
 - No traceback in the terminal.
 - No `verify_whatsapp_is_open()` failure messages.
 
@@ -227,7 +226,7 @@ poetry run whatsapp
 gh pr checkout <N>
 poetry install --with dev
 
-poetry run pytest tests/unit/ -m "not slow and not requires_api and not requires_device and not requires_drive" -q --no-cov
+poetry run pytest tests/unit/ -m "not slow and not requires_api and not requires_device and not requires_drive and not manual" -q --no-cov
 poetry run pytest tests/integration/test_cli.py -q --no-cov
 poetry run pytest tests/integration/test_textual_tui.py tests/integration/test_tab_navigation.py tests/integration/test_connect_pane_preflight.py -q --no-cov
 poetry run whatsapp --help | grep -q -- '--headless' && echo "help ✓"
