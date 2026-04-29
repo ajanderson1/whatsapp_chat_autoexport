@@ -20,7 +20,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentPa
     p.add_argument("--no-transcribe", action="store_true")
     p.add_argument(
         "--transcription-provider",
-        choices=["whisper", "elevenlabs"], default="whisper",
+        choices=["whisper", "elevenlabs"], default=None,
     )
     p.add_argument("--delete-from-drive", action="store_true")
     p.add_argument("--debug", action="store_true")

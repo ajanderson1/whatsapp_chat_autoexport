@@ -86,18 +86,28 @@ def _apply_config_defaults(
 ) -> argparse.Namespace:
     """Merge config-file defaults into args where the user didn't pass a flag.
 
-    We can't tell from a parsed Namespace alone whether a value came from the
-    parser default or the user. So we trust the parser's own defaults: if the
-    current value matches the parser default, fall back to config.
+    Precedence (highest wins): explicit CLI flag > config file > parser default.
+
+    We can't always tell from a parsed Namespace whether a value came from
+    the parser default or the user. The convention used throughout the
+    subcommand parsers is to default to ``None`` for any flag that should
+    be overridable from the config file; that lets us treat ``None`` as
+    "not provided." For boolean ``store_true`` flags, ``False`` plays the
+    same role.
     """
     overrides = cfg.to_argparse_defaults()
     for key, value in overrides.items():
-        # Skip if the user provided an explicit value (i.e. the namespace
-        # already holds a non-default value). For booleans we treat False as
-        # "not set" since all our boolean flags are store_true (default False).
         current = getattr(args, key, None)
         if current is None or current is False:
             setattr(args, key, value)
+
+    # Final fallbacks for None-defaulted, non-config flags.
+    # ``--transcription-provider`` defaults to None in the parser so that
+    # config can override it; if neither user nor config set it, we use
+    # "whisper" as the project-wide default.
+    if getattr(args, "transcription_provider", None) is None:
+        args.transcription_provider = "whisper"
+
     return args
 
 

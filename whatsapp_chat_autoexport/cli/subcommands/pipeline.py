@@ -23,7 +23,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentPa
     p.add_argument("--force-transcribe", action="store_true")
     p.add_argument(
         "--transcription-provider",
-        choices=["whisper", "elevenlabs"], default="whisper",
+        choices=["whisper", "elevenlabs"], default=None,
     )
     p.add_argument("--skip-drive-download", action="store_true")
     p.add_argument("--skip-preflight", action="store_true")
