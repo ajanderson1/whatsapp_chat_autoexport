@@ -35,6 +35,9 @@ test_tui_flow.py
 # Worktrees
 .worktrees/
 
+# Verification artifacts (per-flow, regenerated)
+assets/verification/
+
 # PRPs (code review artifacts)
 PRPs/
 
