@@ -30,6 +30,14 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentPa
 
 
 def run(args: argparse.Namespace) -> int:
+    """Launch the Textual TUI.
+
+    ``args`` has already been merged with ``CliConfig`` defaults by
+    ``cli_entry.main()`` before this handler is called, so flags absent
+    from the command line have already been filled in from
+    ``~/.config/whatsapp-autoexport/config.toml`` (and the project-local
+    override, if present). Read directly from ``args``.
+    """
     from ...tui.textual_app import WhatsAppExporterApp
 
     output_dir = Path(args.output).expanduser() if args.output else None
