@@ -522,6 +522,9 @@ class ChatExporter:
 
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
+            # Halt-precedence: cascade limit (#27) fires BEFORE the recovery
+            # limit, so a regressed verifier halts the batch without spending
+            # recovery budget on doomed retries.
             if not self.driver.verify_whatsapp_is_open():
                 self._consecutive_verify_failure_count += 1
                 state_manager = self._get_state_manager()
@@ -1705,6 +1708,9 @@ class ChatExporter:
 
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
+            # Halt-precedence: cascade limit (#27) fires BEFORE the recovery
+            # limit, so a regressed verifier halts the batch without spending
+            # recovery budget on doomed retries.
             if not self.driver.verify_whatsapp_is_open():
                 self._consecutive_verify_failure_count += 1
                 if self._check_consecutive_verify_failure_limit():

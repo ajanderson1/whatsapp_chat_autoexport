@@ -1269,7 +1269,9 @@ class WhatsAppDriver:
 
             self.logger.success(f"✓ Activity confirmed safe: {current_activity}")
 
-            # Check 4: Final lock screen check
+            # Final lock screen check
+            # (A legacy resource-ID probe sat between the activity check and this
+            # lock check; removed in #27 because it hard-failed on Material 3.)
             is_locked, lock_reason = self.check_if_phone_locked()
             if is_locked:
                 self.logger.error("=" * 70)
