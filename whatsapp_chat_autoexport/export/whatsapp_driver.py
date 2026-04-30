@@ -1269,65 +1269,6 @@ class WhatsAppDriver:
 
             self.logger.success(f"✓ Activity confirmed safe: {current_activity}")
 
-            # Check 3: Verify we can see WhatsApp UI elements
-            self.logger.info("Checking for WhatsApp UI elements...")
-
-            # Try to find common WhatsApp elements
-            whatsapp_elements_found = False
-
-            # Look for chat list elements
-            try:
-                chat_elements = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
-                if len(chat_elements) > 0:
-                    self.logger.success(f"✓ Found {len(chat_elements)} chat elements")
-                    whatsapp_elements_found = True
-            except Exception as e:
-                self.logger.debug_msg(f"No chat elements found: {e}")
-
-            # Look for toolbar (present on most WhatsApp screens)
-            try:
-                toolbar = self.driver.find_elements("id", "com.whatsapp:id/toolbar")
-                if len(toolbar) > 0:
-                    self.logger.success("✓ Found WhatsApp toolbar")
-                    whatsapp_elements_found = True
-            except Exception as e:
-                self.logger.debug_msg(f"No toolbar found: {e}")
-
-            # Look for action bar (another common element)
-            try:
-                action_bar = self.driver.find_elements("id", "com.whatsapp:id/action_bar")
-                if len(action_bar) > 0:
-                    self.logger.success("✓ Found WhatsApp action bar")
-                    whatsapp_elements_found = True
-            except Exception as e:
-                self.logger.debug_msg(f"No action bar found: {e}")
-
-            # Look for menu button
-            try:
-                menu_button = self.driver.find_elements("id", "com.whatsapp:id/menuitem_search")
-                if len(menu_button) > 0:
-                    self.logger.success("✓ Found WhatsApp menu button")
-                    whatsapp_elements_found = True
-            except Exception as e:
-                self.logger.debug_msg(f"No menu button found: {e}")
-
-            if not whatsapp_elements_found:
-                self.logger.error("=" * 70)
-                self.logger.error("❌ CRITICAL FAILURE: No WhatsApp UI elements found!")
-                self.logger.error("=" * 70)
-                self.logger.error("Package is com.whatsapp but UI is not accessible.")
-                self.logger.error("")
-                self.logger.error("This could mean:")
-                self.logger.error("  - Phone is locked but showing WhatsApp in background")
-                self.logger.error("  - WhatsApp is loading but not ready")
-                self.logger.error("  - Dialog or overlay is blocking WhatsApp UI")
-                self.logger.error("")
-                self.logger.error("⚠️  STOPPING to prevent accidental system UI interaction!")
-                self.logger.error("=" * 70)
-                return False
-
-            self.logger.success("✓ WhatsApp UI elements accessible")
-
             # Check 4: Final lock screen check
             is_locked, lock_reason = self.check_if_phone_locked()
             if is_locked:
