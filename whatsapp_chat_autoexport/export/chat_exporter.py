@@ -144,6 +144,11 @@ class ChatExporter:
     # 1 = transient, 2 = unlucky, 3 = systemic issue (phone overheating, OOM, etc.)
     MAX_CONSECUTIVE_RECOVERIES = 3
 
+    # Max consecutive verify_whatsapp_is_open() failures before aborting the batch.
+    # Defence-in-depth (issue #27): a regressed verifier cannot poison more than
+    # this many chats. Counter is independent of MAX_CONSECUTIVE_RECOVERIES.
+    MAX_CONSECUTIVE_VERIFY_FAILURES = 3
+
     def __init__(self, driver: WhatsAppDriver, logger: Logger, pipeline: Optional['WhatsAppPipeline'] = None):
         self.driver = driver
         self.logger = logger
@@ -159,6 +164,9 @@ class ChatExporter:
 
         # Session recovery tracking
         self._consecutive_recovery_count: int = 0
+
+        # Verify-failure cascade tracking (issue #27)
+        self._consecutive_verify_failure_count: int = 0
 
         # Per-chat structured timing (populated by export_chats)
         self.chat_timings: List[ChatTiming] = []
@@ -225,6 +233,21 @@ class ChatExporter:
                 f"Stopping batch: {self._consecutive_recovery_count} consecutive session recoveries "
                 f"reached the limit of {self.MAX_CONSECUTIVE_RECOVERIES}. "
                 f"This suggests a systemic issue (phone overheating, memory exhaustion, etc.)"
+            )
+            return True
+        return False
+
+    def _check_consecutive_verify_failure_limit(self) -> bool:
+        """Check if the consecutive verify-failure limit has been reached.
+
+        Returns:
+            True if the limit has been reached (batch should stop), False otherwise.
+        """
+        if self._consecutive_verify_failure_count >= self.MAX_CONSECUTIVE_VERIFY_FAILURES:
+            self.logger.error(
+                f"Stopping batch: {self._consecutive_verify_failure_count} consecutive WhatsApp "
+                f"verification failures reached the limit of {self.MAX_CONSECUTIVE_VERIFY_FAILURES}. "
+                "The verifier may be regressed; investigate before re-running."
             )
             return True
         return False
@@ -482,6 +505,7 @@ class ChatExporter:
 
         # Reset consecutive recovery counter at the start of each batch
         self._consecutive_recovery_count = 0
+        self._consecutive_verify_failure_count = 0
 
         for i, chat_name in enumerate(chat_names, 1):
             self.logger.info(f"\nProcessing chat {i}/{total}: '{chat_name}'")
@@ -499,7 +523,14 @@ class ChatExporter:
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
             if not self.driver.verify_whatsapp_is_open():
+                self._consecutive_verify_failure_count += 1
                 state_manager = self._get_state_manager()
+                if self._check_consecutive_verify_failure_limit():
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    if state_manager.has_session:
+                        state_manager.fail_chat(chat_name, "Consecutive verify-failure limit reached")
+                    break
                 if self._check_consecutive_recovery_limit():
                     results[chat_name] = False
                     timings[chat_name] = 0
@@ -514,12 +545,21 @@ class ChatExporter:
                         state_manager.fail_chat(chat_name, "Session recovered - skipping to next chat")
                     continue
                 else:
-                    self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
+                    # Recovery failed — record failure and continue. The
+                    # verify-failure cascade counter (above) is the dominant
+                    # halt mechanism; if the verifier is regressed, recovery
+                    # will keep failing too, but the counter still ticks each
+                    # iteration and halts the batch at MAX_CONSECUTIVE_VERIFY_FAILURES.
+                    self.logger.warning(
+                        f"Pre-export verification failed for '{chat_name}' "
+                        f"and session recovery did not succeed "
+                        f"(consecutive verify failures: {self._consecutive_verify_failure_count})"
+                    )
                     results[chat_name] = False
                     timings[chat_name] = 0
                     if state_manager.has_session:
                         state_manager.fail_chat(chat_name, "WhatsApp became inaccessible")
-                    break
+                    continue
 
             chat_start_time = time.time()
 
@@ -576,8 +616,9 @@ class ChatExporter:
                         self.logger.error("Failed to recover session after export - stopping batch")
                         break
                 else:
-                    # A fully successful export resets the consecutive counter
+                    # A fully successful export resets the consecutive counters
                     self._consecutive_recovery_count = 0
+                    self._consecutive_verify_failure_count = 0
 
             except Exception as e:
                 error_msg = str(e)
@@ -1643,6 +1684,7 @@ class ChatExporter:
 
         # Reset consecutive recovery counter at the start of each batch
         self._consecutive_recovery_count = 0
+        self._consecutive_verify_failure_count = 0
 
         # Set up parallel pipeline if pipeline is configured
         parallel: Optional[ParallelPipeline] = None
@@ -1664,6 +1706,13 @@ class ChatExporter:
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
             if not self.driver.verify_whatsapp_is_open():
+                self._consecutive_verify_failure_count += 1
+                if self._check_consecutive_verify_failure_limit():
+                    results[chat_name] = False
+                    timings[chat_name] = 0
+                    ct.status = ChatStatus.FAILED
+                    self.chat_timings.append(ct)
+                    break
                 if self._check_consecutive_recovery_limit():
                     results[chat_name] = False
                     timings[chat_name] = 0
@@ -1678,12 +1727,21 @@ class ChatExporter:
                     self.chat_timings.append(ct)
                     continue
                 else:
-                    self.logger.error(f"WhatsApp is not accessible - cannot export '{chat_name}'. Stopping batch.")
+                    # Recovery failed — record failure and continue. The
+                    # verify-failure cascade counter (above) is the dominant
+                    # halt mechanism; if the verifier is regressed, recovery
+                    # will keep failing too, but the counter still ticks each
+                    # iteration and halts the batch at MAX_CONSECUTIVE_VERIFY_FAILURES.
+                    self.logger.warning(
+                        f"Pre-export verification failed for '{chat_name}' "
+                        f"and session recovery did not succeed "
+                        f"(consecutive verify failures: {self._consecutive_verify_failure_count})"
+                    )
                     results[chat_name] = False
                     timings[chat_name] = 0
                     ct.status = ChatStatus.FAILED
                     self.chat_timings.append(ct)
-                    break
+                    continue
 
             chat_start_time = time.time()
 
@@ -1771,8 +1829,9 @@ class ChatExporter:
                         self.chat_timings.append(ct)
                         break
                 else:
-                    # A fully successful export resets the consecutive counter
+                    # A fully successful export resets the consecutive counters
                     self._consecutive_recovery_count = 0
+                    self._consecutive_verify_failure_count = 0
 
             except Exception as e:
                 error_msg = str(e)
