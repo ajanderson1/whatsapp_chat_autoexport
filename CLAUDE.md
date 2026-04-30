@@ -381,12 +381,12 @@ poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
    - Manages WhatsApp connection and navigation
    - **CRITICAL SAFETY**: Includes robust WhatsApp verification to prevent accidental system UI interaction
    - Key methods:
-     - `verify_whatsapp_is_open()`: **CRITICAL** - Comprehensive verification that WhatsApp is accessible before ANY UI interaction. Checks:
+     - `verify_whatsapp_is_open()`: **CRITICAL** - Verification that WhatsApp is the foregrounded app before ANY UI interaction. Checks:
        - Current package is com.whatsapp (not system settings or other apps)
        - Current activity is safe (not lock screen, system UI, or settings)
-       - WhatsApp UI elements are actually visible and accessible
        - Phone is not locked
        - Called automatically by `connect()`, `interactive_mode()`, and before each export
+       - **Note (#27):** the legacy resource-ID probe was removed — package + activity + lock-check are sufficient and resilient to WhatsApp UI redesigns.
      - `check_if_phone_locked()`: Detects if phone is locked by checking activity, package, and UI elements
      - `detect_phone_lock_state()`: User-friendly wrapper that provides clear error messages if phone is locked
      - `find_element()` / `find_elements()`: Locate UI elements by resource ID, text, or accessibility ID
@@ -470,8 +470,8 @@ poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
    - **Verification checks**:
      - Current package is exactly `com.whatsapp` (not system settings or other apps)
      - Current activity is safe (not lock screen, system UI, or settings)
-     - WhatsApp UI elements (toolbar, action bar, chat list) are actually visible and accessible
      - Phone is not locked (via multiple lock detection strategies)
+     - **Cascade-halt (#27):** if `verify_whatsapp_is_open()` returns False three times in a row, the batch halts via `MAX_CONSECUTIVE_VERIFY_FAILURES = 3` to prevent a regressed verifier from poisoning the entire batch.
    - **Fail-fast behavior**: Script immediately exits with detailed error message if verification fails
    - **Action required**: Phone must be unlocked before running the script and remain unlocked throughout execution
 
