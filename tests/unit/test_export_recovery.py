@@ -178,18 +178,29 @@ class TestExportChatsRecovery:
         assert results["Chat A"] is False
         assert results["Chat B"] is True
 
-    def test_pre_verify_fails_recovery_fails_breaks(self, exporter, mock_driver):
-        """When verify fails and recovery also fails, batch stops."""
-        mock_driver.verify_whatsapp_is_open.side_effect = [False, False]
+    def test_pre_verify_fails_recovery_fails_continues_until_cascade_limit(self, exporter, mock_driver):
+        """When verify fails and recovery also fails, batch continues until the
+        cascade limit (#27): each chat is recorded as failed and the loop moves
+        on; the verify-failure cascade counter halts the batch after
+        MAX_CONSECUTIVE_VERIFY_FAILURES consecutive failures.
+        """
+        mock_driver.verify_whatsapp_is_open.return_value = False
         mock_driver.reconnect.return_value = False
 
+        # Provide enough chats to exceed the cascade limit
+        chat_names = [f"Chat {n}" for n in range(1, 6)]
+
         results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A", "Chat B", "Chat C"], include_media=True
+            chat_names, include_media=True
         )
 
-        # Only Chat A should be in results (batch broke)
-        assert results["Chat A"] is False
-        assert "Chat B" not in results
+        # The cascade limit halts after MAX_CONSECUTIVE_VERIFY_FAILURES chats.
+        from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+        for n in range(1, ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1):
+            assert results.get(f"Chat {n}") is False
+        # Chats beyond the cascade limit must not be processed.
+        for n in range(ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1, 6):
+            assert f"Chat {n}" not in results
 
     def test_session_error_exception_recovery_succeeds(self, exporter, mock_driver):
         """Session error in exception handler triggers recovery and continues."""
@@ -311,18 +322,26 @@ class TestExportChatsNewWorkflowRecovery:
         assert results["Chat A"] is False
         assert results["Chat B"] is True
 
-    def test_pre_verify_fails_recovery_fails_breaks(self, exporter, mock_driver):
-        """When verify fails and recovery fails, batch stops with state manager update."""
-        mock_driver.verify_whatsapp_is_open.side_effect = [False, False]
+    def test_pre_verify_fails_recovery_fails_continues_until_cascade_limit(self, exporter, mock_driver):
+        """When verify fails and recovery fails, batch continues until the
+        cascade limit (#27); state manager is notified for each failed chat
+        and the loop halts at MAX_CONSECUTIVE_VERIFY_FAILURES.
+        """
+        mock_driver.verify_whatsapp_is_open.return_value = False
         mock_driver.reconnect.return_value = False
 
+        chat_names = [f"Chat {n}" for n in range(1, 6)]
+
         results, timings, total_time, skipped = exporter.export_chats_with_new_workflow(
-            ["Chat A", "Chat B"], include_media=True
+            chat_names, include_media=True
         )
 
-        assert results["Chat A"] is False
-        assert "Chat B" not in results
-        # State manager should have been notified
+        from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+        for n in range(1, ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1):
+            assert results.get(f"Chat {n}") is False
+        for n in range(ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1, 6):
+            assert f"Chat {n}" not in results
+        # State manager should have been notified for each failed chat.
         exporter._state_manager.fail_chat.assert_called()
 
     def test_session_error_exception_with_state_manager(self, exporter, mock_driver):
