@@ -1,284 +1,148 @@
-"""
-Unified CLI entry point for WhatsApp Chat Auto-Export.
+"""Unified CLI entry point for WhatsApp Chat Auto-Export.
 
-Dispatches to one of three modes:
-- TUI (default): Interactive Textual application
-- Headless (--headless): Non-interactive export + pipeline
-- Pipeline-only (--pipeline-only): Non-interactive pipeline processing only
+Subcommands:
+  whatsapp                    Launch the interactive TUI (default)
+  whatsapp run --output DIR   Headless export + pipeline
+  whatsapp pipeline SRC OUT   Pipeline-only on existing files
+  whatsapp config init        Scaffold ~/.config/whatsapp-autoexport/config.toml
 
-All R7 flags are parsed here and forwarded to the selected mode.
+Legacy --headless / --pipeline-only flags still dispatch correctly with a
+one-line deprecation notice (removed in the next release).
 """
+from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
 
+from .cli.config import CliConfig
+from .cli.subcommands import config_init, pipeline, run, tui
+
+# ---------------------------------------------------------------------------
+# Deprecation shim: rewrite legacy flag forms to subcommand forms before parse
+# ---------------------------------------------------------------------------
+
+def _rewrite_legacy_flags(argv: list[str]) -> list[str]:
+    """Map legacy `--headless` / `--pipeline-only` invocations to subcommands.
+
+    Emits a stderr deprecation notice when a rewrite happens.
+    """
+    if not argv:
+        return argv
+
+    # Already a subcommand? leave alone
+    known = {"run", "pipeline", "tui", "config", "-h", "--help", "--version"}
+    if argv[0] in known:
+        return argv
+
+    if "--headless" in argv:
+        new = [a for a in argv if a != "--headless"]
+        new.insert(0, "run")
+        print(
+            "warning: --headless is deprecated; use `whatsapp run` instead.",
+            file=sys.stderr,
+        )
+        return new
+
+    if "--pipeline-only" in argv:
+        new = [a for a in argv if a != "--pipeline-only"]
+        new.insert(0, "pipeline")
+        print(
+            "warning: --pipeline-only is deprecated; use `whatsapp pipeline` instead.",
+            file=sys.stderr,
+        )
+        return new
+
+    return argv
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
 
 def create_parser() -> argparse.ArgumentParser:
-    """Create the unified argument parser with all R7 flags."""
     parser = argparse.ArgumentParser(
         prog="whatsapp",
-        description="WhatsApp Chat Auto-Export — TUI, headless, or pipeline-only mode",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Modes:
-  (default)         Launch interactive TUI
-  --headless        Run full export + pipeline without TUI (requires --output)
-  --pipeline-only   Run pipeline only on existing files (requires source and output args)
-
-Examples:
-  %(prog)s                                  # Launch TUI
-  %(prog)s --headless --output ~/exports    # Headless export + pipeline
-  %(prog)s --pipeline-only /downloads /out  # Pipeline-only on local files
-  %(prog)s --limit 5 --debug                # TUI with limit and debug
-        """,
-    )
-
-    # Mode flags
-    mode_group = parser.add_argument_group("Mode Selection")
-    mode_group.add_argument(
-        "--headless",
-        action="store_true",
-        help="Run in headless mode (no TUI). Requires --output.",
-    )
-    mode_group.add_argument(
-        "--pipeline-only",
-        action="store_true",
-        help="Run pipeline only (no device export). Requires source and output positional args.",
-    )
-
-    # Pipeline-only positional args (optional — only required for --pipeline-only)
-    parser.add_argument(
-        "source",
-        nargs="?",
-        default=None,
-        help="Source directory (for --pipeline-only mode)",
+        description="WhatsApp Chat Auto-Export — TUI, headless, or pipeline-only.",
     )
     parser.add_argument(
-        "pipeline_output",
-        nargs="?",
-        default=None,
-        help="Output directory (for --pipeline-only mode)",
+        "--config", type=str, default=None, metavar="PATH",
+        help="Path to a TOML config file (overrides default lookup).",
     )
 
-    # Export options
-    export_group = parser.add_argument_group("Export Options")
-    export_group.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Maximum number of chats to export",
-    )
-    export_group.add_argument(
-        "--without-media",
-        action="store_true",
-        help="Export chats without media files",
-    )
-    export_group.add_argument(
-        "--wireless-adb",
-        nargs="?",
-        const=True,
-        default=None,
-        metavar="IP:PORT",
-        help="Use wireless ADB (optionally provide IP:PORT)",
-    )
-    export_group.add_argument(
-        "--resume",
-        type=str,
-        default=None,
-        metavar="PATH",
-        help="Resume export, skipping chats already in PATH",
-    )
-    export_group.add_argument(
-        "--auto-select",
-        action="store_true",
-        help="Automatically select all chats for export",
-    )
-
-    # Output options
-    output_group = parser.add_argument_group("Output Options")
-    output_group.add_argument(
-        "--output",
-        type=str,
-        default=None,
-        metavar="DIR",
-        help="Output directory for processed exports",
-    )
-    output_group.add_argument(
-        "--no-output-media",
-        action="store_true",
-        help="Exclude media from final output (transcriptions still created)",
-    )
-    output_group.add_argument(
-        "--delete-from-drive",
-        action="store_true",
-        help="Delete files from Google Drive after processing",
-    )
-    output_group.add_argument(
-        "--keep-drive-duplicates",
-        action="store_true",
-        default=False,
-        help="Skip deleting Drive root duplicates after each per-chat download "
-             "(default: duplicates are removed).",
-    )
-    output_group.add_argument(
-        "--format",
-        type=str,
-        choices=["legacy", "spec"],
-        default="legacy",
-        metavar="FORMAT",
-        help="Output format: 'legacy' (transcript.txt) or 'spec' (index.md + transcript.md)",
-    )
-
-    # Transcription options
-    transcribe_group = parser.add_argument_group("Transcription Options")
-    transcribe_group.add_argument(
-        "--no-transcribe",
-        action="store_true",
-        help="Skip audio/video transcription",
-    )
-    transcribe_group.add_argument(
-        "--force-transcribe",
-        action="store_true",
-        help="Re-transcribe even if transcriptions already exist",
-    )
-    transcribe_group.add_argument(
-        "--transcription-provider",
-        type=str,
-        choices=["whisper", "elevenlabs"],
-        default="whisper",
-        metavar="PROVIDER",
-        help="Transcription provider (default: whisper)",
-    )
-
-    # Pipeline options
-    pipeline_group = parser.add_argument_group("Pipeline Options")
-    pipeline_group.add_argument(
-        "--skip-drive-download",
-        action="store_true",
-        help="Skip Google Drive download, process local files only",
-    )
-    pipeline_group.add_argument(
-        "--skip-preflight",
-        action="store_true",
-        help="Skip the credential capacity preflight (default: run)",
-    )
-
-    # Format options
-    format_group = parser.add_argument_group("Format Options")
-    format_group.add_argument(
-        "--format-version",
-        type=str,
-        choices=["v2", "legacy"],
-        default="v2",
-        metavar="VERSION",
-        help="Output format: v2 (default, companion notes + day headers) or legacy (old transcript.txt)",
-    )
-
-    # General options
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug output",
-    )
+    subparsers = parser.add_subparsers(dest="subcommand")
+    tui.add_subparser(subparsers)
+    run.add_subparser(subparsers)
+    pipeline.add_subparser(subparsers)
+    config_init.add_subparser(subparsers)
 
     return parser
 
 
-def detect_mode(args: argparse.Namespace) -> str:
+def _apply_config_defaults(
+    args: argparse.Namespace, cfg: CliConfig,
+) -> argparse.Namespace:
+    """Merge config-file defaults into args where the user didn't pass a flag.
+
+    Precedence (highest wins): explicit CLI flag > config file > parser default.
+
+    We can't always tell from a parsed Namespace whether a value came from
+    the parser default or the user. The convention used throughout the
+    subcommand parsers is to default to ``None`` for any flag that should
+    be overridable from the config file; that lets us treat ``None`` as
+    "not provided." For boolean ``store_true`` flags, ``False`` plays the
+    same role.
+
+    Known limitation: A user with a ``store_true`` flag set to ``true`` in
+    config cannot opt out by simply omitting the flag on the command line —
+    there is no negative form (``--no-delete-from-drive``). To override a
+    ``true`` config value back to ``false`` for a single run, edit or
+    rename the config file (or pass ``--config /dev/null``).
     """
-    Determine which mode to run based on parsed args.
+    overrides = cfg.to_argparse_defaults()
+    for key, value in overrides.items():
+        current = getattr(args, key, None)
+        if current is None or current is False:
+            setattr(args, key, value)
 
-    Returns one of: 'tui', 'headless', 'pipeline-only'
-    """
-    if args.headless and args.pipeline_only:
-        return "error:conflict"
-    if args.headless:
-        return "headless"
-    if args.pipeline_only:
-        return "pipeline-only"
-    return "tui"
+    # Final fallbacks for None-defaulted, non-config flags.
+    # ``--transcription-provider`` defaults to None in the parser so that
+    # config can override it; if neither user nor config set it, we use
+    # "whisper" as the project-wide default.
+    if getattr(args, "transcription_provider", None) is None:
+        args.transcription_provider = "whisper"
 
-
-def validate_args(args: argparse.Namespace, mode: str) -> Optional[str]:
-    """
-    Validate argument combinations for the selected mode.
-
-    Returns an error message string if validation fails, None if valid.
-    """
-    if mode == "error:conflict":
-        return "Cannot use --headless and --pipeline-only together."
-
-    if mode == "headless" and not args.output:
-        return "--headless mode requires --output DIR."
-
-    if mode == "pipeline-only":
-        if not args.source:
-            return "--pipeline-only mode requires source and output positional arguments."
-        if not args.pipeline_output:
-            return "--pipeline-only mode requires both source and output positional arguments."
-
-    return None
+    return args
 
 
-def run_tui(args: argparse.Namespace) -> int:
-    """Launch the Textual TUI application."""
-    # Guard TUI imports — only import Textual when actually running the TUI
-    from .tui.textual_app import WhatsAppExporterApp
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
-    output_dir = Path(args.output).expanduser() if args.output else None
+def main(argv: Sequence[str] | None = None) -> int:
+    raw = list(argv) if argv is not None else sys.argv[1:]
+    rewritten = _rewrite_legacy_flags(raw)
 
-    app = WhatsAppExporterApp(
-        output_dir=output_dir,
-        include_media=not args.no_output_media,
-        transcribe_audio=not args.no_transcribe,
-        delete_from_drive=args.delete_from_drive,
-        transcription_provider=args.transcription_provider,
-        limit=args.limit,
-        debug=args.debug,
-        skip_preflight=args.skip_preflight,
-    )
-    app.run()
-    return 0
-
-
-def run_headless(args: argparse.Namespace) -> int:
-    """Run in headless mode (full export + pipeline, no TUI)."""
-    from .headless import run_headless as _run_headless
-
-    return _run_headless(args)
-
-
-def run_pipeline_only(args: argparse.Namespace) -> int:
-    """Run pipeline-only mode on existing local files."""
-    from .headless import run_pipeline_only as _run_pipeline_only
-
-    return _run_pipeline_only(args)
-
-
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Main entry point for the unified CLI."""
     parser = create_parser()
-    args = parser.parse_args(argv)
 
-    mode = detect_mode(args)
-    error = validate_args(args, mode)
+    # Default subcommand is "tui" if nothing was given
+    if not rewritten:
+        rewritten = ["tui"]
 
-    if error:
-        parser.error(error)
-        # parser.error calls sys.exit(2), but return for clarity
-        return 2  # pragma: no cover
+    args = parser.parse_args(rewritten)
 
-    if mode == "tui":
-        return run_tui(args)
-    elif mode == "headless":
-        return run_headless(args)
-    elif mode == "pipeline-only":
-        return run_pipeline_only(args)
+    # Load config (explicit --config wins, else XDG → project)
+    explicit = Path(args.config).expanduser() if args.config else None
+    cfg = CliConfig.load(explicit_path=explicit)
+    args = _apply_config_defaults(args, cfg)
 
-    return 0  # pragma: no cover
+    handler = getattr(args, "_handler", None)
+    if handler is None:
+        parser.print_help()
+        return 0
+
+    return handler(args)
 
 
 if __name__ == "__main__":

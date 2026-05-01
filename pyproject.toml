@@ -36,13 +36,6 @@ ruff = "^0.11"
 # New unified CLI (recommended)
 whatsapp = "whatsapp_chat_autoexport.cli_entry:main"
 
-# Deprecated commands (print migration notice and exit)
-whatsapp-export = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_export_main"
-whatsapp-process = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_process_main"
-whatsapp-drive = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_drive_main"
-whatsapp-pipeline = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_pipeline_main"
-whatsapp-logs = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_logs_main"
-
 # MCP sync CLI
 whatsapp-sync = "whatsapp_chat_autoexport.cli.commands.sync:main"
 whatsapp-ingest = "whatsapp_chat_autoexport.cli.commands.ingest:main"

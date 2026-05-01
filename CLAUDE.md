@@ -32,7 +32,9 @@ adb devices
 
 ### Unified `whatsapp` Command (Recommended)
 
-There is a single entry point: `whatsapp`. It runs in three modes.
+There is a single entry point: `whatsapp`. It runs via subcommands.
+
+**User config:** Personal defaults can be set in `~/.config/whatsapp-autoexport/config.toml`. Run `whatsapp config init` to scaffold a default file, then edit it. CLI flags always override config values. See the file for documented keys.
 
 #### TUI Mode (Default) — Interactive Textual interface
 ```bash
@@ -46,28 +48,28 @@ poetry run whatsapp --output ~/whatsapp_exports --limit 5 --debug
 #### Headless Mode — Non-interactive, structured logging
 ```bash
 # Full export + pipeline, no TUI
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select
 
 # With transcriptions but no media in output (RECOMMENDED)
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --no-output-media
 
 # Resume from previous session
-poetry run whatsapp --headless --output ~/whatsapp_exports --resume /path/to/drive/folder
+poetry run whatsapp run --output ~/whatsapp_exports --resume /path/to/drive/folder
 
 # Wireless ADB
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --wireless-adb 192.168.1.100:37453
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --wireless-adb 192.168.1.100:37453
 
 # Limit to 5 chats
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --limit 5
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --limit 5
 
 # Without transcription
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-transcribe
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --no-transcribe
 
 # Force re-transcribe
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --force-transcribe
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --force-transcribe
 
 # Delete from Drive after processing
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --delete-from-drive
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --delete-from-drive
 ```
 
 **Exit codes:** 0 = success, 1 = partial failure, 2 = fatal error
@@ -75,23 +77,28 @@ poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --delet
 #### Pipeline-Only Mode — Process already-exported files
 ```bash
 # Complete pipeline: download → extract → transcribe → build output
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output
+poetry run whatsapp pipeline /path/to/downloads /path/to/output
 
 # Without media in output
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-output-media
+poetry run whatsapp pipeline /path/to/downloads /path/to/output --no-output-media
 
 # Without transcription
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-transcribe
+poetry run whatsapp pipeline /path/to/downloads /path/to/output --no-transcribe
 
 # Skip Drive download (local files only)
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-drive-download
+poetry run whatsapp pipeline /path/to/downloads /path/to/output --skip-drive-download
 ```
 
 #### All Available Flags
 ```
---output DIR              Output directory (required for --headless)
---headless                Run without TUI (structured logging to stderr)
---pipeline-only SRC OUT   Run pipeline only (no device connection)
+Subcommands:
+  whatsapp                  Launch interactive TUI (default)
+  whatsapp run              Headless export + pipeline (use --output DIR)
+  whatsapp pipeline SRC OUT Pipeline-only on existing files
+  whatsapp config init      Scaffold ~/.config/whatsapp-autoexport/config.toml
+
+Flags (per-subcommand; see `whatsapp <subcommand> --help`):
+--output DIR              Output directory (required for `whatsapp run`)
 --limit N                 Limit number of chats to export
 --without-media           Export without media from WhatsApp
 --no-output-media         Exclude media from final output (transcriptions still work)
@@ -104,25 +111,17 @@ poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-dr
 --keep-drive-duplicates   Skip deleting Drive root duplicates after download
 --transcription-provider  Choose whisper (default) or elevenlabs
 --skip-drive-download     Process local files without Drive download
---auto-select             Export all chats (required for --headless without --resume)
+--auto-select             Export all chats (required for `whatsapp run` without --resume)
 --skip-preflight          Skip credential capacity checks at startup (default: run)
 ```
 
 ### Deprecated Commands
 
-The following commands are **deprecated** and will print a migration notice:
-
-| Old Command | Replacement |
-|---|---|
-| `whatsapp-export` | `whatsapp --headless --output DIR` |
-| `whatsapp-pipeline` | `whatsapp --pipeline-only SOURCE OUTPUT` |
-| `whatsapp-process` | `whatsapp --pipeline-only SOURCE OUTPUT` |
-| `whatsapp-drive` | `whatsapp --headless --output DIR` |
-| `whatsapp-logs` | `whatsapp --debug` |
+Legacy commands `whatsapp-export`/`-pipeline`/`-process`/`-drive`/`-logs` and the `--headless`/`--pipeline-only` flag aliases were removed in this release; see `whatsapp <subcommand> --help`.
 
 ### Docker (Containerized Execution) 🐳
 
-The entire workflow can be run in a Docker container. The default entrypoint is `whatsapp --headless`, so Docker runs in headless mode automatically. For the interactive TUI, override the entrypoint.
+The entire workflow can be run in a Docker container. The default entrypoint is `whatsapp run`, so Docker runs in headless mode automatically. For the interactive TUI, override the entrypoint.
 
 #### Build the Docker Image
 ```bash
@@ -224,25 +223,25 @@ The TUI guides you through device connection, chat selection, export, and pipeli
 
 ### Workflow 2: Headless — Full Export with Transcriptions (No Media in Output) ⭐
 ```bash
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --no-output-media
 ```
 **Result**: Chat transcripts + audio/video transcriptions. Media used for transcription but not kept in output.
 
 ### Workflow 3: Headless — Full Export (Media + Transcriptions)
 ```bash
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select
 ```
 **Result**: Chat transcripts, media files, and transcriptions.
 
 ### Workflow 4: Pipeline-Only (Process Already-Exported Files)
 ```bash
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output
+poetry run whatsapp pipeline /path/to/downloads /path/to/output
 ```
 **Result**: Processes existing WhatsApp export zips through extract → transcribe → organize.
 
 ### Workflow 5: Minimal Export (No Transcriptions, No Media)
 ```bash
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --without-media --no-transcribe
+poetry run whatsapp run --output ~/whatsapp_exports --auto-select --without-media --no-transcribe
 ```
 **Result**: Chat transcripts only (text).
 
@@ -261,7 +260,7 @@ poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --witho
 - **When to use**: When you want transcriptions but don't want to keep large media files
 - **Benefit**: Transcriptions still work (media exists during processing, just not in final output)
 - **Default**: Copies media to final output
-- **Example**: `whatsapp --headless --output ~/exports --auto-select --no-output-media`
+- **Example**: `whatsapp run --output ~/exports --auto-select --no-output-media`
 
 **Key Insight**: Always export WITH media (default), then use `--no-output-media` or `--no-media` to exclude media from final output while preserving transcription functionality.
 
@@ -301,7 +300,7 @@ Before each run, the tool checks that configured API keys are valid and have suf
 ### Opting out
 
 ```bash
-poetry run whatsapp --headless --output ~/exports --auto-select --skip-preflight
+poetry run whatsapp run --output ~/exports --auto-select --skip-preflight
 ```
 
 Use `--skip-preflight` to bypass all checks (e.g. offline testing, known-good credentials).
@@ -347,10 +346,10 @@ Use `--force-transcribe` to re-transcribe ALL audio/video files, even if transcr
 
 ```bash
 # Headless mode
-poetry run whatsapp --headless --output ~/exports --auto-select --force-transcribe
+poetry run whatsapp run --output ~/exports --auto-select --force-transcribe
 
 # Pipeline-only mode
-poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
+poetry run whatsapp pipeline /downloads /output --force-transcribe
 ```
 
 **When to use:**
@@ -430,12 +429,13 @@ poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
   - **Key behavior**: Media copying can be disabled while preserving transcriptions
 - **Phase 5**: Cleanup temporary files
 
-**CLI Entry Point**: `cli_entry.py` provides the unified `whatsapp` command with three modes:
-- **TUI mode** (default): Launches `WhatsAppExporterApp` Textual TUI
-- **Headless mode** (`--headless`): Runs full export+pipeline with structured stderr logging
-- **Pipeline-only mode** (`--pipeline-only`): Runs pipeline without device connection
+**CLI Entry Point**: `cli_entry.py` provides the unified `whatsapp` command with subcommands:
+- **`whatsapp` (default / `tui` subcommand)**: Launches `WhatsAppExporterApp` Textual TUI
+- **`whatsapp run`**: Runs full export+pipeline with structured stderr logging
+- **`whatsapp pipeline`**: Runs pipeline without device connection
+- **`whatsapp config`**: Manages user config file (`config init` scaffolds defaults)
 
-**headless.py** - Non-interactive orchestrator for `--headless` and `--pipeline-only` modes:
+**headless.py** - Non-interactive orchestrator for `run` and `pipeline` subcommands:
 - `run_headless(args)`: AppiumManager → WhatsAppDriver → ChatExporter → Pipeline, with structured logging and exit codes (0/1/2)
 - `run_pipeline_only(args)`: Pipeline-only with upfront API key validation
 
@@ -506,9 +506,8 @@ poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
 
 ```
 whatsapp_chat_autoexport/
-├── cli_entry.py                  # Unified CLI entry point (whatsapp command)
-├── headless.py                   # Headless + pipeline-only orchestrators
-├── deprecated_entry.py           # Deprecation wrappers for old commands
+├── cli_entry.py                  # Unified CLI entry point (whatsapp command + subcommands)
+├── headless.py                   # run + pipeline subcommand orchestrators
 ├── pipeline.py                   # Main pipeline orchestrator (with progress callbacks)
 ├── tui/
 │   ├── textual_app.py            # WhatsAppExporterApp (Textual)
@@ -543,7 +542,7 @@ whatsapp_chat_autoexport/
 └── __init__.py
 
 Project root:
-├── Dockerfile            # Docker config (entrypoint: whatsapp --headless)
+├── Dockerfile            # Docker config (entrypoint: whatsapp run)
 ├── docker-compose.yml    # Docker Compose profiles
 ├── CLAUDE.md             # Developer documentation (this file)
 ├── pyproject.toml        # Poetry dependencies and scripts
@@ -739,7 +738,7 @@ When adding new tests:
 
 ### Testing Headless Mode (Manual Testing)
 
-1. `poetry run whatsapp --headless --output /tmp/test --auto-select --limit 2` — verify 2 chats export
+1. `poetry run whatsapp run --output /tmp/test --auto-select --limit 2` — verify 2 chats export
 2. Verify structured log output to stderr
 3. Verify exit codes: 0 for success, 1 for partial failure, 2 for fatal error
 4. Test `--resume` functionality by running twice on same folder
@@ -747,7 +746,7 @@ When adding new tests:
 
 ### Testing Pipeline-Only (Manual Testing)
 
-1. `poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output` — full pipeline
+1. `poetry run whatsapp pipeline /path/to/downloads /path/to/output` — full pipeline
 2. Test `--no-output-media` flag (verify transcriptions still created)
 3. Test `--no-transcribe` flag
 4. Verify output structure matches expectations
