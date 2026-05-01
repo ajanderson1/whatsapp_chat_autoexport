@@ -1,5 +1,7 @@
 # Testing Guide
 
+> **For the agentic dispatch contract used by `/aj-flow flow` Step 9, see [`.claude/testing.md`](../.claude/testing.md).**
+
 This directory contains the test suite for the WhatsApp Chat Auto-Export project using **pytest**.
 
 ## Directory Structure
