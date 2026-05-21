@@ -53,7 +53,6 @@ class OutputBuilder:
         self.logger = logger or Logger()
         self.parser = TranscriptParser(logger=logger)
         self.format_version = format_version
-        self._spec_formatter = SpecFormatter()
         self._index_builder = IndexBuilder()
 
     def build_output(
@@ -314,12 +313,15 @@ class OutputBuilder:
         transcript_path = contact_dir / "transcript.md"
         index_path = contact_dir / "index.md"
 
-        # Format content via delegates
-        transcript_content = self._spec_formatter.format_transcript(
-            messages=messages,
-            chat_jid=chat_jid,
+        # SpecFormatter is per-chat (stores contact_name / chat_jid as instance
+        # state used during formatting), so construct one here for this chat.
+        spec_formatter = SpecFormatter(
             contact_name=contact_name,
+            chat_jid=chat_jid,
         )
+
+        # Format content via delegates
+        transcript_content = spec_formatter.format_transcript(messages=messages)
         index_content = self._index_builder.build_index(
             messages=messages,
             chat_jid=chat_jid,
