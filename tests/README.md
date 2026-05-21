@@ -21,13 +21,13 @@ tests/
 
 ```bash
 # Install dependencies (including test dependencies)
-poetry install --with dev
+uv sync --all-extras --dev
 
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # Run with coverage
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=html
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=html
 ```
 
 ## Running Tests
@@ -36,56 +36,56 @@ poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=html
 
 ```bash
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # Run with verbose output
-poetry run pytest -v
+uv run pytest -v
 
 # Run with very verbose output (shows test docstrings)
-poetry run pytest -vv
+uv run pytest -vv
 
 # Show print statements
-poetry run pytest -s
+uv run pytest -s
 
 # Stop at first failure
-poetry run pytest -x
+uv run pytest -x
 ```
 
 ### Running Specific Tests
 
 ```bash
 # Run specific directory
-poetry run pytest tests/unit/
-poetry run pytest tests/integration/
+uv run pytest tests/unit/
+uv run pytest tests/integration/
 
 # Run specific file
-poetry run pytest tests/unit/test_transcription.py
+uv run pytest tests/unit/test_transcription.py
 
 # Run specific test function
-poetry run pytest tests/unit/test_transcription.py::test_mock_transcription
+uv run pytest tests/unit/test_transcription.py::test_mock_transcription
 
 # Run tests matching pattern
-poetry run pytest -k "transcription"
-poetry run pytest -k "parser or builder"
+uv run pytest -k "transcription"
+uv run pytest -k "parser or builder"
 ```
 
 ### Using Markers
 
 ```bash
 # Run only unit tests
-poetry run pytest -m unit
+uv run pytest -m unit
 
 # Run only integration tests
-poetry run pytest -m integration
+uv run pytest -m integration
 
 # Skip slow tests
-poetry run pytest -m "not slow"
+uv run pytest -m "not slow"
 
 # Run tests that don't require API keys
-poetry run pytest -m "not requires_api"
+uv run pytest -m "not requires_api"
 
 # Run tests that don't require device
-poetry run pytest -m "not requires_device"
+uv run pytest -m "not requires_device"
 ```
 
 ## Test Markers
@@ -126,14 +126,14 @@ Common fixtures available in all tests (defined in `conftest.py`):
 
 ```bash
 # Terminal coverage report
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 
 # HTML coverage report
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=html
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=html
 open htmlcov/index.html  # macOS
 
 # Both terminal and HTML
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing --cov-report=html
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing --cov-report=html
 ```
 
 ### Coverage Configuration
@@ -146,10 +146,10 @@ poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing --cov
 
 ```bash
 # See which lines are missing coverage
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 
 # Focus on specific module
-poetry run pytest --cov=whatsapp_chat_autoexport.transcription tests/unit/test_transcription.py
+uv run pytest --cov=whatsapp_chat_autoexport.transcription tests/unit/test_transcription.py
 ```
 
 ## Writing Tests
@@ -268,14 +268,15 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install Poetry
-        run: pip install poetry
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: poetry install --with dev
+        run: uv sync --all-extras --dev
 
       - name: Run tests
-        run: poetry run pytest --cov --cov-report=xml
+        run: uv run pytest --cov --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -290,7 +291,7 @@ jobs:
 **"No module named 'whatsapp_chat_autoexport'"**
 ```bash
 # Ensure package is installed in editable mode
-poetry install
+uv sync
 ```
 
 **"Sample data not found"**
@@ -299,22 +300,22 @@ poetry install
 ls -la sample_data/
 
 # Check fixture paths
-poetry run pytest -vv tests/unit/test_transcript_parser.py
+uv run pytest -vv tests/unit/test_transcript_parser.py
 ```
 
 **"Coverage too low"**
 ```bash
 # Identify uncovered lines
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 
 # Focus on specific module to add tests
-poetry run pytest --cov=whatsapp_chat_autoexport.processing tests/unit/test_archive_extractor.py
+uv run pytest --cov=whatsapp_chat_autoexport.processing tests/unit/test_archive_extractor.py
 ```
 
 **"ImportError: cannot import name 'X'"**
 ```bash
 # Reinstall dependencies
-poetry install --with dev
+uv sync --all-extras --dev
 
 # Clear pytest cache
 rm -rf .pytest_cache
@@ -323,10 +324,10 @@ rm -rf .pytest_cache
 **"Tests hang or timeout"**
 ```bash
 # Run with timeout warnings
-poetry run pytest --timeout=300
+uv run pytest --timeout=300
 
 # Skip slow tests
-poetry run pytest -m "not slow"
+uv run pytest -m "not slow"
 ```
 
 ## Best Practices
@@ -395,7 +396,7 @@ When contributing new features:
 3. Add appropriate markers
 4. Update fixtures if needed
 5. Maintain >90% coverage
-6. Run full test suite before PR: `poetry run pytest --cov`
+6. Run full test suite before PR: `uv run pytest --cov`
 
 ---
 
