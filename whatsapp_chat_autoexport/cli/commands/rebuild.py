@@ -179,7 +179,9 @@ def run_rebuild(
     _progress(f"Fetched {len(messages)} messages")
 
     # ---- 5. Create formatters ----
-    spec_formatter = SpecFormatter(user_display_name=user_display_name)
+    # SpecFormatter is per-chat (stores contact_name / chat_jid as instance
+    # state used during formatting), so it is built below once chat
+    # identifiers are resolved. IndexBuilder is shareable across chats.
     index_builder = IndexBuilder(user_display_name=user_display_name)
 
     # ---- 6. Write transcript.md + index.md ----
@@ -187,13 +189,14 @@ def run_rebuild(
     chat_dir = output_dir / folder_name
     chat_dir.mkdir(parents=True, exist_ok=True)
 
+    spec_formatter = SpecFormatter(
+        contact_name=chat.name or folder_name,
+        chat_jid=chat.jid,
+    )
+
     # Write transcript.md
     transcript_path = chat_dir / "transcript.md"
-    transcript_content = spec_formatter.format_transcript(
-        messages=messages,
-        chat_jid=chat.jid,
-        contact_name=chat.name or folder_name,
-    )
+    transcript_content = spec_formatter.format_transcript(messages=messages)
     _atomic_write(transcript_path, transcript_content)
     _progress(f"Wrote {transcript_path}")
 
