@@ -6,14 +6,14 @@
 WhatsApp chat export automation for Android. Uses Appium + UiAutomator2 to drive the WhatsApp UI, trigger per-chat exports to Google Drive, then download, extract, transcribe (Whisper / ElevenLabs), and build a final organised output. Single-user tool; runs locally or in Docker.
 
 ## Stack constraints (overrides global defaults)
-<!-- Empty here at PR 1 time. Entries are added by later PRs in the convention-alignment train. -->
+<!-- Empty — project follows global defaults. -->
 
 ## Canonical commands
 - dev: n/a
 - build: `docker build -t whatsapp-export .`
-- test: `poetry run pytest`
-- lint: `poetry run ruff check .`
-- format: `poetry run ruff format .`
+- test: `uv run pytest`
+- lint: `uv run ruff check .`
+- format: `uv run ruff format .`
 - typecheck: n/a
 
 ## Where things live

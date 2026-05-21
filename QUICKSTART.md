@@ -23,7 +23,7 @@ Get started exporting and processing WhatsApp chats in minutes.
    ```
 4. **Install dependencies**:
    ```bash
-   poetry install
+   uv sync
    ```
 
 ## Recommended Command ⭐
@@ -36,7 +36,7 @@ export ELEVENLABS_API_KEY="your-api-key-here"
 
 # Complete workflow: export → download → transcribe → organize
 # (Transcriptions included, no media in final output, pre-select chats 300-500)
-poetry run whatsapp-export \
+uv run whatsapp-export \
   --output ~/whatsapp_exports \
   --transcription-provider elevenlabs \
   --delete-from-drive \
@@ -94,10 +94,10 @@ If you just want to export chats without processing:
 
 ```bash
 # Export WITH media (default - required for transcription later)
-poetry run whatsapp-export
+uv run whatsapp-export
 
 # Export WITHOUT media (faster, no transcription support)
-poetry run whatsapp-export --without-media
+uv run whatsapp-export --without-media
 ```
 
 ## During Export
@@ -152,7 +152,7 @@ appium --version
 appium -a 127.0.0.1 -p 4723
 
 # Then run script with --skip-appium flag
-poetry run whatsapp-export --output ~/exports --skip-appium
+uv run whatsapp-export --output ~/exports --skip-appium
 ```
 
 ### Export Failures
@@ -161,31 +161,31 @@ poetry run whatsapp-export --output ~/exports --skip-appium
 - Try manually exporting one chat to verify setup
 - Use `--debug` flag for detailed output:
   ```bash
-  poetry run whatsapp-export --output ~/exports --debug
+  uv run whatsapp-export --output ~/exports --debug
   ```
 
 ## Advanced Options
 
 ```bash
 # Pre-select specific chat ranges
-poetry run whatsapp-export --output ~/exports --range 300-500
-poetry run whatsapp-export --output ~/exports --range 1,5,10-20,50
+uv run whatsapp-export --output ~/exports --range 300-500
+uv run whatsapp-export --output ~/exports --range 1,5,10-20,50
 
 # Limit to 5 chats (useful for testing)
-poetry run whatsapp-export --output ~/exports --limit 5
+uv run whatsapp-export --output ~/exports --limit 5
 
 # Force re-transcribe everything (overwrite existing)
-poetry run whatsapp-export --output ~/exports --force-transcribe
+uv run whatsapp-export --output ~/exports --force-transcribe
 
 # Skip transcription (faster, text only)
-poetry run whatsapp-export --output ~/exports --no-transcribe
+uv run whatsapp-export --output ~/exports --no-transcribe
 
 # Keep media files in final output
-poetry run whatsapp-export --output ~/exports
+uv run whatsapp-export --output ~/exports
 # (omit --no-output-media flag)
 
 # Process already-downloaded files (skip export and download)
-poetry run whatsapp-pipeline \
+uv run whatsapp-pipeline \
   --skip-download \
   --source ~/Downloads \
   --output ~/exports
