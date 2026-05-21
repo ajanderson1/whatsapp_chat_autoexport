@@ -1,57 +1,60 @@
-[tool.poetry]
+[project]
 name = "whatsapp-chat-autoexport"
 version = "0.2.0"
-description = ""
-authors = ["AJ Anderson <ajanderson1@gmail.com>"]
+description = "WhatsApp chat export automation for Android (Appium-driven, Google Drive, optional transcription)."
 readme = "README.md"
+requires-python = ">=3.13,<4.0"
+authors = [
+    { name = "AJ Anderson", email = "ajanderson1@gmail.com" },
+]
+license = { text = "MIT" }
+dependencies = [
+    "appium-python-client>=5.2.4,<6.0.0",
+    "ipykernel>=7.1.0,<8.0.0",
+    "colorama>=0.4.6,<1.0.0",
+    "google-api-python-client>=2.100.0,<3.0.0",
+    "google-auth-httplib2>=0.2.0,<1.0.0",
+    "google-auth-oauthlib>=1.1.0,<2.0.0",
+    "tqdm>=4.66.0,<5.0.0",
+    "openai>=1.0.0,<2.0.0",
+    "elevenlabs>=1.0.0,<2.0.0",
+    "pydantic-settings>=2.12.0,<3.0.0",
+    "python-dotenv>=1.1.0,<2.0.0",
+    "httpx>=0.28.1,<1.0.0",
+    "pyyaml>=6.0.3,<7.0.0",
+    "rich>=14.3.1,<15.0.0",
+    "typer>=0.21.1,<1.0.0",
+    "textual>=0.94.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.13"
-appium-python-client = ">=5.2.4,<6.0.0"
-ipykernel = ">=7.1.0,<8.0.0"
-colorama = ">=0.4.6,<1.0.0"
-google-api-python-client = "^2.100.0"
-google-auth-httplib2 = "^0.2.0"
-google-auth-oauthlib = "^1.1.0"
-tqdm = "^4.66.0"
-openai = "^1.0.0"
-elevenlabs = "^1.0.0"
-pydantic-settings = "^2.12.0"
-python-dotenv = "^1.1.0"
-httpx = "^0.28.1"
-pyyaml = "^6.0.3"
-rich = "^14.3.1"
-typer = "^0.21.1"
-textual = ">=0.94.0"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-pytest-cov = "^4.1.0"
-pytest-mock = "^3.11.1"
-pytest-timeout = "^2.1.0"
-pytest-asyncio = "^0.23"
-ruff = "^0.11"
-
-[tool.poetry.scripts]
-# New unified CLI (recommended)
+[project.scripts]
 whatsapp = "whatsapp_chat_autoexport.cli_entry:main"
-
-# Deprecated commands (print migration notice and exit)
 whatsapp-export = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_export_main"
 whatsapp-process = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_process_main"
 whatsapp-drive = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_drive_main"
 whatsapp-pipeline = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_pipeline_main"
 whatsapp-logs = "whatsapp_chat_autoexport.deprecated_entry:whatsapp_logs_main"
-
-# MCP sync CLI
 whatsapp-sync = "whatsapp_chat_autoexport.cli.commands.sync:main"
 whatsapp-ingest = "whatsapp_chat_autoexport.cli.commands.ingest:main"
 whatsapp-migrate = "whatsapp_chat_autoexport.cli.commands.migrate:main"
 whatsapp-rebuild = "whatsapp_chat_autoexport.cli.commands.rebuild:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-mock>=3.11.1,<4.0.0",
+    "pytest-timeout>=2.1.0,<3.0.0",
+    "pytest-asyncio>=0.23,<1.0.0",
+    "ruff>=0.11,<1.0.0",
+]
+
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["whatsapp_chat_autoexport"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -108,16 +111,16 @@ line-length = 120
 
 [tool.ruff.lint]
 select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # pyflakes
-    "I",    # isort
-    "B",    # flake8-bugbear
-    "UP",   # pyupgrade
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "UP",
 ]
 ignore = [
-    "E501",   # line too long (handled by formatter)
-    "B008",   # do not perform function calls in argument defaults
+    "E501",
+    "B008",
 ]
 
 [tool.ruff.lint.isort]
