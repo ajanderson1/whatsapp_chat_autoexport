@@ -22,11 +22,25 @@ whatsapp_chat_autoexport.code-workspace
 
 .DS_Store
 .env
+.env.local
+.env.*.local
 
 # Log files
 .logs/
 .claude/
+.cursor/
+.codex/
+.opencode/
+.aider*
+CLAUDE.local.md
+*.local.md
+GEMINI.md
 .mcp.json
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
 
 # Scratch / one-off scripts
 run_full_export.py
