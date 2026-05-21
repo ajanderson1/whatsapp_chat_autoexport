@@ -230,6 +230,6 @@ Everything is self-contained and cleaned up after execution.
 
 ## Next Steps
 
-- See `CLAUDE.md` for full developer documentation
+- See `docs/internals/architecture.md` for full developer documentation
 - See `README.md` for project overview
 - See `QUICKSTART.md` for native installation guide

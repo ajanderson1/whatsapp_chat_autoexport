@@ -1,4 +1,7 @@
-# CLAUDE.md
+# whatsapp_chat_autoexport — Developer Architecture Reference
+
+> Source of truth for the project's internal architecture, commands, workflows, and testing strategy. Used by Claude Code and other coding agents via `AGENTS.md` → `## Where things live`.
+
 <!-- BEGIN:PROJECT_NOTE -->
 ## Project Note
 
