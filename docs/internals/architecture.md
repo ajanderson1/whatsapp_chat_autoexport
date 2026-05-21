@@ -24,7 +24,7 @@ This project automates the export of WhatsApp chats from Android devices to Goog
 ### Setup
 ```bash
 # Install dependencies
-poetry install
+uv sync
 
 # Install Appium (required)
 npm install -g appium
@@ -40,37 +40,37 @@ There is a single entry point: `whatsapp`. It runs in three modes.
 #### TUI Mode (Default) — Interactive Textual interface
 ```bash
 # Launch the Textual TUI — full wizard flow
-poetry run whatsapp
+uv run whatsapp
 
 # With options passed at launch
-poetry run whatsapp --output ~/whatsapp_exports --limit 5 --debug
+uv run whatsapp --output ~/whatsapp_exports --limit 5 --debug
 ```
 
 #### Headless Mode — Non-interactive, structured logging
 ```bash
 # Full export + pipeline, no TUI
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select
 
 # With transcriptions but no media in output (RECOMMENDED)
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
 
 # Resume from previous session
-poetry run whatsapp --headless --output ~/whatsapp_exports --resume /path/to/drive/folder
+uv run whatsapp --headless --output ~/whatsapp_exports --resume /path/to/drive/folder
 
 # Wireless ADB
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --wireless-adb 192.168.1.100:37453
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --wireless-adb 192.168.1.100:37453
 
 # Limit to 5 chats
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --limit 5
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --limit 5
 
 # Without transcription
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-transcribe
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-transcribe
 
 # Force re-transcribe
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --force-transcribe
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --force-transcribe
 
 # Delete from Drive after processing
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --delete-from-drive
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --delete-from-drive
 ```
 
 **Exit codes:** 0 = success, 1 = partial failure, 2 = fatal error
@@ -78,16 +78,16 @@ poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --delet
 #### Pipeline-Only Mode — Process already-exported files
 ```bash
 # Complete pipeline: download → extract → transcribe → build output
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output
+uv run whatsapp --pipeline-only /path/to/downloads /path/to/output
 
 # Without media in output
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-output-media
+uv run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-output-media
 
 # Without transcription
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-transcribe
+uv run whatsapp --pipeline-only /path/to/downloads /path/to/output --no-transcribe
 
 # Skip Drive download (local files only)
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-drive-download
+uv run whatsapp --pipeline-only /path/to/downloads /path/to/output --skip-drive-download
 ```
 
 #### All Available Flags
@@ -221,31 +221,31 @@ Pass API keys at runtime:
 ### Workflow 1: Interactive TUI (Recommended)
 ```bash
 # Launch the TUI — walks you through connect, select, export, process
-poetry run whatsapp
+uv run whatsapp
 ```
 The TUI guides you through device connection, chat selection, export, and pipeline processing in a single interface.
 
 ### Workflow 2: Headless — Full Export with Transcriptions (No Media in Output) ⭐
 ```bash
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --no-output-media
 ```
 **Result**: Chat transcripts + audio/video transcriptions. Media used for transcription but not kept in output.
 
 ### Workflow 3: Headless — Full Export (Media + Transcriptions)
 ```bash
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select
 ```
 **Result**: Chat transcripts, media files, and transcriptions.
 
 ### Workflow 4: Pipeline-Only (Process Already-Exported Files)
 ```bash
-poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output
+uv run whatsapp --pipeline-only /path/to/downloads /path/to/output
 ```
 **Result**: Processes existing WhatsApp export zips through extract → transcribe → organize.
 
 ### Workflow 5: Minimal Export (No Transcriptions, No Media)
 ```bash
-poetry run whatsapp --headless --output ~/whatsapp_exports --auto-select --without-media --no-transcribe
+uv run whatsapp --headless --output ~/whatsapp_exports --auto-select --without-media --no-transcribe
 ```
 **Result**: Chat transcripts only (text).
 
@@ -304,7 +304,7 @@ Before each run, the tool checks that configured API keys are valid and have suf
 ### Opting out
 
 ```bash
-poetry run whatsapp --headless --output ~/exports --auto-select --skip-preflight
+uv run whatsapp --headless --output ~/exports --auto-select --skip-preflight
 ```
 
 Use `--skip-preflight` to bypass all checks (e.g. offline testing, known-good credentials).
@@ -350,10 +350,10 @@ Use `--force-transcribe` to re-transcribe ALL audio/video files, even if transcr
 
 ```bash
 # Headless mode
-poetry run whatsapp --headless --output ~/exports --auto-select --force-transcribe
+uv run whatsapp --headless --output ~/exports --auto-select --force-transcribe
 
 # Pipeline-only mode
-poetry run whatsapp --pipeline-only /downloads /output --force-transcribe
+uv run whatsapp --pipeline-only /downloads /output --force-transcribe
 ```
 
 **When to use:**
@@ -549,7 +549,7 @@ Project root:
 ├── Dockerfile            # Docker config (entrypoint: whatsapp --headless)
 ├── docker-compose.yml    # Docker Compose profiles
 ├── CLAUDE.md             # Developer documentation (this file)
-├── pyproject.toml        # Poetry dependencies and scripts
+├── pyproject.toml        # uv / PEP 621 dependencies and scripts
 ├── docs/
 │   ├── brainstorms/      # Requirements documents
 │   └── plans/            # Implementation plans
@@ -597,37 +597,37 @@ tests/
 
 ```bash
 # Install test dependencies
-poetry install --with dev
+uv sync --all-extras --dev
 
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # Run with coverage report
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=html
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=html
 
 # Run only unit tests
-poetry run pytest tests/unit/
+uv run pytest tests/unit/
 
 # Run only integration tests
-poetry run pytest tests/integration/
+uv run pytest tests/integration/
 
 # Run specific test file
-poetry run pytest tests/unit/test_transcription.py
+uv run pytest tests/unit/test_transcription.py
 
 # Run tests matching a pattern
-poetry run pytest -k "transcription"
+uv run pytest -k "transcription"
 
 # Run fast tests only (exclude slow tests)
-poetry run pytest -m "not slow"
+uv run pytest -m "not slow"
 
 # Run with verbose output
-poetry run pytest -v
+uv run pytest -v
 
 # Run with extra debugging info
-poetry run pytest -vv
+uv run pytest -vv
 
 # Show print statements
-poetry run pytest -s
+uv run pytest -s
 ```
 
 ### Test Markers
@@ -643,13 +643,13 @@ Tests are categorized using pytest markers:
 Run specific categories:
 ```bash
 # Run only unit tests
-poetry run pytest -m unit
+uv run pytest -m unit
 
 # Skip slow tests
-poetry run pytest -m "not slow"
+uv run pytest -m "not slow"
 
 # Run tests that don't require API keys
-poetry run pytest -m "not requires_api"
+uv run pytest -m "not requires_api"
 ```
 
 ### Test Fixtures
@@ -675,13 +675,13 @@ Target: **90% code coverage**
 View coverage report:
 ```bash
 # Generate HTML coverage report
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=html
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=html
 
 # Open in browser (macOS)
 open htmlcov/index.html
 
 # View coverage in terminal
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 ```
 
 Coverage is configured in `pyproject.toml` to:
@@ -735,14 +735,14 @@ When adding new tests:
 
 ### Testing TUI (Manual Testing)
 
-1. `poetry run whatsapp` — verify TUI launches with DiscoveryScreen
+1. `uv run whatsapp` — verify TUI launches with DiscoveryScreen
 2. Test dry-run mode (press 'd' on DiscoveryScreen) to verify screen flow without device
 3. Test wireless ADB input fields on DiscoveryScreen
 4. With device: verify full flow through connect → select → export → process → summary
 
 ### Testing Headless Mode (Manual Testing)
 
-1. `poetry run whatsapp --headless --output /tmp/test --auto-select --limit 2` — verify 2 chats export
+1. `uv run whatsapp --headless --output /tmp/test --auto-select --limit 2` — verify 2 chats export
 2. Verify structured log output to stderr
 3. Verify exit codes: 0 for success, 1 for partial failure, 2 for fatal error
 4. Test `--resume` functionality by running twice on same folder
@@ -750,7 +750,7 @@ When adding new tests:
 
 ### Testing Pipeline-Only (Manual Testing)
 
-1. `poetry run whatsapp --pipeline-only /path/to/downloads /path/to/output` — full pipeline
+1. `uv run whatsapp --pipeline-only /path/to/downloads /path/to/output` — full pipeline
 2. Test `--no-output-media` flag (verify transcriptions still created)
 3. Test `--no-transcribe` flag
 4. Verify output structure matches expectations
@@ -773,12 +773,13 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-      - name: Install Poetry
-        run: pip install poetry
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
       - name: Install dependencies
-        run: poetry install --with dev
+        run: uv sync --all-extras --dev
       - name: Run tests
-        run: poetry run pytest --cov --cov-report=xml
+        run: uv run pytest --cov --cov-report=xml
       - name: Upload coverage
         uses: codecov/codecov-action@v3
 ```
@@ -800,25 +801,25 @@ This data is used by tests to ensure realistic testing conditions.
 ls -la sample_data/
 
 # Run with verbose output to see fixture paths
-poetry run pytest -vv tests/unit/test_transcript_parser.py
+uv run pytest -vv tests/unit/test_transcript_parser.py
 ```
 
 **Import errors**:
 ```bash
 # Reinstall dependencies
-poetry install --with dev
+uv sync --all-extras --dev
 
 # Verify package is installed in editable mode
-poetry run pip list | grep whatsapp
+uv run pip list | grep whatsapp
 ```
 
 **Coverage too low**:
 ```bash
 # See which lines are missing coverage
-poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
+uv run pytest --cov=whatsapp_chat_autoexport --cov-report=term-missing
 
 # Focus on specific module
-poetry run pytest --cov=whatsapp_chat_autoexport.transcription tests/unit/test_transcription.py
+uv run pytest --cov=whatsapp_chat_autoexport.transcription tests/unit/test_transcription.py
 ```
 
 <!-- Run `claude-tui-settings` to reconfigure. -->

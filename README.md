@@ -61,9 +61,9 @@ Before using this script, ensure you have:
 
 ### Installing Dependencies
 
-Using Poetry (recommended):
+Using uv (recommended):
 ```bash
-poetry install
+uv sync
 ```
 
 Or using pip:
@@ -103,10 +103,10 @@ The simplest approach is the unified `whatsapp-export` command that handles ever
 ```bash
 # Complete workflow: export → download → transcribe → organize
 # Transcriptions included, no media in final output (RECOMMENDED)
-poetry run whatsapp-export --output ~/whatsapp_exports --no-output-media
+uv run whatsapp-export --output ~/whatsapp_exports --no-output-media
 
 # Same with ElevenLabs + wireless ADB + auto-delete + pre-select chats 300-500
-poetry run whatsapp-export \
+uv run whatsapp-export \
   --output ~/whatsapp_exports \
   --transcription-provider elevenlabs \
   --delete-from-drive \
@@ -115,16 +115,16 @@ poetry run whatsapp-export \
   --range 300-500
 
 # Full archive with media files included
-poetry run whatsapp-export --output ~/whatsapp_exports
+uv run whatsapp-export --output ~/whatsapp_exports
 
 # Pre-select specific chats (ranges or comma-separated)
-poetry run whatsapp-export --output ~/whatsapp_exports --range 1,5,10-20,50
+uv run whatsapp-export --output ~/whatsapp_exports --range 1,5,10-20,50
 
 # Faster: skip transcription entirely
-poetry run whatsapp-export --output ~/whatsapp_exports --no-transcribe
+uv run whatsapp-export --output ~/whatsapp_exports --no-transcribe
 
 # Force re-transcribe all audio/video (overwrites existing)
-poetry run whatsapp-export --output ~/whatsapp_exports --force-transcribe
+uv run whatsapp-export --output ~/whatsapp_exports --force-transcribe
 ```
 
 ### Alternative: Manual Export + Standalone Pipeline
@@ -134,22 +134,22 @@ If you prefer to export and process separately:
 **Step 1: Export from WhatsApp**
 ```bash
 # Export WITH media (required for voice message transcription)
-poetry run whatsapp-export
+uv run whatsapp-export
 
 # Export WITHOUT media (faster, but no transcription support)
-poetry run whatsapp-export --without-media
+uv run whatsapp-export --without-media
 ```
 
 **Step 2: Process Exported Files**
 ```bash
 # Complete pipeline: download → extract → transcribe → organize
-poetry run whatsapp-pipeline --output ~/whatsapp_exports
+uv run whatsapp-pipeline --output ~/whatsapp_exports
 
 # Transcriptions only (no media in final output)
-poetry run whatsapp-pipeline --output ~/whatsapp_exports --no-media
+uv run whatsapp-pipeline --output ~/whatsapp_exports --no-media
 
 # Process local files (skip Google Drive download)
-poetry run whatsapp-pipeline --skip-download --source ~/Downloads --output ~/whatsapp_exports
+uv run whatsapp-pipeline --skip-download --source ~/Downloads --output ~/whatsapp_exports
 ```
 
 ### Common Use Cases
@@ -157,10 +157,10 @@ poetry run whatsapp-pipeline --skip-download --source ~/Downloads --output ~/wha
 **Use Case 1: Transcriptions Without Media ⭐ RECOMMENDED**
 ```bash
 # Single unified command (simplest)
-poetry run whatsapp-export --output ~/whatsapp_exports --no-output-media
+uv run whatsapp-export --output ~/whatsapp_exports --no-output-media
 
 # With ElevenLabs, wireless ADB, and auto-delete from Drive
-poetry run whatsapp-export \
+uv run whatsapp-export \
   --output ~/whatsapp_exports \
   --transcription-provider elevenlabs \
   --delete-from-drive \
@@ -173,18 +173,18 @@ poetry run whatsapp-export \
 **Use Case 2: Full Archive (Media + Transcriptions)**
 ```bash
 # Single unified command
-poetry run whatsapp-export --output ~/whatsapp_exports
+uv run whatsapp-export --output ~/whatsapp_exports
 
 # OR use separate commands (more control)
-poetry run whatsapp-export  # Export only
-poetry run whatsapp-pipeline --output ~/whatsapp_exports  # Process later
+uv run whatsapp-export  # Export only
+uv run whatsapp-pipeline --output ~/whatsapp_exports  # Process later
 ```
 **Result**: Complete archive with chat transcripts, all media files, and voice message transcriptions.
 
 **Use Case 3: Text-Only Archive**
 ```bash
 # Export without media, skip transcription
-poetry run whatsapp-export --output ~/whatsapp_exports --without-media --no-transcribe
+uv run whatsapp-export --output ~/whatsapp_exports --without-media --no-transcribe
 ```
 **Result**: Chat transcripts only, no media, no transcriptions.
 
@@ -232,7 +232,7 @@ Skipped files (existing transcriptions found):
 **Force Re-Transcription**:
 Use `--force-transcribe` to re-transcribe everything:
 ```bash
-poetry run whatsapp-export --output ~/exports --force-transcribe
+uv run whatsapp-export --output ~/exports --force-transcribe
 ```
 
 Use this when:
@@ -261,13 +261,13 @@ export ELEVENLABS_API_KEY="your-elevenlabs-key"
 **Using a specific provider**:
 ```bash
 # Use Whisper (default)
-poetry run whatsapp-export --output ~/exports
+uv run whatsapp-export --output ~/exports
 
 # Use ElevenLabs
-poetry run whatsapp-export --output ~/exports --transcription-provider elevenlabs
+uv run whatsapp-export --output ~/exports --transcription-provider elevenlabs
 
 # Standalone pipeline with ElevenLabs
-poetry run whatsapp-pipeline --output ~/exports --transcription-provider elevenlabs
+uv run whatsapp-pipeline --output ~/exports --transcription-provider elevenlabs
 ```
 
 ## ⚠️ Important Notes
@@ -337,13 +337,13 @@ This tool supports connecting to your Android device via wireless ADB, allowing 
    **Interactive mode** (script will prompt for missing details):
    ```bash
    # Provide just the flag - script will prompt for pairing details
-   poetry run python whatsapp_export.py --wireless-adb
+   uv run python whatsapp_export.py --wireless-adb
 
    # Or provide pairing address - script will prompt for code
-   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:37453
+   uv run python whatsapp_export.py --wireless-adb 192.168.1.100:37453
 
    # Or provide both pairing address and code (no prompts)
-   poetry run python whatsapp_export.py --wireless-adb 192.168.1.100:37453 123456
+   uv run python whatsapp_export.py --wireless-adb 192.168.1.100:37453 123456
    ```
 
    **Docker interactive mode** (add `-it` for prompts - RECOMMENDED):

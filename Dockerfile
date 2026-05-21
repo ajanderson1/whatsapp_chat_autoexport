@@ -11,21 +11,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install --no-cache-dir poetry
+# Install uv
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# Install dependencies first (layer caching)
-COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --without dev
+# Install dependencies first (layer caching) — only pyproject.toml + uv.lock change rarely
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy application code
-COPY . .
+COPY whatsapp_chat_autoexport ./whatsapp_chat_autoexport
+COPY README.md ./
 
 # Install the package itself
-RUN poetry install --no-interaction --no-ansi --without dev
+RUN uv sync --frozen --no-dev
+
+# Put the project venv on PATH so the `whatsapp` entry-point script resolves at ENTRYPOINT.
+ENV PATH="/app/.venv/bin:$PATH"
 
 # API keys passed at runtime via -e flags
 ENV OPENAI_API_KEY=""
