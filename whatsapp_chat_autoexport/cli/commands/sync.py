@@ -203,7 +203,6 @@ def _sync_chat(
     mcp_source: MCPSource,
     state: MCPState,
     output_dir: Path,
-    spec_formatter: SpecFormatter,
     index_builder: IndexBuilder,
     overlap_minutes: int,
     dry_run: bool,
@@ -281,12 +280,15 @@ def _sync_chat(
     # Ensure chat directory exists
     chat_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write transcript.md via SpecFormatter (atomic write)
-    transcript_content = spec_formatter.format_transcript(
-        messages=all_messages,
-        chat_jid=jid,
+    # SpecFormatter is per-chat (stores contact_name / chat_jid as instance
+    # state used during formatting), so construct one here for this chat.
+    spec_formatter = SpecFormatter(
         contact_name=chat.name or folder_name,
+        chat_jid=jid,
     )
+
+    # Write transcript.md via SpecFormatter (atomic write)
+    transcript_content = spec_formatter.format_transcript(messages=all_messages)
     _atomic_write(transcript_path, transcript_content)
 
     # Write/update index.md via IndexBuilder
@@ -431,7 +433,9 @@ def run_sync(
         summary["voice_retry"] = voice_stats
 
     # ---- 6. Create formatters ----
-    spec_formatter = SpecFormatter(user_display_name=user_display_name)
+    # SpecFormatter is built per-chat inside _sync_chat (it stores
+    # contact_name / chat_jid as instance state); only IndexBuilder is
+    # safe to share across chats here.
     index_builder = IndexBuilder(user_display_name=user_display_name)
 
     # ---- 7. Per-chat sync loop ----
@@ -443,7 +447,6 @@ def run_sync(
                 mcp_source=mcp_source,
                 state=state,
                 output_dir=output_dir,
-                spec_formatter=spec_formatter,
                 index_builder=index_builder,
                 overlap_minutes=overlap_minutes,
                 dry_run=dry_run,

@@ -91,7 +91,6 @@ def _find_legacy_transcripts(input_dir: Path) -> List[Path]:
 def _migrate_chat(
     transcript_path: Path,
     input_dir: Path,
-    spec_formatter: SpecFormatter,
     index_builder: IndexBuilder,
     no_backup: bool,
     dry_run: bool,
@@ -139,12 +138,15 @@ def _migrate_chat(
     # Ensure chat directory exists (for flat layout migration)
     chat_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write transcript.md via SpecFormatter
-    transcript_content = spec_formatter.format_transcript(
-        messages=messages,
-        chat_jid=chat_name,
+    # SpecFormatter is per-chat (stores contact_name / chat_jid as instance
+    # state used during formatting), so construct one here for this chat.
+    spec_formatter = SpecFormatter(
         contact_name=chat_name,
+        chat_jid=chat_name,
     )
+
+    # Write transcript.md via SpecFormatter
+    transcript_content = spec_formatter.format_transcript(messages=messages)
     transcript_md = chat_dir / "transcript.md"
     _atomic_write(transcript_md, transcript_content)
 
@@ -243,7 +245,9 @@ def run_migrate(
     _progress(f"Found {len(transcripts)} legacy transcript(s)")
 
     # ---- 3. Create formatters ----
-    spec_formatter = SpecFormatter(user_display_name=user_display_name)
+    # SpecFormatter is built per-chat inside _migrate_chat (it stores
+    # contact_name / chat_jid as instance state); only IndexBuilder is
+    # safe to share across chats here.
     index_builder = IndexBuilder(user_display_name=user_display_name)
 
     # ---- 4. Per-chat migration loop ----
@@ -259,7 +263,6 @@ def run_migrate(
             chat_result = _migrate_chat(
                 transcript_path=transcript_path,
                 input_dir=input_dir,
-                spec_formatter=spec_formatter,
                 index_builder=index_builder,
                 no_backup=no_backup,
                 dry_run=dry_run,

@@ -60,7 +60,6 @@ def _ingest_chat(
     chat_name: str,
     appium_messages: List[Message],
     output_dir: Path,
-    spec_formatter: SpecFormatter,
     index_builder: IndexBuilder,
     dry_run: bool,
 ) -> Dict[str, Any]:
@@ -108,12 +107,15 @@ def _ingest_chat(
     # Ensure chat directory exists
     chat_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write transcript.md via SpecFormatter (atomic write)
-    transcript_content = spec_formatter.format_transcript(
-        messages=merged,
-        chat_jid=chat_name,
+    # SpecFormatter is per-chat (stores contact_name / chat_jid as instance
+    # state used during formatting), so construct one here for this chat.
+    spec_formatter = SpecFormatter(
         contact_name=chat_name,
+        chat_jid=chat_name,
     )
+
+    # Write transcript.md via SpecFormatter (atomic write)
+    transcript_content = spec_formatter.format_transcript(messages=merged)
     _atomic_write(transcript_md, transcript_content)
 
     # Write/update index.md via IndexBuilder
@@ -204,7 +206,9 @@ def run_ingest(
     _progress(f"Found {len(chats)} chat(s) in Appium export")
 
     # ---- 4. Create formatters ----
-    spec_formatter = SpecFormatter(user_display_name=user_display_name)
+    # SpecFormatter is built per-chat inside _ingest_chat (it stores
+    # contact_name / chat_jid as instance state); only IndexBuilder is
+    # safe to share across chats here.
     index_builder = IndexBuilder(user_display_name=user_display_name)
 
     # ---- 5. Per-chat ingest loop ----
@@ -220,7 +224,6 @@ def run_ingest(
                 chat_name=chat.name,
                 appium_messages=appium_messages,
                 output_dir=output_dir,
-                spec_formatter=spec_formatter,
                 index_builder=index_builder,
                 dry_run=dry_run,
             )
