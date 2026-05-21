@@ -154,7 +154,7 @@ PR 5: CI + release-please + dependabot
 **Branch:** `chore/NN-lefthook-mypy-verify`.
 
 **Files touched:**
-- `pyproject.toml` — add `mypy` and `gitleaks` (binary; or vendor via pre-commit) to `[dependency-groups]` dev. Add `[tool.mypy]` with `strict = true`, plus `[[tool.mypy.overrides]]` blocks for known-noisy modules: `whatsapp_chat_autoexport.whatsapp_export`, `whatsapp_chat_autoexport.legacy.*`, `whatsapp_chat_autoexport.tui.*`. Override modules get `ignore_errors = true` initially.
+- `pyproject.toml` — add `mypy` to `[dependency-groups]` dev. (`gitleaks` is a standalone Go binary — installed via `brew install gitleaks` locally and `gitleaks/gitleaks-action@v2` in CI; not a Python dep.) Add `[tool.mypy]` with `strict = true`, plus `[[tool.mypy.overrides]]` blocks for known-noisy modules: `whatsapp_chat_autoexport.whatsapp_export`, `whatsapp_chat_autoexport.legacy.*`, `whatsapp_chat_autoexport.tui.*`. Override modules get `ignore_errors = true` initially.
 - `lefthook.yml` — four-stage cascade (run order matches `ci.md`):
   1. `ruff format` (auto-fix on commit, doesn't block)
   2. `ruff check` (blocks)
