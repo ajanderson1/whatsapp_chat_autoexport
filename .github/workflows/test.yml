@@ -17,14 +17,15 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install Poetry
-        run: pip install poetry
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: poetry install --with dev
+        run: uv sync --all-extras --dev
 
       - name: Run tests
-        run: poetry run pytest --cov=whatsapp_chat_autoexport --cov-report=xml -m "not requires_api and not requires_device and not requires_drive"
+        run: uv run pytest --cov=whatsapp_chat_autoexport --cov-report=xml -m "not requires_api and not requires_device and not requires_drive"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
