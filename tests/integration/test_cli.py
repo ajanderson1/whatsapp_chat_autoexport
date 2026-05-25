@@ -12,9 +12,9 @@ import pytest
 
 
 def _run(args, timeout=15):
-    """Run the `whatsapp` command (via poetry run) with the given args."""
+    """Run the `whatsapp` command (via uv run) with the given args."""
     return subprocess.run(
-        ["poetry", "run", "whatsapp", *args],
+        ["uv", "run", "whatsapp", *args],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -90,7 +90,7 @@ def test_headless_without_output_exits_with_error():
 def test_deprecated_command_prints_migration_notice(deprecated_cmd):
     """Deprecated entry points exit cleanly with a migration hint pointing to `whatsapp`."""
     result = subprocess.run(
-        ["poetry", "run", deprecated_cmd, "--help"],
+        ["uv", "run", deprecated_cmd, "--help"],
         capture_output=True,
         text=True,
         timeout=15,
