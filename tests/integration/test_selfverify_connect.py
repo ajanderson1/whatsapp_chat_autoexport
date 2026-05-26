@@ -36,7 +36,7 @@ def test_connect_and_verify_returns_nonzero_when_device_absent():
 
     rc = connect_and_verify(driver)
 
-    assert rc != 0
+    assert rc == 2
     driver.connect.assert_not_called()
 
 
@@ -48,4 +48,4 @@ def test_connect_and_verify_returns_nonzero_when_connect_fails():
 
     rc = connect_and_verify(driver)
 
-    assert rc != 0
+    assert rc == 3

@@ -15,9 +15,18 @@ import argparse
 import logging
 import sys
 from logging import Logger
+from typing import Protocol
 
 
-def connect_and_verify(driver) -> int:
+class _ConnectableDriver(Protocol):
+    device_id: str | None
+
+    def check_device_connection(self) -> bool: ...
+
+    def connect(self) -> bool: ...
+
+
+def connect_and_verify(driver: _ConnectableDriver) -> int:
     """Run the driver's connection path and return a shell exit code.
 
     Returns 0 on a verified connection, non-zero otherwise. Never exports.
@@ -30,7 +39,7 @@ def connect_and_verify(driver) -> int:
     return 0
 
 
-def _wireless_adb_arg(value) -> list | None:
+def _wireless_adb_arg(value) -> list[str] | None:
     """Translate the argparse --wireless-adb value into the List[str] the
     WhatsAppDriver constructor expects.
 
@@ -70,9 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return connect_and_verify(driver)
     finally:
-        quit_fn = getattr(driver, "quit", None)
-        if callable(quit_fn):
-            quit_fn()
+        driver.quit()
 
 
 if __name__ == "__main__":
