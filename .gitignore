@@ -36,6 +36,13 @@ CLAUDE.local.md
 *.local.md
 GEMINI.md
 .mcp.json
+.agents/
+.pi/
+.understand-anything/
+skills-lock.json
+
+# Self-verification evidence (oracle screenshots/logs, regenerated)
+test-evidence/
 
 # Editor / OS
 .vscode/
