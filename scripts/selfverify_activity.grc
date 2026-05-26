@@ -1,0 +1,34 @@
+# grc colouriser config for the self-verification activity log.
+# Watch with:  tail -F test-evidence/activity.log | grcat test-evidence/activity.grc
+
+# Timestamps [HH:MM:SS]
+regexp=^\[\d{2}:\d{2}:\d{2}\]
+colours=dark
+
+# Success / passed / OK / done
+regexp=(?i)\b(OK|SUCCESS|PASSED|DONE|✓|✅|proven|complete[d]?)\b
+colours=bold green
+
+# Failure / error
+regexp=(?i)\b(FAIL|FAILED|ERROR|✗|❌|crash|traceback|blocked)\b
+colours=bold red
+
+# Warnings / safety-gate / stopping
+regexp=(?i)\b(WARN|WARNING|⚠|STOPPING|locked|refus)\w*
+colours=bold yellow
+
+# Oracle / out-of-band (Half A)
+regexp=(?i)\b(ORACLE|screencap|uiautomator|adb|out-of-band)\b
+colours=cyan
+
+# Phase / step / layer markers
+regexp=(?i)\b(L0|C1|C2|T1|T2|T3|STEP \d+|PHASE|LAYER)\b
+colours=bold magenta
+
+# Commands being run
+regexp=^\s*\$ .*$
+colours=bold blue
+
+# Device / app identifiers
+regexp=(com\.whatsapp[\w.]*|com\.google\.android[\w.]*|\d+\.\d+\.\d+\.\d+:\d+|56281FDCH000SQ)
+colours=blue
