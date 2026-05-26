@@ -57,3 +57,6 @@ PRPs/
 
 # MkDocs build output
 site/
+
+# Self-verification loop evidence (screenshots, UI dumps, captured CLI output)
+test-evidence/

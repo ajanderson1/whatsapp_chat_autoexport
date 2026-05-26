@@ -16,6 +16,10 @@ WhatsApp chat export automation for Android. Uses Appium + UiAutomator2 to drive
 - format: `uv run ruff format .`
 - typecheck: n/a
 
+## Testing
+- Standard suite (no device): `uv run pytest`.
+- Self-verification loop against a real device (raw-ADB oracle + headless CLI / TUI pilot): see `TESTING.md`.
+
 ## Where things live
 - `whatsapp_chat_autoexport/` — main package (moves to `src/whatsapp_chat_autoexport/` in a later PR).
 - `tests/unit/`, `tests/integration/` — pytest suite.
