@@ -47,6 +47,7 @@ dev = [
     "pytest-timeout>=2.1.0,<3.0.0",
     "pytest-asyncio>=0.23,<1.0.0",
     "ruff>=0.11,<1.0.0",
+    "mypy>=1.11,<2.0",
 ]
 
 [build-system]
@@ -143,3 +144,123 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["whatsapp_chat_autoexport"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+packages = ["whatsapp_chat_autoexport"]
+mypy_path = "src"
+exclude = [
+    "tests/",
+    "build/",
+    "dist/",
+]
+
+# Per-module overrides for legacy / noisy modules.
+# Goal: each entry is a TODO — remove the override and type-clean the module over time.
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.whatsapp_export"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.whatsapp_process"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.legacy.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.tui.*"
+ignore_errors = true
+
+# TODO: type-clean and remove these overrides incrementally.
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.core.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.config.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.transcription.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.export.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.utils.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.state.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.preflight.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.sources.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.mcp.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.processing.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.output.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.google_drive.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.automation.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.whatsapp.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "whatsapp_chat_autoexport.pipeline_cli.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "whatsapp_chat_autoexport.pipeline",
+    "whatsapp_chat_autoexport.headless",
+    "whatsapp_chat_autoexport.cli_entry",
+    "whatsapp_chat_autoexport.deprecated_entry",
+    "whatsapp_chat_autoexport.constants",
+    "whatsapp_chat_autoexport.cli.*",
+]
+ignore_errors = true
+
+# Third-party modules without stubs — silence missing-imports for these only.
+[[tool.mypy.overrides]]
+module = [
+    "appium.*",
+    "selenium.*",
+    "elevenlabs.*",
+    "google.*",
+    "googleapiclient.*",
+    "google_auth_oauthlib.*",
+    "google_auth_httplib2.*",
+    "colorama",
+    "textual.*",
+    "rich.*",
+    "tqdm",
+    "typer",
+    "pydantic_settings",
+]
+ignore_missing_imports = true
