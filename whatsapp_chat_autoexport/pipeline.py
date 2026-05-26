@@ -638,13 +638,16 @@ class WhatsAppPipeline:
         if self.config.output_format == "spec":
             return self._phase4_build_spec_outputs(transcript_files)
 
-        # Legacy format (default)
+        # Legacy format (default). Force format_version="legacy" so the
+        # OutputBuilder writes transcript.txt even when its instance default
+        # was constructed with "v2" (the per-call arg overrides the instance).
         results = self.output_builder.batch_build_outputs(
             transcript_files,
             self.config.output_dir,
             include_transcriptions=self.config.include_transcriptions,
             copy_media=self.config.include_media,
-            on_progress=self.on_progress
+            on_progress=self.on_progress,
+            format_version="legacy",
         )
 
         output_dirs = [r['output_dir'] for r in results]
