@@ -2,12 +2,10 @@
 Step 5: Select Google Drive from the share sheet.
 """
 
-from typing import Any, Dict, Optional
-
-from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
-from ....core.result import Result, Ok, Err
+from ....config.selectors import ElementSelectors, SelectorDefinition, SelectorStrategy, create_default_selectors
 from ....core.errors import ExportError, ExportWorkflowError
-from ....config.selectors import create_default_selectors, ElementSelectors, SelectorDefinition, SelectorStrategy
+from ....core.result import Err, Ok, Result
+from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
 
 
 class SelectDriveStep(BaseExportStep):
@@ -145,9 +143,7 @@ class SelectDriveStep(BaseExportStep):
             # My Drive might already be selected, check if we can proceed
             upload_selectors = create_default_selectors().get("upload_button")
             if upload_selectors:
-                is_present = context.element_finder.is_present(
-                    upload_selectors, timeout=2.0
-                )
+                is_present = context.element_finder.is_present(upload_selectors, timeout=2.0)
                 if is_present:
                     context.log_debug("Upload button visible - My Drive may be pre-selected")
                     return StepResult.success("My Drive appears to be selected")
@@ -225,9 +221,7 @@ class SelectDriveStep(BaseExportStep):
                 return False
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate that share dialog is open.
 

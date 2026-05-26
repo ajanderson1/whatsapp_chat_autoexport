@@ -15,18 +15,17 @@ Flow:
 """
 
 import asyncio
-from typing import List, Optional
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Static, Button
+from textual.widgets import Button, Static
 from textual.worker import Worker, WorkerState
 
 from ..textual_widgets.activity_log import ActivityLog
-from ..textual_widgets.chat_list import ChatListWidget, ChatDisplayStatus
-from ..textual_widgets.progress_pane import ProgressPane
 from ..textual_widgets.cancel_modal import CancelModal
+from ..textual_widgets.chat_list import ChatDisplayStatus, ChatListWidget
+from ..textual_widgets.progress_pane import ProgressPane
 
 
 class ExportPane(Container):
@@ -55,6 +54,7 @@ class ExportPane(Container):
 
     class CancelledReturnToSelection(Message):
         """Emitted when user cancels and chooses to return to selection."""
+
         pass
 
     # ------------------------------------------------------------------
@@ -81,10 +81,10 @@ class ExportPane(Container):
         self._consecutive_failures: int = 0
         self._cancel_after_current: bool = False
         self._paused: bool = False
-        self._current_chat: Optional[str] = None
-        self._export_worker: Optional[Worker] = None
+        self._current_chat: str | None = None
+        self._export_worker: Worker | None = None
         self._cancel_modal_open: bool = False
-        self._active_cancel_modal: Optional[CancelModal] = None
+        self._active_cancel_modal: CancelModal | None = None
         self._exit_after_cancel: bool = False
 
     # ------------------------------------------------------------------
@@ -116,7 +116,7 @@ class ExportPane(Container):
     # Public API
     # ------------------------------------------------------------------
 
-    def start_export(self, chats: List[str]) -> None:
+    def start_export(self, chats: list[str]) -> None:
         """
         Populate the chat list and start the export worker.
 
@@ -238,7 +238,7 @@ class ExportPane(Container):
             except Exception:
                 pass
 
-    def _show_cancel_modal(self, message: Optional[str] = None) -> None:
+    def _show_cancel_modal(self, message: str | None = None) -> None:
         """Show the cancel confirmation modal."""
         if self._cancel_modal_open:
             return
@@ -246,9 +246,11 @@ class ExportPane(Container):
         self._cancel_modal_open = True
 
         completed = len(self._export_results.get("completed", []))
-        total = len(self._export_results.get("completed", [])) + \
-                len(self._export_results.get("failed", [])) + \
-                len(self._export_results.get("skipped", []))
+        total = (
+            len(self._export_results.get("completed", []))
+            + len(self._export_results.get("failed", []))
+            + len(self._export_results.get("skipped", []))
+        )
         # Estimate total from chat list
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
@@ -322,7 +324,7 @@ class ExportPane(Container):
     # Export worker
     # ------------------------------------------------------------------
 
-    async def _run_export(self, chats: List[str]) -> dict:
+    async def _run_export(self, chats: list[str]) -> dict:
         """
         Run the export process for all selected chats.
 
@@ -345,9 +347,7 @@ class ExportPane(Container):
 
         def _export_log_callback(message: str, level: str) -> None:
             try:
-                self.app.call_from_thread(
-                    progress.log_activity, message, level
-                )
+                self.app.call_from_thread(progress.log_activity, message, level)
             except Exception:
                 pass
 
@@ -387,9 +387,7 @@ class ExportPane(Container):
             if self._cancel_after_current:
                 for remaining in chats[i:]:
                     results["skipped"].append(remaining)
-                    self.app.call_from_thread(
-                        self._skip_chat_export, remaining, "Cancelled by user"
-                    )
+                    self.app.call_from_thread(self._skip_chat_export, remaining, "Cancelled by user")
                 break
 
             # Update UI - start this chat
@@ -412,6 +410,7 @@ class ExportPane(Container):
                         ExportOutcome,
                         ExportOutcomeKind,
                     )
+
                     if outcome is True:
                         outcome = ExportOutcome(kind=ExportOutcomeKind.SUCCESS)
                     elif outcome is False:
@@ -423,9 +422,7 @@ class ExportPane(Container):
                     if outcome.kind == ExportOutcomeKind.SUCCESS:
                         results["completed"].append(chat_name)
                         self._consecutive_failures = 0
-                        self.app.call_from_thread(
-                            self._complete_chat_export, chat_name
-                        )
+                        self.app.call_from_thread(self._complete_chat_export, chat_name)
                     elif outcome.kind == ExportOutcomeKind.SKIPPED_COMMUNITY:
                         # Community chats must NOT count toward the consecutive
                         # failure limit - they are an expected skip, not a
@@ -446,13 +443,11 @@ class ExportPane(Container):
                         )
 
                         if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
-                            self.app.call_from_thread(
-                                self._show_consecutive_failure_warning
-                            )
+                            self.app.call_from_thread(self._show_consecutive_failure_warning)
                             while self._cancel_modal_open:
                                 await asyncio.sleep(0.3)
                             if self._cancel_after_current:
-                                for remaining in chats[i + 1:]:
+                                for remaining in chats[i + 1 :]:
                                     results["skipped"].append(remaining)
                                     self.app.call_from_thread(
                                         self._skip_chat_export,
@@ -466,32 +461,24 @@ class ExportPane(Container):
                         if self._paused:
                             while self._paused:
                                 await asyncio.sleep(0.5)
-                        self.app.call_from_thread(
-                            self._update_step, chat_name, step_idx
-                        )
+                        self.app.call_from_thread(self._update_step, chat_name, step_idx)
                         await asyncio.sleep(0.3)
 
                     results["completed"].append(chat_name)
                     self._consecutive_failures = 0
-                    self.app.call_from_thread(
-                        self._complete_chat_export, chat_name
-                    )
+                    self.app.call_from_thread(self._complete_chat_export, chat_name)
 
             except Exception as e:
                 results["failed"].append(chat_name)
                 self._consecutive_failures += 1
-                self.app.call_from_thread(
-                    self._fail_chat_export, chat_name, str(e)
-                )
+                self.app.call_from_thread(self._fail_chat_export, chat_name, str(e))
 
                 if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
-                    self.app.call_from_thread(
-                        self._show_consecutive_failure_warning
-                    )
+                    self.app.call_from_thread(self._show_consecutive_failure_warning)
                     while self._cancel_modal_open:
                         await asyncio.sleep(0.3)
                     if self._cancel_after_current:
-                        for remaining in chats[i + 1:]:
+                        for remaining in chats[i + 1 :]:
                             results["skipped"].append(remaining)
                             self.app.call_from_thread(
                                 self._skip_chat_export,
@@ -543,6 +530,7 @@ class ExportPane(Container):
 
         try:
             from ...utils.logger import Logger
+
             logger = Logger(debug=debug_mode, on_message=log_callback)
         except ImportError:
             logger = None
@@ -571,6 +559,7 @@ class ExportPane(Container):
             # Navigate to main screen and open the chat
             driver.navigate_to_main()
             from time import sleep
+
             sleep(0.3)
 
             if not driver.click_chat(chat_name):
@@ -622,9 +611,7 @@ class ExportPane(Container):
 
         try:
             status = self.query_one("#export-status", Static)
-            status.update(
-                f"[yellow]Exporting {completed + 1} of {total_chats}[/yellow]"
-            )
+            status.update(f"[yellow]Exporting {completed + 1} of {total_chats}[/yellow]")
         except Exception:
             pass
 
@@ -655,9 +642,7 @@ class ExportPane(Container):
 
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
-            chat_list.update_chat_status(
-                chat_name, ChatDisplayStatus.FAILED, reason=error
-            )
+            chat_list.update_chat_status(chat_name, ChatDisplayStatus.FAILED, reason=error)
         except Exception:
             pass
 
@@ -674,9 +659,7 @@ class ExportPane(Container):
 
         try:
             chat_list = self.query_one("#chat-status-list", ChatListWidget)
-            chat_list.update_chat_status(
-                chat_name, ChatDisplayStatus.SKIPPED, reason=reason
-            )
+            chat_list.update_chat_status(chat_name, ChatDisplayStatus.SKIPPED, reason=reason)
         except Exception:
             pass
 
@@ -699,9 +682,7 @@ class ExportPane(Container):
             return
 
         for chat in self._export_results.get("completed", []):
-            chat_list.update_chat_status(
-                chat, ChatDisplayStatus.COMPLETED, reason=None
-            )
+            chat_list.update_chat_status(chat, ChatDisplayStatus.COMPLETED, reason=None)
         for chat in self._export_results.get("failed", []):
             chat_list.update_chat_status(
                 chat,
@@ -729,8 +710,7 @@ class ExportPane(Container):
     def _show_consecutive_failure_warning(self) -> None:
         """Show cancel modal with a consecutive failure warning."""
         self._show_cancel_modal(
-            message=f"{self._consecutive_failures} consecutive exports failed. "
-            "The device may have disconnected."
+            message=f"{self._consecutive_failures} consecutive exports failed. The device may have disconnected."
         )
 
     # ------------------------------------------------------------------
@@ -751,17 +731,11 @@ class ExportPane(Container):
                 self.app.exit()
                 return
 
-            self.post_message(
-                self.ExportComplete(results=results, cancelled=cancelled)
-            )
+            self.post_message(self.ExportComplete(results=results, cancelled=cancelled))
 
         elif event.state == WorkerState.ERROR:
             self._log("Export worker failed with error")
-            self.post_message(
-                self.ExportComplete(
-                    results=self._export_results, cancelled=False
-                )
-            )
+            self.post_message(self.ExportComplete(results=self._export_results, cancelled=False))
 
         elif event.state == WorkerState.CANCELLED:
             # Cancellation is handled by _cancel_and_return

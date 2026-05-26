@@ -7,12 +7,10 @@ handling, watermark management, contact cache, and voice retry queue.
 
 import json
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
-from whatsapp_chat_autoexport.mcp.state import MCPState, VoiceRetryItem, STATE_VERSION
-
+from whatsapp_chat_autoexport.mcp.state import STATE_VERSION, MCPState, VoiceRetryItem
 
 # =========================================================================
 # Construction and defaults

@@ -4,12 +4,11 @@ Transcription Manager for WhatsApp Chat Auto-Export.
 Handles batch transcription of media files with resume functionality.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Callable
-import json
 
-from .base_transcriber import BaseTranscriber, TranscriptionResult
 from ..utils.logger import Logger
+from .base_transcriber import BaseTranscriber, TranscriptionResult
 
 
 class TranscriptionManager:
@@ -29,9 +28,9 @@ class TranscriptionManager:
     def __init__(
         self,
         transcriber: BaseTranscriber,
-        logger: Optional[Logger] = None,
-        output_dir: Optional[Path] = None,
-        contact_name_extractor: Optional[Callable[[Path], str]] = None
+        logger: Logger | None = None,
+        output_dir: Path | None = None,
+        contact_name_extractor: Callable[[Path], str] | None = None,
     ):
         """
         Initialize transcription manager.
@@ -60,7 +59,7 @@ class TranscriptionManager:
         """
         return media_file.parent / f"{media_file.stem}{self.TRANSCRIPTION_SUFFIX}"
 
-    def is_transcribed(self, media_file: Path, transcript_path: Optional[Path] = None) -> Tuple[bool, Optional[str]]:
+    def is_transcribed(self, media_file: Path, transcript_path: Path | None = None) -> tuple[bool, str | None]:
         """
         Check if a media file has already been transcribed.
 
@@ -86,8 +85,7 @@ class TranscriptionManager:
             try:
                 contact_name = self.contact_name_extractor(transcript_path)
                 output_transcription_path = (
-                    self.output_dir / contact_name / "transcriptions" /
-                    f"{media_file.stem}{self.TRANSCRIPTION_SUFFIX}"
+                    self.output_dir / contact_name / "transcriptions" / f"{media_file.stem}{self.TRANSCRIPTION_SUFFIX}"
                 )
                 if output_transcription_path.exists() and output_transcription_path.stat().st_size > 0:
                     return True, "output"
@@ -97,11 +95,8 @@ class TranscriptionManager:
         return False, None
 
     def save_transcription(
-        self,
-        media_file: Path,
-        result: TranscriptionResult,
-        include_metadata: bool = True
-    ) -> Optional[Path]:
+        self, media_file: Path, result: TranscriptionResult, include_metadata: bool = True
+    ) -> Path | None:
         """
         Save transcription result to file.
 
@@ -120,7 +115,7 @@ class TranscriptionManager:
         transcription_path = self.get_transcription_path(media_file)
 
         try:
-            with open(transcription_path, 'w', encoding='utf-8') as f:
+            with open(transcription_path, "w", encoding="utf-8") as f:
                 # Optional metadata header
                 if include_metadata:
                     f.write(f"# Transcription of: {media_file.name}\n")
@@ -149,12 +144,8 @@ class TranscriptionManager:
             return None
 
     def transcribe_file(
-        self,
-        media_file: Path,
-        skip_existing: bool = True,
-        transcript_path: Optional[Path] = None,
-        **transcribe_kwargs
-    ) -> Tuple[bool, Optional[Path], Optional[str]]:
+        self, media_file: Path, skip_existing: bool = True, transcript_path: Path | None = None, **transcribe_kwargs
+    ) -> tuple[bool, Path | None, str | None]:
         """
         Transcribe a single media file.
 
@@ -203,13 +194,13 @@ class TranscriptionManager:
 
     def batch_transcribe(
         self,
-        media_files: List[Path],
+        media_files: list[Path],
         skip_existing: bool = True,
         show_progress: bool = True,
-        transcript_path: Optional[Path] = None,
-        on_progress: Optional[Callable] = None,
-        **transcribe_kwargs
-    ) -> Dict[str, any]:
+        transcript_path: Path | None = None,
+        on_progress: Callable | None = None,
+        **transcribe_kwargs,
+    ) -> dict[str, any]:
         """
         Transcribe multiple media files in batch.
 
@@ -236,14 +227,7 @@ class TranscriptionManager:
         """
         if not media_files:
             self.logger.warning("No media files to transcribe")
-            return {
-                'total': 0,
-                'successful': 0,
-                'skipped': 0,
-                'failed': 0,
-                'transcriptions': [],
-                'errors': []
-            }
+            return {"total": 0, "successful": 0, "skipped": 0, "failed": 0, "transcriptions": [], "errors": []}
 
         self.logger.info(f"Transcribing {len(media_files)} file(s)...")
 
@@ -251,22 +235,22 @@ class TranscriptionManager:
         if not self.transcriber.is_available():
             self.logger.error("Transcription service not available")
             return {
-                'total': len(media_files),
-                'successful': 0,
-                'skipped': 0,
-                'failed': len(media_files),
-                'transcriptions': [],
-                'errors': [(f, "Transcription service not available") for f in media_files]
+                "total": len(media_files),
+                "successful": 0,
+                "skipped": 0,
+                "failed": len(media_files),
+                "transcriptions": [],
+                "errors": [(f, "Transcription service not available") for f in media_files],
             }
 
         results = {
-            'total': len(media_files),
-            'successful': 0,
-            'skipped': 0,
-            'failed': 0,
-            'transcriptions': [],
-            'skipped_files': [],  # Track skipped files for reporting
-            'errors': []
+            "total": len(media_files),
+            "successful": 0,
+            "skipped": 0,
+            "failed": 0,
+            "transcriptions": [],
+            "skipped_files": [],  # Track skipped files for reporting
+            "errors": [],
         }
 
         # Process files with logger-based progress
@@ -279,28 +263,27 @@ class TranscriptionManager:
                 self.logger.info(f"[{i}/{total_files}] Transcribing {media_file.name}")
 
             # Check if already transcribed (for skipped count)
-            already_transcribed, _ = self.is_transcribed(media_file, transcript_path) if skip_existing else (False, None)
+            already_transcribed, _ = (
+                self.is_transcribed(media_file, transcript_path) if skip_existing else (False, None)
+            )
 
             # Transcribe file
             success, transcription_path_result, error = self.transcribe_file(
-                media_file,
-                skip_existing=skip_existing,
-                transcript_path=transcript_path,
-                **transcribe_kwargs
+                media_file, skip_existing=skip_existing, transcript_path=transcript_path, **transcribe_kwargs
             )
 
             if success:
                 if already_transcribed:
-                    results['skipped'] += 1
-                    results['skipped_files'].append(media_file)
+                    results["skipped"] += 1
+                    results["skipped_files"].append(media_file)
                 else:
-                    results['successful'] += 1
+                    results["successful"] += 1
 
                 if transcription_path_result:
-                    results['transcriptions'].append(transcription_path_result)
+                    results["transcriptions"].append(transcription_path_result)
             else:
-                results['failed'] += 1
-                results['errors'].append((media_file, error or "Unknown error"))
+                results["failed"] += 1
+                results["errors"].append((media_file, error or "Unknown error"))
 
             if on_progress:
                 try:
@@ -315,36 +298,32 @@ class TranscriptionManager:
         self.logger.info(f"Total files: {results['total']}")
         self.logger.success(f"Successful: {results['successful']}")
 
-        if results['skipped'] > 0:
+        if results["skipped"] > 0:
             self.logger.info(f"Skipped (existing): {results['skipped']}")
 
             # Show first few skipped files with folder paths
-            for media_file in results['skipped_files'][:5]:
+            for media_file in results["skipped_files"][:5]:
                 folder_name = media_file.parent.name
                 self.logger.info(f"  - {folder_name}/{media_file.name}")
 
-            if len(results['skipped_files']) > 5:
+            if len(results["skipped_files"]) > 5:
                 self.logger.info(f"  ... and {len(results['skipped_files']) - 5} more")
 
-        if results['failed'] > 0:
+        if results["failed"] > 0:
             self.logger.error(f"Failed: {results['failed']}")
 
             # Show first few errors
-            for media_file, error in results['errors'][:5]:
+            for media_file, error in results["errors"][:5]:
                 self.logger.error(f"  - {media_file.name}: {error}")
 
-            if len(results['errors']) > 5:
+            if len(results["errors"]) > 5:
                 self.logger.error(f"  ... and {len(results['errors']) - 5} more")
 
         self.logger.info("=" * 70)
 
         return results
 
-    def get_transcribable_files(
-        self,
-        directory: Path,
-        recursive: bool = True
-    ) -> List[Path]:
+    def get_transcribable_files(self, directory: Path, recursive: bool = True) -> list[Path]:
         """
         Find all transcribable media files in a directory.
 
@@ -375,7 +354,7 @@ class TranscriptionManager:
         self.logger.info(f"Found {len(media_files)} transcribable file(s) in {directory}")
         return sorted(media_files)
 
-    def get_progress_summary(self, directory: Path) -> Dict:
+    def get_progress_summary(self, directory: Path) -> dict:
         """
         Get summary of transcription progress in a directory.
 
@@ -397,10 +376,10 @@ class TranscriptionManager:
                 pending += 1
 
         return {
-            'total': len(transcribable_files),
-            'transcribed': transcribed,
-            'pending': pending,
-            'progress_percent': (transcribed / len(transcribable_files) * 100) if transcribable_files else 0
+            "total": len(transcribable_files),
+            "transcribed": transcribed,
+            "pending": pending,
+            "progress_percent": (transcribed / len(transcribable_files) * 100) if transcribable_files else 0,
         }
 
     def cleanup_empty_transcriptions(self, directory: Path) -> int:

@@ -5,8 +5,6 @@ check via GET /v1/models. Key works → OK. Key rejected → HARD_FAIL. Network
 error → HARD_FAIL. No key → SKIPPED.
 """
 
-from typing import Optional
-
 import httpx
 
 from ..report import CheckResult, Status
@@ -17,9 +15,9 @@ _TIMEOUT = 10.0
 
 
 def check_whisper(
-    api_key: Optional[str],
+    api_key: str | None,
     *,
-    _client: Optional[httpx.Client] = None,
+    _client: httpx.Client | None = None,
 ) -> CheckResult:
     """Probe the OpenAI key by hitting /v1/models.
 

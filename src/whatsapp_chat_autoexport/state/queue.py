@@ -5,12 +5,12 @@ Provides a priority queue for managing chat export order
 with support for reordering and status filtering.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum, auto
-from typing import Optional, List, Iterator, Callable
 import heapq
 import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 
 
 class QueuePriority(Enum):
@@ -64,7 +64,7 @@ class ExportQueue:
 
     def __init__(self):
         """Initialize the export queue."""
-        self._heap: List[QueueItem] = []
+        self._heap: list[QueueItem] = []
         self._items: dict[str, QueueItem] = {}
         self._lock = threading.RLock()
         self._counter = 0
@@ -113,9 +113,9 @@ class ExportQueue:
 
     def add_many(
         self,
-        chat_names: List[str],
+        chat_names: list[str],
         priority: QueuePriority = QueuePriority.NORMAL,
-    ) -> List[QueueItem]:
+    ) -> list[QueueItem]:
         """
         Add multiple chats to the queue.
 
@@ -133,7 +133,7 @@ class ExportQueue:
                 items.append(item)
             return items
 
-    def pop(self) -> Optional[QueueItem]:
+    def pop(self) -> QueueItem | None:
         """
         Remove and return the highest priority item.
 
@@ -148,7 +148,7 @@ class ExportQueue:
                     return item
             return None
 
-    def peek(self) -> Optional[QueueItem]:
+    def peek(self) -> QueueItem | None:
         """
         Return the highest priority item without removing.
 
@@ -160,7 +160,7 @@ class ExportQueue:
                 return self._heap[0]
             return None
 
-    def get(self, chat_name: str) -> Optional[QueueItem]:
+    def get(self, chat_name: str) -> QueueItem | None:
         """
         Get an item by chat name.
 
@@ -172,7 +172,7 @@ class ExportQueue:
         """
         return self._items.get(chat_name)
 
-    def remove(self, chat_name: str) -> Optional[QueueItem]:
+    def remove(self, chat_name: str) -> QueueItem | None:
         """
         Remove an item by chat name.
 
@@ -194,7 +194,7 @@ class ExportQueue:
         self,
         chat_name: str,
         priority: QueuePriority,
-    ) -> Optional[QueueItem]:
+    ) -> QueueItem | None:
         """
         Change the priority of an item.
 
@@ -222,7 +222,7 @@ class ExportQueue:
             self._items.clear()
             self._counter = 0
 
-    def items(self) -> List[QueueItem]:
+    def items(self) -> list[QueueItem]:
         """
         Get all items in priority order.
 
@@ -235,7 +235,7 @@ class ExportQueue:
     def filter(
         self,
         predicate: Callable[[QueueItem], bool],
-    ) -> List[QueueItem]:
+    ) -> list[QueueItem]:
         """
         Filter items by a predicate.
 

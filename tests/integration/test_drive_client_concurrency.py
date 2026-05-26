@@ -12,17 +12,15 @@ Run locally with:
 
 See tests/integration/README_drive_integration.md for setup.
 """
+
 import hashlib
 import os
-import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 import pytest
 
 from whatsapp_chat_autoexport.google_drive.auth import GoogleDriveAuth
 from whatsapp_chat_autoexport.google_drive.drive_client import GoogleDriveClient
-
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_drive]
 
@@ -54,10 +52,7 @@ def test_concurrent_downloads_do_not_corrupt_each_other(connected_client, tmp_pa
     with content matching a pre-download sequential baseline."""
     folder_id = _fixture_folder_id()
     files = connected_client.list_files(folder_id=folder_id, page_size=100)
-    assert files, (
-        f"Fixture folder {folder_id} is empty. Upload a handful of small files "
-        f"before running this test."
-    )
+    assert files, f"Fixture folder {folder_id} is empty. Upload a handful of small files before running this test."
 
     # Baseline: sequential downloads to establish expected hashes.
     baseline_hashes: dict[str, str] = {}
@@ -99,12 +94,6 @@ def test_concurrent_downloads_do_not_corrupt_each_other(connected_client, tmp_pa
                 continue
             expected = baseline_hashes[file_id]
             if actual_hash != expected:
-                errors.append(
-                    f"{dest.name}: hash mismatch (expected {expected[:12]}, "
-                    f"got {actual_hash[:12]})"
-                )
+                errors.append(f"{dest.name}: hash mismatch (expected {expected[:12]}, got {actual_hash[:12]})")
 
-    assert not errors, (
-        "Concurrent downloads produced errors — thread-safety regression?\n"
-        + "\n".join(errors)
-    )
+    assert not errors, "Concurrent downloads produced errors — thread-safety regression?\n" + "\n".join(errors)

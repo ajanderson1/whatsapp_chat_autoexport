@@ -8,23 +8,23 @@ Covers:
 - Dispatch to correct mode function
 """
 
-import argparse
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from whatsapp_chat_autoexport.cli_entry import (
     create_parser,
     detect_mode,
-    validate_args,
     main,
     run_headless,
     run_pipeline_only,
+    validate_args,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def parse(args_list):
     """Parse a list of CLI args and return the namespace."""
@@ -35,6 +35,7 @@ def parse(args_list):
 # ---------------------------------------------------------------------------
 # Mode detection
 # ---------------------------------------------------------------------------
+
 
 class TestDetectMode:
     """Tests for detect_mode()."""
@@ -63,6 +64,7 @@ class TestDetectMode:
 # ---------------------------------------------------------------------------
 # Argument validation
 # ---------------------------------------------------------------------------
+
 
 class TestValidateArgs:
     """Tests for validate_args()."""
@@ -114,6 +116,7 @@ class TestValidateArgs:
 # ---------------------------------------------------------------------------
 # R7 flag parsing
 # ---------------------------------------------------------------------------
+
 
 class TestR7FlagParsing:
     """All R7 flags must be parsed and accessible on the namespace."""
@@ -202,22 +205,29 @@ class TestR7FlagParsing:
             parse(["--headless", "--output", "/tmp/out", "--format", "xml"])
 
     def test_all_flags_combined(self):
-        args = parse([
-            "--headless",
-            "--output", "/tmp/out",
-            "--limit", "5",
-            "--without-media",
-            "--no-output-media",
-            "--force-transcribe",
-            "--no-transcribe",
-            "--wireless-adb", "192.168.1.100:5555",
-            "--debug",
-            "--resume", "/drive/path",
-            "--delete-from-drive",
-            "--transcription-provider", "elevenlabs",
-            "--skip-drive-download",
-            "--auto-select",
-        ])
+        args = parse(
+            [
+                "--headless",
+                "--output",
+                "/tmp/out",
+                "--limit",
+                "5",
+                "--without-media",
+                "--no-output-media",
+                "--force-transcribe",
+                "--no-transcribe",
+                "--wireless-adb",
+                "192.168.1.100:5555",
+                "--debug",
+                "--resume",
+                "/drive/path",
+                "--delete-from-drive",
+                "--transcription-provider",
+                "elevenlabs",
+                "--skip-drive-download",
+                "--auto-select",
+            ]
+        )
         assert args.headless is True
         assert args.output == "/tmp/out"
         assert args.limit == 5
@@ -238,6 +248,7 @@ class TestR7FlagParsing:
 # Stub mode functions
 # ---------------------------------------------------------------------------
 
+
 class TestModeDelegation:
     """Headless and pipeline-only delegate to their implementations."""
 
@@ -257,6 +268,7 @@ class TestModeDelegation:
 # ---------------------------------------------------------------------------
 # main() dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestMainDispatch:
     """Tests that main() dispatches to the correct mode function."""
@@ -311,6 +323,7 @@ class TestMainDispatch:
 # TUI launch (with mocked Textual)
 # ---------------------------------------------------------------------------
 
+
 class TestRunTui:
     """Test that run_tui correctly creates and runs the Textual app."""
 
@@ -351,15 +364,20 @@ class TestRunTui:
 
         from whatsapp_chat_autoexport.cli_entry import run_tui
 
-        args = parse([
-            "--output", "/tmp/exports",
-            "--no-output-media",
-            "--no-transcribe",
-            "--delete-from-drive",
-            "--transcription-provider", "elevenlabs",
-            "--limit", "10",
-            "--debug",
-        ])
+        args = parse(
+            [
+                "--output",
+                "/tmp/exports",
+                "--no-output-media",
+                "--no-transcribe",
+                "--delete-from-drive",
+                "--transcription-provider",
+                "elevenlabs",
+                "--limit",
+                "10",
+                "--debug",
+            ]
+        )
         run_tui(args)
 
         call_kwargs = MockApp.call_args[1]
@@ -399,8 +417,5 @@ class TestSkipPreflightFlag:
         from whatsapp_chat_autoexport.cli_entry import create_parser
 
         parser = create_parser()
-        args = parser.parse_args(
-            ["--headless", "--output", "/tmp/out", "--auto-select", "--skip-preflight"]
-        )
+        args = parser.parse_args(["--headless", "--output", "/tmp/out", "--auto-select", "--skip-preflight"])
         assert args.skip_preflight is True
-

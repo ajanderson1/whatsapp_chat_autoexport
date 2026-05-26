@@ -12,20 +12,15 @@ Updated for the MainScreen tab-navigation model (Units 1-7 refactor):
 
 import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
-from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp, PipelineStage
-from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
+from whatsapp_chat_autoexport.tui.textual_app import PipelineStage, WhatsAppExporterApp
 from whatsapp_chat_autoexport.tui.textual_panes.connect_pane import ConnectPane
-from whatsapp_chat_autoexport.tui.textual_panes.discover_select_pane import DiscoverSelectPane
-from whatsapp_chat_autoexport.tui.textual_panes.export_pane import ExportPane
-from whatsapp_chat_autoexport.tui.textual_panes.summary_pane import SummaryPane
+from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
 from whatsapp_chat_autoexport.tui.textual_widgets.cancel_modal import CancelModal
 from whatsapp_chat_autoexport.tui.textual_widgets.progress_pane import ProgressPane
-
 
 # The `tui_app` fixture is defined in tests/conftest.py and available to all tests.
 
@@ -60,6 +55,7 @@ async def test_app_starts_on_connect_tab(tui_app):
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         from textual.widgets import TabbedContent
+
         tabbed = tui_app.screen.query_one(TabbedContent)
         assert tabbed.active == "connect"
 
@@ -68,7 +64,6 @@ async def test_app_starts_on_connect_tab(tui_app):
 @pytest.mark.asyncio
 async def test_app_has_header_and_footer(tui_app):
     """App should render Header and Footer widgets."""
-    from textual.widgets import Header, Footer
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -97,7 +92,6 @@ async def test_app_initial_pipeline_stage(tui_app):
 @pytest.mark.asyncio
 async def test_connect_pane_has_device_list(tui_app):
     """ConnectPane should contain a device ListView."""
-    from textual.widgets import ListView
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -123,7 +117,7 @@ async def test_connect_pane_has_action_buttons(tui_app):
 @pytest.mark.asyncio
 async def test_connect_pane_wireless_section(tui_app):
     """ConnectPane should have wireless ADB input fields."""
-    from textual.widgets import Input, Button
+    from textual.widgets import Button, Input
 
     async with tui_app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -139,10 +133,7 @@ async def test_connect_pane_wireless_section(tui_app):
 @pytest.mark.asyncio
 async def test_device_scan_shows_devices(tui_app):
     """When adb returns a device, it should appear in the list."""
-    mock_adb_output = (
-        "List of devices attached\n"
-        "ABCDEF123456\tdevice\tmodel:Pixel_6\n"
-    )
+    mock_adb_output = "List of devices attached\nABCDEF123456\tdevice\tmodel:Pixel_6\n"
 
     with patch("subprocess.run") as mock_run:
         mock_result = MagicMock()
@@ -157,6 +148,7 @@ async def test_device_scan_shows_devices(tui_app):
             await pilot.pause()
 
             from textual.widgets import ListView
+
             device_list = tui_app.screen.query_one("#device-list", ListView)
             # Should have at least one item
             assert len(device_list.children) >= 1
@@ -180,6 +172,7 @@ async def test_device_scan_no_devices(tui_app):
             await pilot.pause()
 
             from textual.widgets import Static
+
             status = tui_app.screen.query_one("#device-status", Static)
             # Access the content set via update() (name-mangled __content)
             content = str(getattr(status, "_Static__content", ""))
@@ -208,6 +201,7 @@ async def test_dry_run_transitions_to_discover_select_tab(tui_app):
 
         # Should now be on the discover-select tab
         from textual.widgets import TabbedContent
+
         tabbed = tui_app.screen.query_one(TabbedContent)
         assert tabbed.active == "discover-select"
 
@@ -284,6 +278,7 @@ async def test_tabs_disabled_on_startup(tui_app):
         await pilot.pause()
 
         from textual.widgets import TabbedContent
+
         tabbed = tui_app.screen.query_one(TabbedContent)
         # discover-select, export, summary should be disabled
         assert tabbed.get_tab("discover-select").disabled is True
@@ -305,6 +300,7 @@ async def test_dry_run_enables_discover_select_tab(tui_app):
         await pilot.pause()
 
         from textual.widgets import TabbedContent
+
         tabbed = tui_app.screen.query_one(TabbedContent)
         assert tabbed.get_tab("discover-select").disabled is False
 
@@ -527,12 +523,14 @@ async def test_progress_pane_complete_mode():
 
         pane = app.screen.query_one("#export-progress-pane", ProgressPane)
 
-        pane.set_complete({
-            "exported": 5,
-            "failed": 1,
-            "transcribed": 12,
-            "output_path": "/tmp/test_output",
-        })
+        pane.set_complete(
+            {
+                "exported": 5,
+                "failed": 1,
+                "transcribed": 12,
+                "output_path": "/tmp/test_output",
+            }
+        )
         await pilot.pause()
 
         assert pane.mode == "complete"

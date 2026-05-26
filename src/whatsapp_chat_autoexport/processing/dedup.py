@@ -16,10 +16,8 @@ Conflict resolution:
 """
 
 import hashlib
-from typing import List, Set
 
 from .transcript_parser import Message
-
 
 # Source priority: higher number = preferred when deduplicating
 _SOURCE_PRIORITY = {
@@ -45,7 +43,7 @@ def _compound_key(msg: Message) -> str:
     return f"ck:{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
 
 
-def _all_keys(msg: Message) -> List[str]:
+def _all_keys(msg: Message) -> list[str]:
     """
     Return all dedup keys for a message.
 
@@ -71,7 +69,7 @@ def _dedup_key(msg: Message) -> str:
     return _compound_key(msg)
 
 
-def deduplicate(messages: List[Message]) -> List[Message]:
+def deduplicate(messages: list[Message]) -> list[Message]:
     """
     Full dedup: takes messages from any combination of sources, returns a
     deduplicated, chronologically sorted list.
@@ -123,9 +121,7 @@ def deduplicate(messages: List[Message]) -> List[Message]:
                     # Merge: move the best from old group if better
                     if old_group in group_best:
                         old_best = group_best.pop(old_group)
-                        if _source_priority(old_best.source) > _source_priority(
-                            group_best.get(group_id, msg).source
-                        ):
+                        if _source_priority(old_best.source) > _source_priority(group_best.get(group_id, msg).source):
                             group_best[group_id] = old_best
                     # Re-point all keys from old group
                     for kk, gg in list(key_to_group.items()):
@@ -134,9 +130,7 @@ def deduplicate(messages: List[Message]) -> List[Message]:
 
             # Compare this message against the current best for the group
             current_best = group_best.get(group_id)
-            if current_best is None or _source_priority(msg.source) > _source_priority(
-                current_best.source
-            ):
+            if current_best is None or _source_priority(msg.source) > _source_priority(current_best.source):
                 group_best[group_id] = msg
 
     result = list(group_best.values())
@@ -145,9 +139,9 @@ def deduplicate(messages: List[Message]) -> List[Message]:
 
 
 def find_new_messages(
-    new_messages: List[Message],
-    existing_tail: List[Message],
-) -> List[Message]:
+    new_messages: list[Message],
+    existing_tail: list[Message],
+) -> list[Message]:
     """
     Incremental dedup: given new messages and the tail of an existing
     transcript, returns only genuinely new messages.
@@ -173,7 +167,7 @@ def find_new_messages(
         return result
 
     # Build set of all dedup keys from the existing tail
-    existing_keys: Set[str] = set()
+    existing_keys: set[str] = set()
     for msg in existing_tail:
         existing_keys.update(_all_keys(msg))
 

@@ -5,25 +5,22 @@ Manages WhatsApp connection and navigation via Appium and UiAutomator2.
 """
 
 import subprocess
-import os
 import time
-from time import sleep
 import xml.etree.ElementTree as ET
-from typing import Callable, Optional, Tuple, List
-from pathlib import Path
+from collections.abc import Callable
+from time import sleep
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from ..config.timeouts import get_timeout_config
 from ..utils.logger import Logger
-from .models import ChatMetadata
 from .foreground_wait import wait_for_whatsapp_foreground
-
+from .models import ChatMetadata
 
 # Precise Appium/WebDriver error signatures indicating a dead or crashed session.
 # Used by safe_driver_call() and ChatExporter's session recovery logic.
@@ -38,6 +35,7 @@ SESSION_ERROR_KEYWORDS = (
 
 
 # Helper functions for device connection
+
 
 def validate_pairing_code(code: str) -> bool:
     """
@@ -81,7 +79,7 @@ def prompt_for_connect_port(default: str = "5555") -> str:
     return response if response else default
 
 
-def check_existing_devices(logger: Logger) -> List[str]:
+def check_existing_devices(logger: Logger) -> list[str]:
     """
     Check for already connected ADB devices.
 
@@ -96,7 +94,7 @@ def check_existing_devices(logger: Logger) -> List[str]:
             ["adb", "devices"],
             capture_output=True,
             text=True,
-            close_fds=True  # Prevent fd inheritance issues in threaded contexts
+            close_fds=True,  # Prevent fd inheritance issues in threaded contexts
         )
 
         if result.returncode != 0:
@@ -105,8 +103,8 @@ def check_existing_devices(logger: Logger) -> List[str]:
 
         # Parse output - lines like "192.168.1.100:5555    device"
         devices = []
-        for line in result.stdout.strip().split('\n')[1:]:  # Skip header line
-            if 'device' in line and 'offline' not in line and 'unauthorized' not in line:
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header line
+            if "device" in line and "offline" not in line and "unauthorized" not in line:
                 device_id = line.split()[0]
                 devices.append(device_id)
 
@@ -118,7 +116,7 @@ def check_existing_devices(logger: Logger) -> List[str]:
         return []
 
 
-def prompt_device_selection(devices: List[str], logger: Logger) -> Optional[str]:
+def prompt_device_selection(devices: list[str], logger: Logger) -> str | None:
     """
     Prompt user to select a device from list.
 
@@ -173,9 +171,9 @@ def prompt_yes_no(question: str, default: bool = True) -> bool:
         if not response:
             return default
 
-        if response in ['y', 'yes']:
+        if response in ["y", "yes"]:
             return True
-        elif response in ['n', 'no']:
+        elif response in ["n", "no"]:
             return False
         else:
             print("❌ Please answer 'y' or 'n'")
@@ -191,7 +189,7 @@ def parse_ip_from_address(address: str) -> str:
     Returns:
         Just the IP part (e.g., "192.168.1.100")
     """
-    return address.split(':')[0] if ':' in address else address
+    return address.split(":")[0] if ":" in address else address
 
 
 def discover_wireless_connect_port(ip: str, logger: Logger) -> str:
@@ -278,7 +276,7 @@ def wireless_adb_pair(pairing_address: str, pairing_code: str, logger: Logger) -
             capture_output=True,
             text=True,
             timeout=30,
-            close_fds=True  # Prevent fd inheritance issues in threaded contexts
+            close_fds=True,  # Prevent fd inheritance issues in threaded contexts
         )
 
         logger.debug_msg(f"Pairing output: {result.stdout}")
@@ -302,7 +300,7 @@ def wireless_adb_pair(pairing_address: str, pairing_code: str, logger: Logger) -
         return False
 
 
-def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger) -> Tuple[bool, Optional[str]]:
+def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger) -> tuple[bool, str | None]:
     """
     Connect to wireless ADB device (after pairing).
 
@@ -326,7 +324,7 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
             capture_output=True,
             text=True,
             timeout=10,
-            close_fds=True  # Prevent fd inheritance issues in threaded contexts
+            close_fds=True,  # Prevent fd inheritance issues in threaded contexts
         )
 
         logger.debug_msg(f"Connect output: {result.stdout}")
@@ -356,7 +354,7 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
             ["adb", "devices"],
             capture_output=True,
             text=True,
-            close_fds=True  # Prevent fd inheritance issues in threaded contexts
+            close_fds=True,  # Prevent fd inheritance issues in threaded contexts
         )
 
         logger.debug_msg(f"Verification output: {result.stdout}")
@@ -377,24 +375,25 @@ def wireless_adb_connect(pairing_address: str, connect_port: str, logger: Logger
 
 # Main WhatsAppDriver class
 
+
 class WhatsAppDriver:
     """Manages WhatsApp connection and navigation."""
 
     def __init__(
         self,
         logger: Logger,
-        wireless_adb: Optional[List[str]] = None,
-        device_id: Optional[str] = None,
+        wireless_adb: list[str] | None = None,
+        device_id: str | None = None,
     ):
         self.logger = logger
-        self.driver: Optional[webdriver.Remote] = None
+        self.driver: webdriver.Remote | None = None
         self.default_wait_timeout = 10  # Default timeout for explicit waits
         self.wireless_adb = wireless_adb
         self.device_id = device_id  # Store selected device ID for device-specific commands
         self.is_wireless = wireless_adb is not None  # Track if using wireless ADB
         # Store original device settings for restoration on cleanup
-        self._original_stay_awake_setting: Optional[str] = None
-        self._original_screen_timeout: Optional[str] = None
+        self._original_stay_awake_setting: str | None = None
+        self._original_screen_timeout: str | None = None
 
     def keep_device_awake(self) -> None:
         """
@@ -471,7 +470,14 @@ class WhatsAppDriver:
 
             # Restore stay_on_while_plugged_in
             if self._original_stay_awake_setting is not None:
-                restore_cmd = adb_cmd + ["shell", "settings", "put", "global", "stay_on_while_plugged_in", self._original_stay_awake_setting]
+                restore_cmd = adb_cmd + [
+                    "shell",
+                    "settings",
+                    "put",
+                    "global",
+                    "stay_on_while_plugged_in",
+                    self._original_stay_awake_setting,
+                ]
                 result = subprocess.run(restore_cmd, capture_output=True, text=True, close_fds=True)
                 if result.returncode == 0:
                     self.logger.debug_msg(f"Restored stay_on_while_plugged_in to: {self._original_stay_awake_setting}")
@@ -479,7 +485,14 @@ class WhatsAppDriver:
 
             # Restore screen_off_timeout
             if self._original_screen_timeout is not None:
-                restore_cmd = adb_cmd + ["shell", "settings", "put", "system", "screen_off_timeout", self._original_screen_timeout]
+                restore_cmd = adb_cmd + [
+                    "shell",
+                    "settings",
+                    "put",
+                    "system",
+                    "screen_off_timeout",
+                    self._original_screen_timeout,
+                ]
                 result = subprocess.run(restore_cmd, capture_output=True, text=True, close_fds=True)
                 if result.returncode == 0:
                     try:
@@ -498,7 +511,7 @@ class WhatsAppDriver:
     def is_session_active(self) -> bool:
         """
         Check if the Appium session is still active.
-        
+
         Returns:
             True if session is active, False otherwise
         """
@@ -512,9 +525,7 @@ class WhatsAppDriver:
             self.logger.debug_msg(f"Session check failed: {e}")
             return False
 
-    def wait_for_whatsapp_foreground(
-        self, timeout: float = 8.0, poll_interval: float = 0.25
-    ) -> bool:
+    def wait_for_whatsapp_foreground(self, timeout: float = 8.0, poll_interval: float = 0.25) -> bool:
         """
         Wait up to `timeout` seconds for com.whatsapp to become the foreground package.
 
@@ -529,28 +540,26 @@ class WhatsAppDriver:
         Returns:
             True if `com.whatsapp` was observed before the deadline, False otherwise.
         """
-        return wait_for_whatsapp_foreground(
-            self, timeout=timeout, poll_interval=poll_interval
-        )
+        return wait_for_whatsapp_foreground(self, timeout=timeout, poll_interval=poll_interval)
 
     def reconnect(self) -> bool:
         """
         Attempt to reconnect to WhatsApp if session was lost.
-        
+
         Returns:
             True if reconnection successful, False otherwise
         """
         self.logger.warning("Session lost - attempting to reconnect...")
-        
+
         # First, check if ADB connection is still alive
         adb_connected, adb_error = self.check_adb_connection()
         if not adb_connected:
             self.logger.error(f"Cannot reconnect: {adb_error}")
             self.logger.error("Please check your device connection and try again")
             return False
-        
+
         self.logger.success("✓ ADB connection is still active")
-        
+
         # Close any existing session
         if self.driver:
             try:
@@ -558,10 +567,10 @@ class WhatsAppDriver:
             except:
                 pass
             self.driver = None
-        
+
         # Wait a moment before reconnecting
         sleep(2)
-        
+
         # Attempt to reconnect
         return self.connect()
 
@@ -569,7 +578,7 @@ class WhatsAppDriver:
         """
         Check if ADB connection to device is still alive.
         This is particularly important for wireless ADB which can drop unexpectedly.
-        
+
         Returns:
             Tuple of (connected: bool, error_msg: str)
             - connected: True if ADB connection is active
@@ -578,14 +587,14 @@ class WhatsAppDriver:
         if not self.device_id:
             # If no device_id set yet, can't check specific device
             return True, ""
-        
+
         try:
             result = subprocess.run(
                 ["adb", "-s", self.device_id, "get-state"],
                 capture_output=True,
                 text=True,
                 timeout=2,
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode == 0 and "device" in result.stdout:
@@ -595,7 +604,7 @@ class WhatsAppDriver:
                 if self.is_wireless:
                     error_msg += " - Wireless ADB disconnected"
                 return False, error_msg
-                
+
         except subprocess.TimeoutExpired:
             error_msg = "ADB command timed out"
             if self.is_wireless:
@@ -608,15 +617,15 @@ class WhatsAppDriver:
     def safe_driver_call(self, operation_name: str, func: callable, max_retries: int = 3):
         """
         Execute a driver operation with automatic retry and session recovery.
-        
+
         Args:
             operation_name: Name of the operation (for logging)
             func: Callable that performs the driver operation
             max_retries: Maximum number of retry attempts (default: 3)
-        
+
         Returns:
             Result of func() if successful
-        
+
         Raises:
             Exception: Re-raises the exception if all retries exhausted
         """
@@ -625,16 +634,15 @@ class WhatsAppDriver:
                 return func()
             except Exception as e:
                 error_msg = str(e).lower()
-                
+
                 # Check if it's a session termination error
                 is_session_error = any(keyword in error_msg for keyword in SESSION_ERROR_KEYWORDS)
-                
+
                 if is_session_error:
                     self.logger.warning(
-                        f"{operation_name} failed (attempt {attempt+1}/{max_retries}): "
-                        f"Session appears lost"
+                        f"{operation_name} failed (attempt {attempt + 1}/{max_retries}): Session appears lost"
                     )
-                    
+
                     if attempt < max_retries - 1:
                         # Attempt reconnection
                         self.logger.info("Attempting session recovery...")
@@ -651,12 +659,13 @@ class WhatsAppDriver:
                 else:
                     # Non-session error - re-raise immediately (don't waste retries)
                     raise
-        
+
         # Should not reach here, but just in case
         raise Exception(f"{operation_name} failed after {max_retries} attempts")
 
-    def _wait_for_element(self, locator_type: str, locator_value: str, timeout: Optional[int] = None,
-                         expected_condition: str = "presence") -> Optional[object]:
+    def _wait_for_element(
+        self, locator_type: str, locator_value: str, timeout: int | None = None, expected_condition: str = "presence"
+    ) -> object | None:
         """
         Wait for an element to be present or visible using explicit wait.
 
@@ -699,7 +708,7 @@ class WhatsAppDriver:
             self.logger.debug_msg(f"Timeout waiting for element: {locator_type}={locator_value}")
             return None
 
-    def _wait_for_activity(self, expected_activity: str, timeout: Optional[int] = None) -> bool:
+    def _wait_for_activity(self, expected_activity: str, timeout: int | None = None) -> bool:
         """
         Wait for a specific activity to become current.
 
@@ -741,9 +750,9 @@ class WhatsAppDriver:
             True if device is connected and ready, False otherwise
         """
         import sys
-        
+
         self.logger.info("Checking device connection...")
-        
+
         # Check if running in interactive mode (TTY available)
         is_interactive = sys.stdin.isatty()
 
@@ -760,7 +769,9 @@ class WhatsAppDriver:
                 # Check if user wants to use this device or connect wireless
                 if self.wireless_adb:
                     # Wireless flag provided but device already exists
-                    if is_interactive and prompt_yes_no(f"Device {device} already connected. Still connect wireless device?", default=False):
+                    if is_interactive and prompt_yes_no(
+                        f"Device {device} already connected. Still connect wireless device?", default=False
+                    ):
                         self.logger.info("Will proceed with wireless ADB setup...")
                         # Continue to wireless setup below
                     else:
@@ -832,7 +843,7 @@ class WhatsAppDriver:
                     self.logger.error("2. Tap 'Pair device with pairing code'")
                     self.logger.error("3. Use the IP:PORT and 6-digit code shown")
                     return False
-                
+
                 # Interactive mode - prompt for pairing details
                 self.logger.info("Wireless ADB mode - please provide pairing details...")
                 pairing_address = input("Enter pairing address (IP:PORT): ").strip()
@@ -842,14 +853,16 @@ class WhatsAppDriver:
                 # Only pairing address provided
                 pairing_address = self.wireless_adb[0]
                 self.logger.info(f"Using pairing address: {pairing_address}")
-                
+
                 if not is_interactive:
                     # Non-interactive mode - need pairing code too
-                    self.logger.error("Wireless ADB mode requires both IP:PORT and pairing code in non-interactive mode")
+                    self.logger.error(
+                        "Wireless ADB mode requires both IP:PORT and pairing code in non-interactive mode"
+                    )
                     self.logger.error("Usage: --wireless-adb PAIRING_IP:PORT PAIRING_CODE")
                     self.logger.error("Example: --wireless-adb 192.168.1.100:37453 123456")
                     return False
-                
+
                 # Interactive mode - prompt for code
                 pairing_code = prompt_for_pairing_code()
 
@@ -886,7 +899,7 @@ class WhatsAppDriver:
                         self.logger.error("  3. Pairing IP:PORT and code are correct")
                         self.logger.error("  4. Pairing code hasn't expired (tap 'Pair device' again to get new code)")
                         return False
-                    
+
                     # Interactive mode - ask if user wants to retry
                     if prompt_yes_no("Pairing failed. Retry?", default=True):
                         # Re-prompt for pairing details
@@ -924,7 +937,7 @@ class WhatsAppDriver:
                         self.logger.error(f"Tried connecting to port {connect_port}")
                         self.logger.error("Please verify device is still on wireless debugging screen")
                         return False
-                    
+
                     # Interactive mode - ask if user wants to retry
                     if prompt_yes_no("Connection failed. Retry?", default=True):
                         # Re-prompt for all details (pairing might need to be redone)
@@ -955,7 +968,7 @@ class WhatsAppDriver:
         self.keep_device_awake()
 
         self.logger.info("Setting up WebDriver options...")
-        
+
         # Adjust timeouts based on connection type
         if self.is_wireless:
             # Wireless ADB needs longer timeouts due to network latency
@@ -965,7 +978,7 @@ class WhatsAppDriver:
             # USB connection is more stable, shorter timeouts are fine
             adb_exec_timeout = 60000  # 1 minute
             self.logger.info("🔌 Using USB connection")
-        
+
         options = UiAutomator2Options()
         capabilities = {
             "platformName": "Android",
@@ -1122,7 +1135,7 @@ class WhatsAppDriver:
                     "LockScreen",
                     "lockscreen",
                     "KeyguardView",
-                    "StatusBar"  # Sometimes appears when locked
+                    "StatusBar",  # Sometimes appears when locked
                 ]
 
                 for indicator in lock_indicators:
@@ -1225,9 +1238,7 @@ class WhatsAppDriver:
             # Check 1: Current package MUST be WhatsApp
             # Use retry wrapper to handle transient session issues
             current_package = self.safe_driver_call(
-                "Get current package",
-                lambda: self.driver.current_package,
-                max_retries=3
+                "Get current package", lambda: self.driver.current_package, max_retries=3
             )
             self.logger.info(f"Current package: {current_package}")
 
@@ -1258,7 +1269,7 @@ class WhatsAppDriver:
             for unsafe in unsafe_activities:
                 if unsafe in current_activity:
                     self.logger.error("=" * 70)
-                    self.logger.error(f"❌ CRITICAL FAILURE: Unsafe activity detected!")
+                    self.logger.error("❌ CRITICAL FAILURE: Unsafe activity detected!")
                     self.logger.error("=" * 70)
                     self.logger.error(f"Current activity: {current_activity}")
                     self.logger.error(f"Unsafe indicator: {unsafe}")
@@ -1389,9 +1400,7 @@ class WhatsAppDriver:
                     return True
                 sleep(poll_interval)
 
-            self.logger.error(
-                f"WhatsApp restart failed - app not accessible after {ceiling:.1f}s"
-            )
+            self.logger.error(f"WhatsApp restart failed - app not accessible after {ceiling:.1f}s")
             return False
 
         except subprocess.TimeoutExpired:
@@ -1401,7 +1410,7 @@ class WhatsAppDriver:
             self.logger.error(f"Failed to restart WhatsApp: {e}")
             return False
 
-    def get_whatsapp_version(self) -> Optional[str]:
+    def get_whatsapp_version(self) -> str | None:
         """Read the installed WhatsApp version from the device via ADB.
 
         Returns:
@@ -1412,11 +1421,10 @@ class WhatsAppDriver:
             if self.device_id:
                 adb_prefix.extend(["-s", self.device_id])
             cmd = adb_prefix + ["shell", "dumpsys", "package", "com.whatsapp"]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=10, close_fds=True
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, close_fds=True)
             if result.returncode == 0 and result.stdout:
                 import re
+
                 match = re.search(r"versionName=([\d.]+)", result.stdout)
                 if match:
                     version = match.group(1)
@@ -1462,7 +1470,7 @@ class WhatsAppDriver:
         except Exception as e:
             self.logger.error(f"Error saving page source: {e}")
 
-    def list_visible_chats(self) -> List[str]:
+    def list_visible_chats(self) -> list[str]:
         """List all currently visible chats on screen."""
         try:
             chats = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
@@ -1498,13 +1506,15 @@ class WhatsAppDriver:
         # The --where clause contains single quotes that must survive the
         # adb shell layer. Passing the entire content-query as a single
         # shell string argument preserves the quoting correctly.
-        adb_cmd.extend([
-            "shell",
-            "content query "
-            "--uri content://com.android.contacts/data "
-            "--projection display_name "
-            "--where \"mimetype='vnd.android.cursor.item/vnd.com.whatsapp.profile'\"",
-        ])
+        adb_cmd.extend(
+            [
+                "shell",
+                "content query "
+                "--uri content://com.android.contacts/data "
+                "--projection display_name "
+                "--where \"mimetype='vnd.android.cursor.item/vnd.com.whatsapp.profile'\"",
+            ]
+        )
 
         try:
             result = subprocess.run(
@@ -1514,12 +1524,8 @@ class WhatsAppDriver:
                 timeout=15,
                 close_fds=True,
             )
-            if result.returncode != 0 or (
-                not result.stdout.strip() and result.stderr.strip()
-            ):
-                self.logger.debug_msg(
-                    f"ContactsContract query failed: {result.stderr.strip()}"
-                )
+            if result.returncode != 0 or (not result.stdout.strip() and result.stderr.strip()):
+                self.logger.debug_msg(f"ContactsContract query failed: {result.stderr.strip()}")
                 return set()
 
             contacts: set[str] = set()
@@ -1530,9 +1536,7 @@ class WhatsAppDriver:
                     if name:
                         contacts.add(name)
 
-            self.logger.debug_msg(
-                f"ContactsContract: {len(contacts)} WhatsApp contacts"
-            )
+            self.logger.debug_msg(f"ContactsContract: {len(contacts)} WhatsApp contacts")
             return contacts
         except subprocess.TimeoutExpired:
             self.logger.debug_msg("ContactsContract query timed out")
@@ -1541,7 +1545,7 @@ class WhatsAppDriver:
             self.logger.debug_msg(f"ContactsContract query error: {e}")
             return set()
 
-    def _search_for_chat(self, contact_name: str) -> Optional[str]:
+    def _search_for_chat(self, contact_name: str) -> str | None:
         """Search WhatsApp for a contact by name and check if a conversation exists.
 
         Taps the search bar, types the contact name, checks if a conversation
@@ -1551,16 +1555,12 @@ class WhatsAppDriver:
         """
         try:
             # Tap the search bar (embedded in the chat list header)
-            search_bar = self.driver.find_element(
-                "id", "com.whatsapp:id/my_search_bar"
-            )
+            search_bar = self.driver.find_element("id", "com.whatsapp:id/my_search_bar")
             search_bar.click()
             sleep(0.5)
 
             # Type the contact name into the search input
-            search_input = self.driver.find_element(
-                "id", "com.whatsapp:id/search_input"
-            )
+            search_input = self.driver.find_element("id", "com.whatsapp:id/search_input")
             search_input.clear()
             search_input.send_keys(contact_name)
             sleep(0.8)  # Wait for results to populate
@@ -1590,9 +1590,7 @@ class WhatsAppDriver:
                 try:
                     self.driver.back()
                     sleep(0.3)
-                    self.driver.find_element(
-                        "id", "com.whatsapp:id/my_search_bar"
-                    )
+                    self.driver.find_element("id", "com.whatsapp:id/my_search_bar")
                     break  # Back on main chat list
                 except Exception:
                     continue
@@ -1601,7 +1599,7 @@ class WhatsAppDriver:
         self,
         seen_names: set[str],
         results: list,
-        on_chat_found: Optional[Callable] = None,
+        on_chat_found: Callable | None = None,
     ) -> int:
         """Fill gaps in scroll-based discovery using ContactsContract.
 
@@ -1623,10 +1621,7 @@ class WhatsAppDriver:
         missing = [c for c in sorted(contacts) if c.lower() not in seen_lower]
 
         if not missing:
-            self.logger.info(
-                f"ContactsContract reconciliation: all {len(contacts)} contacts "
-                f"already found — no gaps"
-            )
+            self.logger.info(f"ContactsContract reconciliation: all {len(contacts)} contacts already found — no gaps")
             return 0
 
         self.logger.info(
@@ -1644,8 +1639,7 @@ class WhatsAppDriver:
             searched += 1
             if searched % 25 == 0:
                 self.logger.debug_msg(
-                    f"Reconciliation progress: {searched}/{len(missing)} "
-                    f"searched, {found_count} found"
+                    f"Reconciliation progress: {searched}/{len(missing)} searched, {found_count} found"
                 )
 
             matched_name = self._search_for_chat(contact_name)
@@ -1670,12 +1664,12 @@ class WhatsAppDriver:
 
     def collect_all_chats(
         self,
-        limit: Optional[int] = None,
+        limit: int | None = None,
         sort_alphabetical: bool = False,
-        on_chat_found: Optional[Callable[[ChatMetadata], None]] = None,
+        on_chat_found: Callable[[ChatMetadata], None] | None = None,
         passes: int = 2,
         reconcile_contacts: bool = True,
-    ) -> List[ChatMetadata]:
+    ) -> list[ChatMetadata]:
         """Scroll through the chat list to collect all chats via XML page source.
 
         Performs ``passes`` top-to-bottom scroll passes, unioning the results.
@@ -1701,7 +1695,7 @@ class WhatsAppDriver:
         else:
             self.logger.info(f"Collecting all chats by scrolling (passes={passes})...")
 
-        results: List[ChatMetadata] = []
+        results: list[ChatMetadata] = []
         seen_names: set[str] = set()
         max_scrolls = 100  # Safety limit (raised from 50 to handle 400+ chat lists)
         no_new_chats_threshold = 6  # Raised from 3 to reduce premature termination on
@@ -1713,17 +1707,13 @@ class WhatsAppDriver:
         # genuinely new chats (those missed by earlier passes due to WhatsApp
         # reordering the list mid-scroll).
         for pass_idx in range(passes):
-            self.logger.info(
-                f"Discovery: starting pass {pass_idx + 1}/{passes} "
-                f"({len(seen_names)} chats so far)"
-            )
+            self.logger.info(f"Discovery: starting pass {pass_idx + 1}/{passes} ({len(seen_names)} chats so far)")
 
             # Restart app to ensure we're at the top of the chat list
             # (faster and more reliable than scrolling 20-30 times)
             if not self.restart_app_to_top():
                 self.logger.error(
-                    f"Failed to restart WhatsApp at start of pass {pass_idx + 1} "
-                    f"- aborting remaining passes"
+                    f"Failed to restart WhatsApp at start of pass {pass_idx + 1} - aborting remaining passes"
                 )
                 break
 
@@ -1737,9 +1727,7 @@ class WhatsAppDriver:
             chat_list_wait_ceiling = 10.0
             while time.time() - chat_list_wait_start < chat_list_wait_ceiling:
                 try:
-                    visible = self.driver.find_elements(
-                        "id", "com.whatsapp:id/conversations_row_contact_name"
-                    )
+                    visible = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
                     if len(visible) > 0:
                         chat_list_ready = True
                         self.logger.debug_msg(
@@ -1915,9 +1903,7 @@ class WhatsAppDriver:
                     settle_start = time.time()
                     while time.time() - settle_start < settle_ceiling:
                         try:
-                            elements = self.driver.find_elements(
-                                "id", "com.whatsapp:id/conversations_row_contact_name"
-                            )
+                            elements = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
                             current_el_count = len(elements)
                         except Exception:
                             break
@@ -1952,8 +1938,7 @@ class WhatsAppDriver:
             # passes are very unlikely to help. Save time.
             if pass_idx > 0 and pass_new_count == 0:
                 self.logger.info(
-                    f"Discovery: pass {pass_idx + 1} added no new chats — "
-                    f"stopping early (convergence reached)"
+                    f"Discovery: pass {pass_idx + 1} added no new chats — stopping early (convergence reached)"
                 )
                 break
 
@@ -1997,12 +1982,12 @@ class WhatsAppDriver:
                 parent_row = target_chat.find_element("xpath", "..")
                 parent_row.click()
                 self.logger.debug_msg("Clicked parent row")
-            except Exception as parent_err:
+            except Exception:
                 # Fallback: coordinate click
                 location = target_chat.location
                 size = target_chat.size
-                center_x = location['x'] + size['width'] // 2
-                center_y = location['y'] + size['height'] // 2
+                center_x = location["x"] + size["width"] // 2
+                center_y = location["y"] + size["height"] // 2
                 self.logger.debug_msg(f"Using coordinate click at ({center_x}, {center_y})")
                 self.driver.tap([(center_x, center_y)], duration=100)
 
@@ -2035,7 +2020,7 @@ class WhatsAppDriver:
             self.logger.debug_msg(f"Error finding chat in view: {e}")
         return None
 
-    def _get_top_chat_name(self) -> Optional[str]:
+    def _get_top_chat_name(self) -> str | None:
         """Get the name of the chat at the top of the visible list. Returns None if none found."""
         try:
             chats = self.driver.find_elements("id", "com.whatsapp:id/conversations_row_contact_name")
@@ -2046,7 +2031,7 @@ class WhatsAppDriver:
                         chat_name = chat.text.strip()
                         if chat_name:
                             location = chat.location
-                            chats_with_position.append((location['y'], chat_name))
+                            chats_with_position.append((location["y"], chat_name))
                 except:
                     continue
 
@@ -2058,7 +2043,7 @@ class WhatsAppDriver:
             self.logger.debug_msg(f"Error getting top chat: {e}")
         return None
 
-    def _is_at_top(self, previous_top_chat: Optional[str]) -> bool:
+    def _is_at_top(self, previous_top_chat: str | None) -> bool:
         """Check if we're at the top of the list by comparing top chat before/after scroll."""
         current_top_chat = self._get_top_chat_name()
         if previous_top_chat and current_top_chat:
@@ -2077,7 +2062,7 @@ class WhatsAppDriver:
 
         # Optimization: Try scrolling down once first (next chat is likely just below)
         try:
-            self.logger.debug_msg(f"Trying quick scroll down to find chat...")
+            self.logger.debug_msg("Trying quick scroll down to find chat...")
             self.driver.swipe(500, 1500, 500, 500, duration=300)
             sleep(0.2)  # Brief pause to let UI update after scroll
 
@@ -2092,7 +2077,7 @@ class WhatsAppDriver:
         # If quick scroll down didn't work, use full scroll strategy: try up first, then down
         scroll_directions = [
             ("up", lambda: self.driver.swipe(500, 800, 500, 1800, duration=300)),
-            ("down", lambda: self.driver.swipe(500, 1500, 500, 500, duration=300))
+            ("down", lambda: self.driver.swipe(500, 1500, 500, 500, duration=300)),
         ]
 
         adaptive_max_scrolls = max_scrolls
@@ -2119,7 +2104,9 @@ class WhatsAppDriver:
                     if previous_top_chat and current_top_chat == previous_top_chat:
                         consecutive_no_change += 1
                         if consecutive_no_change >= max_no_change:
-                            self.logger.debug_msg(f"Reached {'top' if direction_name == 'up' else 'bottom'} of list, stopping {direction_name} scroll")
+                            self.logger.debug_msg(
+                                f"Reached {'top' if direction_name == 'up' else 'bottom'} of list, stopping {direction_name} scroll"
+                            )
                             break
                     else:
                         consecutive_no_change = 0
@@ -2168,8 +2155,10 @@ class WhatsAppDriver:
             except Exception as e:
                 # Suppress "session already closed" errors - these are harmless
                 error_msg = str(e)
-                if "session is either terminated or not started" in error_msg.lower() or \
-                   "invalidsessionid" in error_msg.lower():
+                if (
+                    "session is either terminated or not started" in error_msg.lower()
+                    or "invalidsessionid" in error_msg.lower()
+                ):
                     self.logger.debug_msg("Driver session already closed")
                 else:
                     # Log other errors that might be more serious

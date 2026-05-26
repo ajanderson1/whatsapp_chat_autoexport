@@ -5,7 +5,6 @@ no async complexity.
 """
 
 from datetime import datetime
-from typing import Optional
 
 from ..config.api_key_manager import get_api_key_manager
 from .probes import check_drive, check_elevenlabs, check_whisper
@@ -13,10 +12,10 @@ from .report import PreflightReport
 
 # Thresholds — re-exported here so callers and tests can reach them via
 # a single import path.
-ELEVENLABS_WARN_THRESHOLD = 50_000        # chars
-ELEVENLABS_HARD_THRESHOLD = 0             # chars
-DRIVE_WARN_BYTES = 5 * 1024**3            # 5 GB
-DRIVE_HARD_FAIL_BYTES = 500 * 1024**2     # 500 MB
+ELEVENLABS_WARN_THRESHOLD = 50_000  # chars
+ELEVENLABS_HARD_THRESHOLD = 0  # chars
+DRIVE_WARN_BYTES = 5 * 1024**3  # 5 GB
+DRIVE_HARD_FAIL_BYTES = 500 * 1024**2  # 500 MB
 
 
 def _build_drive_auth():
@@ -92,10 +91,7 @@ def format_report_for_stderr(report: PreflightReport) -> str:
             n_warn += 1
         elif r.status == _Status.HARD_FAIL:
             n_fail += 1
-        lines.append(
-            f"[preflight] {r.display_name.ljust(_NAME_WIDTH)} "
-            f"{token.ljust(_TOKEN_WIDTH)} {r.summary}"
-        )
+        lines.append(f"[preflight] {r.display_name.ljust(_NAME_WIDTH)} {token.ljust(_TOKEN_WIDTH)} {r.summary}")
 
     if n_fail > 0:
         lines.append(
@@ -106,9 +102,6 @@ def format_report_for_stderr(report: PreflightReport) -> str:
     else:
         warn_word = "warning" if n_warn == 1 else "warnings"
         fail_word = "hard failure" if n_fail == 1 else "hard failures"
-        lines.append(
-            f"[preflight] {n_warn} {warn_word}, {n_fail} {fail_word} — "
-            f"proceeding ({report.duration_ms} ms)"
-        )
+        lines.append(f"[preflight] {n_warn} {warn_word}, {n_fail} {fail_word} — proceeding ({report.duration_ms} ms)")
 
     return "\n".join(lines)

@@ -8,14 +8,15 @@ Covers:
 - Recovery wiring in export_chats() and export_chats_with_new_workflow()
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
-from whatsapp_chat_autoexport.export.whatsapp_driver import SESSION_ERROR_KEYWORDS
 from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
-
+from whatsapp_chat_autoexport.export.whatsapp_driver import SESSION_ERROR_KEYWORDS
 
 # --- Fixtures ---
+
 
 @pytest.fixture
 def mock_driver():
@@ -47,6 +48,7 @@ def exporter(mock_driver, mock_logger):
 
 # --- SESSION_ERROR_KEYWORDS constant ---
 
+
 class TestSessionErrorKeywords:
     def test_contains_all_expected_keywords(self):
         expected = [
@@ -70,6 +72,7 @@ class TestSessionErrorKeywords:
 
 # --- _is_session_error() ---
 
+
 class TestIsSessionError:
     def test_detects_each_keyword(self, exporter):
         for kw in SESSION_ERROR_KEYWORDS:
@@ -90,6 +93,7 @@ class TestIsSessionError:
 
 
 # --- _attempt_session_recovery() ---
+
 
 class TestAttemptSessionRecovery:
     def test_success_reconnect_and_verify(self, exporter, mock_driver):
@@ -139,6 +143,7 @@ class TestAttemptSessionRecovery:
 
 # --- _check_consecutive_recovery_limit() ---
 
+
 class TestCheckConsecutiveRecoveryLimit:
     def test_not_reached(self, exporter):
         exporter._consecutive_recovery_count = 0
@@ -161,6 +166,7 @@ class TestCheckConsecutiveRecoveryLimit:
 
 # --- Recovery in export_chats() ---
 
+
 class TestExportChatsRecovery:
     def test_pre_verify_fails_recovery_succeeds_continues(self, exporter, mock_driver):
         """When verify fails but recovery succeeds, batch continues to next chat."""
@@ -170,9 +176,7 @@ class TestExportChatsRecovery:
 
         exporter.export_chat_to_google_drive = MagicMock(return_value=True)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A", "Chat B"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Chat A", "Chat B"], include_media=True)
 
         # Chat A should be marked failed (skipped due to recovery), Chat B should succeed
         assert results["Chat A"] is False
@@ -190,12 +194,11 @@ class TestExportChatsRecovery:
         # Provide enough chats to exceed the cascade limit
         chat_names = [f"Chat {n}" for n in range(1, 6)]
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names, include_media=True)
 
         # The cascade limit halts after MAX_CONSECUTIVE_VERIFY_FAILURES chats.
         from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+
         for n in range(1, ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1):
             assert results.get(f"Chat {n}") is False
         # Chats beyond the cascade limit must not be processed.
@@ -208,6 +211,7 @@ class TestExportChatsRecovery:
         mock_driver.reconnect.return_value = True
 
         call_count = [0]
+
         def export_side_effect(name, include_media=True):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -216,9 +220,7 @@ class TestExportChatsRecovery:
 
         exporter.export_chat_to_google_drive = MagicMock(side_effect=export_side_effect)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A", "Chat B"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Chat A", "Chat B"], include_media=True)
 
         assert results["Chat A"] is False
         assert results["Chat B"] is True
@@ -227,13 +229,9 @@ class TestExportChatsRecovery:
         """Community chat errors should NOT trigger session recovery."""
         mock_driver.verify_whatsapp_is_open.return_value = True
 
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=Exception("community chat not supported")
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=Exception("community chat not supported"))
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Chat A"], include_media=True)
 
         # Should not attempt reconnect for community error
         mock_driver.reconnect.assert_not_called()
@@ -246,9 +244,7 @@ class TestExportChatsRecovery:
 
         exporter.export_chat_to_google_drive = MagicMock(return_value=True)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A", "Chat B"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Chat A", "Chat B"], include_media=True)
 
         assert results["Chat A"] is True
         assert results["Chat B"] is True
@@ -261,9 +257,7 @@ class TestExportChatsRecovery:
 
         exporter.export_chat_to_google_drive = MagicMock(return_value=True)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A", "Chat B"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Chat A", "Chat B"], include_media=True)
 
         # Chat A exported but batch stopped after health check failed
         assert results["Chat A"] is True
@@ -300,6 +294,7 @@ class TestExportChatsRecovery:
 
 # --- Recovery in export_chats_with_new_workflow() ---
 
+
 class TestExportChatsNewWorkflowRecovery:
     @pytest.fixture(autouse=True)
     def _patch_state_manager(self, exporter):
@@ -332,11 +327,10 @@ class TestExportChatsNewWorkflowRecovery:
 
         chat_names = [f"Chat {n}" for n in range(1, 6)]
 
-        results, timings, total_time, skipped = exporter.export_chats_with_new_workflow(
-            chat_names, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats_with_new_workflow(chat_names, include_media=True)
 
         from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+
         for n in range(1, ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1):
             assert results.get(f"Chat {n}") is False
         for n in range(ChatExporter.MAX_CONSECUTIVE_VERIFY_FAILURES + 1, 6):
@@ -350,6 +344,7 @@ class TestExportChatsNewWorkflowRecovery:
         mock_driver.reconnect.return_value = True
 
         call_count = [0]
+
         def workflow_side_effect(chat_name, chat_index, include_media, use_state_tracking):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -383,7 +378,7 @@ class TestExportChatsNewWorkflowRecovery:
 
     def test_batch_loop_calls_settle_before_verify(self, exporter, mock_driver):
         """wait_for_whatsapp_foreground() is called before verify_whatsapp_is_open() for each chat."""
-        from unittest.mock import Mock, call
+        from unittest.mock import Mock
 
         mock_driver.wait_for_whatsapp_foreground.return_value = True
         mock_driver.verify_whatsapp_is_open.return_value = True
@@ -448,16 +443,11 @@ def test_regression_drive_return_race_does_not_fail_chat(mock_driver, mock_logge
     mock_driver.is_session_active = MagicMock(return_value=True)
 
     exporter = ChatExporter(mock_driver, mock_logger)
-    monkeypatch.setattr(
-        exporter, "export_with_new_workflow", lambda **kw: (True, "ok")
-    )
+    monkeypatch.setattr(exporter, "export_with_new_workflow", lambda **kw: (True, "ok"))
 
-    results, _, _, _ = exporter.export_chats_with_new_workflow(
-        ["RaceChat"], include_media=False
-    )
+    results, _, _, _ = exporter.export_chats_with_new_workflow(["RaceChat"], include_media=False)
 
     assert results["RaceChat"] is True
     mock_driver.wait_for_whatsapp_foreground.assert_called_once()
     # reconnect() was NOT invoked because settle+verify both passed
     mock_driver.reconnect.assert_not_called()
-

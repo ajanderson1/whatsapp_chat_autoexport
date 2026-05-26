@@ -6,14 +6,11 @@ directory structure and exercises the migration flow programmatically
 via ``run_migrate``. No subprocesses are spawned.
 """
 
-import json
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from whatsapp_chat_autoexport.cli.commands.migrate import run_migrate
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -88,6 +85,7 @@ def legacy_vault_flat(tmp_path):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestMigrateBasic:
     """Test basic migration from legacy to v2 format."""
@@ -164,9 +162,7 @@ class TestMigrateMessageCount:
 
         assert summary["success"] is True
 
-        alice_result = next(
-            r for r in summary["chat_results"] if r["name"] == "Alice Smith"
-        )
+        alice_result = next(r for r in summary["chat_results"] if r["name"] == "Alice Smith")
         assert alice_result["old_message_count"] == len(_US_FORMAT_MESSAGES)
         assert alice_result["counts_match"] is True
 
@@ -174,9 +170,7 @@ class TestMigrateMessageCount:
         """Summary should report total migrated message count."""
         summary = run_migrate(input_dir=legacy_vault)
 
-        assert summary["total_messages"] == (
-            len(_US_FORMAT_MESSAGES) + len(_BOB_MESSAGES)
-        )
+        assert summary["total_messages"] == (len(_US_FORMAT_MESSAGES) + len(_BOB_MESSAGES))
 
 
 class TestMigrateDryRun:

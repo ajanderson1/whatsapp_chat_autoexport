@@ -1,8 +1,8 @@
 """Tests for reason propagation on ChatListWidget.update_chat_status."""
 
 from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import (
-    ChatListWidget,
     ChatDisplayStatus,
+    ChatListWidget,
 )
 
 

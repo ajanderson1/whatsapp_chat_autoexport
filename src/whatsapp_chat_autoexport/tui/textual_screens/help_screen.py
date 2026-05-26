@@ -5,10 +5,10 @@ Displayed as a modal overlay when user presses H.
 """
 
 from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Static
-from textual.containers import Vertical, Container
-from textual.binding import Binding
 
 
 class HelpScreen(ModalScreen):

@@ -5,8 +5,6 @@ called, renders three labelled rows with status icons. Exposes
 `has_hard_fail` so the parent pane can gate the Connected message.
 """
 
-from typing import Optional
-
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.css.query import NoMatches
@@ -57,7 +55,7 @@ class PreflightPanel(Vertical):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._report: Optional[PreflightReport] = None
+        self._report: PreflightReport | None = None
         # Cached row widgets created after first set_report call.
         self._row_widgets: list[Static] = []
 
@@ -77,10 +75,7 @@ class PreflightPanel(Vertical):
         self._report = report
 
         # Build the row text strings.
-        row_texts = [
-            f"{_STATUS_ICON[r.status]} {r.display_name}: {r.summary}"
-            for r in report.results
-        ]
+        row_texts = [f"{_STATUS_ICON[r.status]} {r.display_name}: {r.summary}" for r in report.results]
 
         # Grow row widget list if needed (mount new ones before summary).
         summary_widget = self.query_one("#preflight-summary", Static)
@@ -102,10 +97,7 @@ class PreflightPanel(Vertical):
         n_warn = sum(1 for x in report.results if x.status == Status.WARN)
         n_fail = sum(1 for x in report.results if x.status == Status.HARD_FAIL)
         if n_fail:
-            tail = (
-                f"[red]{n_fail} hard "
-                f"{'failure' if n_fail == 1 else 'failures'}[/red] — fix above to continue."
-            )
+            tail = f"[red]{n_fail} hard {'failure' if n_fail == 1 else 'failures'}[/red] — fix above to continue."
         else:
             warn_word = "warning" if n_warn == 1 else "warnings"
             tail = f"{n_warn} {warn_word}, ready to continue ({report.duration_ms} ms)"

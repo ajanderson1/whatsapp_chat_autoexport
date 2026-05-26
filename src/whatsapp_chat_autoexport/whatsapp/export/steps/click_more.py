@@ -2,12 +2,10 @@
 Step 2: Click the 'More' option in the menu.
 """
 
-from typing import Any, Dict, Optional
-
-from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
-from ....core.result import Result, Ok, Err
-from ....core.errors import ExportError, ExportWorkflowError
 from ....config.selectors import create_default_selectors
+from ....core.errors import ExportError, ExportWorkflowError
+from ....core.result import Err, Ok, Result
+from .base_step import BaseExportStep, StepContext, StepResult
 
 
 class ClickMoreStep(BaseExportStep):
@@ -111,9 +109,7 @@ class ClickMoreStep(BaseExportStep):
                 return False
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate that menu is open.
 

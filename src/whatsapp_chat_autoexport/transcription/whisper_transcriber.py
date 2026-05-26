@@ -7,19 +7,17 @@ Uses OpenAI's Whisper API for audio/video transcription.
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
-from .base_transcriber import BaseTranscriber, TranscriptionResult
 from ..utils.audio_converter import (
     AudioConverter,
     is_whatsapp_video_message,
-    ExtractionResult,
-    ExtractionErrorCode,
 )
+from .base_transcriber import BaseTranscriber, TranscriptionResult
 
 # OpenAI import (will be optional)
 try:
     from openai import OpenAI
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -37,19 +35,15 @@ class WhisperTranscriber(BaseTranscriber):
     MAX_FILE_SIZE_MB = 25
 
     # Supported formats per OpenAI docs
-    SUPPORTED_FORMATS = [
-        '.mp3', '.mp4', '.mpeg', '.mpga',
-        '.m4a', '.wav', '.webm', '.ogg',
-        '.opus', '.flac'
-    ]
+    SUPPORTED_FORMATS = [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm", ".ogg", ".opus", ".flac"]
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         logger=None,
         model: str = "whisper-1",
         convert_opus: bool = True,
-        debug_dir: Optional[Path] = None
+        debug_dir: Path | None = None,
     ):
         """
         Initialize Whisper transcriber.
@@ -73,7 +67,7 @@ class WhisperTranscriber(BaseTranscriber):
             return
 
         # Check for API key early to provide helpful error message
-        effective_api_key = api_key or os.environ.get('OPENAI_API_KEY')
+        effective_api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not effective_api_key:
             self.log_error(
                 "OpenAI API key not found!\n"
@@ -127,48 +121,50 @@ class WhisperTranscriber(BaseTranscriber):
         """
         return self.SUPPORTED_FORMATS.copy()
 
-    def _check_existing_transcription(self, audio_path: Path) -> Optional[str]:
+    def _check_existing_transcription(self, audio_path: Path) -> str | None:
         """
         Check if transcription already exists for this audio file.
-        
+
         Args:
             audio_path: Path to the audio file
-            
+
         Returns:
             Transcription text if exists and non-empty, None otherwise
         """
         # Calculate expected transcription path (same logic as TranscriptionManager)
         transcription_path = audio_path.parent / f"{audio_path.stem}_transcription.txt"
-        
+
         try:
             if not transcription_path.exists():
                 return None
-            
+
             # Check if file is not empty
             if transcription_path.stat().st_size == 0:
                 self.log_debug(f"Found empty transcription file: {transcription_path.name}")
                 return None
-            
+
             # Read the transcription file
-            with open(transcription_path, 'r', encoding='utf-8') as f:
+            with open(transcription_path, encoding="utf-8") as f:
                 lines = f.readlines()
-            
+
             # Extract text, skipping metadata lines (starting with #)
             text_lines = []
             for line in lines:
                 stripped = line.strip()
                 # Skip metadata headers and empty lines
-                if stripped and not stripped.startswith('#'):
+                if stripped and not stripped.startswith("#"):
                     text_lines.append(stripped)
-            
-            transcription_text = '\n'.join(text_lines)
-            
+
+            transcription_text = "\n".join(text_lines)
+
             if transcription_text:
-                self.log_debug(f"Found existing transcription: {transcription_path.name} ({len(transcription_text)} chars)")
+                self.log_debug(
+                    f"Found existing transcription: {transcription_path.name} ({len(transcription_text)} chars)"
+                )
                 return transcription_text
             else:
                 return None
-                
+
         except Exception as e:
             self.log_debug(f"Could not read existing transcription: {e}")
             return None
@@ -176,11 +172,11 @@ class WhisperTranscriber(BaseTranscriber):
     def transcribe(
         self,
         audio_path: Path,
-        language: Optional[str] = None,
-        prompt: Optional[str] = None,
+        language: str | None = None,
+        prompt: str | None = None,
         temperature: float = 0.0,
         skip_existing: bool = True,
-        **kwargs
+        **kwargs,
     ) -> TranscriptionResult:
         """
         Transcribe an audio or video file using OpenAI Whisper.
@@ -199,8 +195,7 @@ class WhisperTranscriber(BaseTranscriber):
         # Check if service is available
         if not self.is_available():
             return TranscriptionResult(
-                success=False,
-                error="OpenAI Whisper service not available. Check API key and installation."
+                success=False, error="OpenAI Whisper service not available. Check API key and installation."
             )
 
         # DEFENSIVE CHECK: Skip if transcription already exists (if skip_existing=True)
@@ -214,50 +209,38 @@ class WhisperTranscriber(BaseTranscriber):
                     text=existing_transcription,
                     duration_seconds=0.0,
                     language=language,
-                    metadata={
-                        'cached': True,
-                        'source': 'existing_transcription'
-                    }
+                    metadata={"cached": True, "source": "existing_transcription"},
                 )
 
         # Validate file
         is_valid, error_msg = self.validate_file(audio_path)
         if not is_valid:
-            return TranscriptionResult(
-                success=False,
-                error=error_msg
-            )
+            return TranscriptionResult(success=False, error=error_msg)
 
         # Check if file is Opus and needs conversion
         temp_m4a_file = None
         actual_file_to_transcribe = audio_path
 
-        if audio_path.suffix.lower() == '.opus':
+        if audio_path.suffix.lower() == ".opus":
             if self.convert_opus and self.audio_converter:
                 if not self.audio_converter.is_ffmpeg_available():
                     return TranscriptionResult(
                         success=False,
-                        error="Opus file requires FFmpeg for conversion. Install FFmpeg or use --skip-opus-conversion."
+                        error="Opus file requires FFmpeg for conversion. Install FFmpeg or use --skip-opus-conversion.",
                     )
 
-                self.log_info(f"🔄 Converting Opus to M4A for Whisper API compatibility...")
-                temp_m4a_file = self.audio_converter.convert_opus_to_m4a(
-                    audio_path,
-                    temp_dir=audio_path.parent
-                )
+                self.log_info("🔄 Converting Opus to M4A for Whisper API compatibility...")
+                temp_m4a_file = self.audio_converter.convert_opus_to_m4a(audio_path, temp_dir=audio_path.parent)
 
                 if not temp_m4a_file:
-                    return TranscriptionResult(
-                        success=False,
-                        error="Failed to convert Opus file to M4A"
-                    )
+                    return TranscriptionResult(success=False, error="Failed to convert Opus file to M4A")
 
                 actual_file_to_transcribe = temp_m4a_file
                 self.log_debug(f"✓ Converted to: {temp_m4a_file.name}")
             else:
                 return TranscriptionResult(
                     success=False,
-                    error="Opus format not supported by Whisper API. Enable opus conversion or install FFmpeg."
+                    error="Opus format not supported by Whisper API. Enable opus conversion or install FFmpeg.",
                 )
 
         # Check if file is a WhatsApp video message and needs audio extraction
@@ -268,16 +251,16 @@ class WhisperTranscriber(BaseTranscriber):
                 if not self.audio_converter.is_ffmpeg_available():
                     return TranscriptionResult(
                         success=False,
-                        error="WhatsApp video message requires FFmpeg for audio extraction. Install FFmpeg."
+                        error="WhatsApp video message requires FFmpeg for audio extraction. Install FFmpeg.",
                     )
 
-                self.log_info(f"🎬 Extracting audio from WhatsApp video message...")
+                self.log_info("🎬 Extracting audio from WhatsApp video message...")
 
                 # Use detailed extraction for better error reporting
                 extraction_result = self.audio_converter.extract_audio_from_video_detailed(
                     audio_path,
                     temp_dir=audio_path.parent,
-                    contact_name=audio_path.parent.name  # Use parent folder as contact name
+                    contact_name=audio_path.parent.name,  # Use parent folder as contact name
                 )
 
                 if not extraction_result.success:
@@ -286,10 +269,10 @@ class WhisperTranscriber(BaseTranscriber):
                         success=False,
                         error=extraction_result.user_friendly_message,
                         metadata={
-                            'error_code': extraction_result.error_code.value,
-                            'video_info': extraction_result.video_info,
-                            'ffmpeg_stderr': extraction_result.ffmpeg_stderr,
-                        }
+                            "error_code": extraction_result.error_code.value,
+                            "video_info": extraction_result.video_info,
+                            "ffmpeg_stderr": extraction_result.ffmpeg_stderr,
+                        },
                     )
 
                 temp_m4a_file = extraction_result.output_path
@@ -298,7 +281,7 @@ class WhisperTranscriber(BaseTranscriber):
             else:
                 return TranscriptionResult(
                     success=False,
-                    error="WhatsApp video message requires audio extraction but AudioConverter not initialized"
+                    error="WhatsApp video message requires audio extraction but AudioConverter not initialized",
                 )
 
         # Check file size
@@ -307,10 +290,9 @@ class WhisperTranscriber(BaseTranscriber):
             # Cleanup temp file if created
             if temp_m4a_file and temp_m4a_file.exists():
                 temp_m4a_file.unlink()
-            
+
             return TranscriptionResult(
-                success=False,
-                error=f"File too large: {file_size_mb:.1f} MB (max: {self.MAX_FILE_SIZE_MB} MB)"
+                success=False, error=f"File too large: {file_size_mb:.1f} MB (max: {self.MAX_FILE_SIZE_MB} MB)"
             )
 
         self.log_info(f"Transcribing: {audio_path.name} ({file_size_mb:.2f} MB)")
@@ -319,20 +301,20 @@ class WhisperTranscriber(BaseTranscriber):
 
         try:
             # Open file and send to Whisper API
-            with open(actual_file_to_transcribe, 'rb') as audio_file:
+            with open(actual_file_to_transcribe, "rb") as audio_file:
                 # Build request parameters
                 request_params = {
-                    'model': self.model,
-                    'file': audio_file,
-                    'response_format': 'text',  # Get plain text response
-                    'temperature': temperature,
+                    "model": self.model,
+                    "file": audio_file,
+                    "response_format": "text",  # Get plain text response
+                    "temperature": temperature,
                 }
 
                 # Add optional parameters
                 if language:
-                    request_params['language'] = language
+                    request_params["language"] = language
                 if prompt:
-                    request_params['prompt'] = prompt
+                    request_params["prompt"] = prompt
 
                 # Add any additional kwargs
                 request_params.update(kwargs)
@@ -347,9 +329,7 @@ class WhisperTranscriber(BaseTranscriber):
 
             if not transcription_text:
                 return TranscriptionResult(
-                    success=False,
-                    error="Transcription returned empty text",
-                    duration_seconds=duration
+                    success=False, error="Transcription returned empty text", duration_seconds=duration
                 )
 
             self.log_success(f"✓ Transcribed {audio_path.name} in {duration:.1f}s ({len(transcription_text)} chars)")
@@ -360,12 +340,12 @@ class WhisperTranscriber(BaseTranscriber):
                 duration_seconds=duration,
                 language=language,
                 metadata={
-                    'model': self.model,
-                    'file_size_mb': file_size_mb,
-                    'temperature': temperature,
-                    'was_converted': temp_m4a_file is not None,
-                    'original_format': audio_path.suffix if temp_m4a_file else None
-                }
+                    "model": self.model,
+                    "file_size_mb": file_size_mb,
+                    "temperature": temperature,
+                    "was_converted": temp_m4a_file is not None,
+                    "original_format": audio_path.suffix if temp_m4a_file else None,
+                },
             )
 
         except Exception as e:
@@ -373,12 +353,8 @@ class WhisperTranscriber(BaseTranscriber):
             error_msg = f"Transcription failed: {str(e)}"
             self.log_error(error_msg)
 
-            return TranscriptionResult(
-                success=False,
-                error=error_msg,
-                duration_seconds=duration
-            )
-        
+            return TranscriptionResult(success=False, error=error_msg, duration_seconds=duration)
+
         finally:
             # Always cleanup temporary M4A file
             if temp_m4a_file and temp_m4a_file.exists():
@@ -389,11 +365,7 @@ class WhisperTranscriber(BaseTranscriber):
                     self.log_warning(f"Failed to cleanup temp file: {e}")
 
     def transcribe_with_retry(
-        self,
-        audio_path: Path,
-        max_retries: int = 3,
-        retry_delay: float = 2.0,
-        **kwargs
+        self, audio_path: Path, max_retries: int = 3, retry_delay: float = 2.0, **kwargs
     ) -> TranscriptionResult:
         """
         Transcribe with automatic retry on failure.

@@ -1,7 +1,5 @@
 """Tests for export layer data models."""
 
-import pytest
-
 from whatsapp_chat_autoexport.export.models import ChatMetadata
 
 

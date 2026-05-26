@@ -1,10 +1,8 @@
 """Tests for SummaryPane widget."""
 
-import pytest
 from textual.containers import Container
 
 from whatsapp_chat_autoexport.tui.textual_panes.summary_pane import SummaryPane
-from whatsapp_chat_autoexport.tui.textual_widgets.progress_pane import ProgressPane
 
 
 class TestSummaryPaneStructure:

@@ -5,11 +5,11 @@ Provides YAML-based selector definitions with multi-strategy fallback
 support and version compatibility checking.
 """
 
-import os
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from enum import Enum
+from pathlib import Path
+from typing import Any
+
 import yaml
 
 
@@ -35,7 +35,7 @@ class SelectorDefinition:
     timeout: float = 5.0
     wait_visible: bool = True
     case_sensitive: bool = True
-    constraints: Dict[str, Any] = field(default_factory=dict)
+    constraints: dict[str, Any] = field(default_factory=dict)
 
     def to_appium_locator(self) -> tuple[str, str]:
         """Convert to Appium locator tuple (strategy, value)."""
@@ -76,11 +76,11 @@ class ElementSelectors:
 
     name: str
     description: str = ""
-    strategies: List[SelectorDefinition] = field(default_factory=list)
+    strategies: list[SelectorDefinition] = field(default_factory=list)
     fallback_behavior: str = "error"  # "error", "skip", "retry"
     required: bool = True
 
-    def get_sorted_strategies(self) -> List[SelectorDefinition]:
+    def get_sorted_strategies(self) -> list[SelectorDefinition]:
         """Get strategies sorted by priority (lower = higher priority)."""
         return sorted(self.strategies, key=lambda s: s.priority)
 
@@ -92,22 +92,22 @@ class SelectorRegistry:
     Loads selectors from YAML files and provides lookup functionality.
     """
 
-    def __init__(self, selectors_path: Optional[Path] = None):
-        self._selectors: Dict[str, ElementSelectors] = {}
-        self._version: Optional[str] = None
-        self._app_name: Optional[str] = None
-        self._loaded_files: List[Path] = []
+    def __init__(self, selectors_path: Path | None = None):
+        self._selectors: dict[str, ElementSelectors] = {}
+        self._version: str | None = None
+        self._app_name: str | None = None
+        self._loaded_files: list[Path] = []
 
         if selectors_path:
             self.load_from_directory(selectors_path)
 
     @property
-    def version(self) -> Optional[str]:
+    def version(self) -> str | None:
         """Get the loaded selector version."""
         return self._version
 
     @property
-    def app_name(self) -> Optional[str]:
+    def app_name(self) -> str | None:
         """Get the app name for these selectors."""
         return self._app_name
 
@@ -126,7 +126,7 @@ class SelectorRegistry:
         if not path.exists():
             raise FileNotFoundError(f"Selector file not found: {path}")
 
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
 
         if not data:
@@ -145,9 +145,7 @@ class SelectorRegistry:
 
         self._loaded_files.append(path)
 
-    def _parse_element_selectors(
-        self, name: str, data: Dict[str, Any]
-    ) -> ElementSelectors:
+    def _parse_element_selectors(self, name: str, data: dict[str, Any]) -> ElementSelectors:
         """Parse selector data into ElementSelectors."""
         strategies = []
 
@@ -173,7 +171,7 @@ class SelectorRegistry:
             required=data.get("required", True),
         )
 
-    def get(self, name: str) -> Optional[ElementSelectors]:
+    def get(self, name: str) -> ElementSelectors | None:
         """Get selectors for an element by name."""
         return self._selectors.get(name)
 
@@ -184,7 +182,7 @@ class SelectorRegistry:
             raise KeyError(f"No selectors found for element: {name}")
         return selectors
 
-    def get_all_names(self) -> List[str]:
+    def get_all_names(self) -> list[str]:
         """Get all registered element names."""
         return list(self._selectors.keys())
 
@@ -207,7 +205,7 @@ class SelectorRegistry:
 
 
 # Global registry instance
-_registry: Optional[SelectorRegistry] = None
+_registry: SelectorRegistry | None = None
 
 
 def get_selector_registry() -> SelectorRegistry:
@@ -226,7 +224,7 @@ def reset_selector_registry() -> None:
     _registry = None
 
 
-def create_default_selectors() -> Dict[str, ElementSelectors]:
+def create_default_selectors() -> dict[str, ElementSelectors]:
     """
     Create default WhatsApp selectors.
 

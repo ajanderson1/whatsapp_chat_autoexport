@@ -4,17 +4,15 @@ Summary screen for TUI.
 Displays export results and statistics.
 """
 
-from typing import Optional, List
-from datetime import timedelta
 from dataclasses import dataclass
 
-from rich.console import Console, RenderableType
+from rich.align import Align
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.align import Align
 
-from whatsapp_chat_autoexport.state.models import ChatStatus, ChatState, SessionState
+from whatsapp_chat_autoexport.state.models import ChatStatus, SessionState
 
 
 @dataclass
@@ -24,7 +22,7 @@ class ExportResult:
     name: str
     status: ChatStatus
     duration: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class SummaryScreen:
@@ -40,9 +38,9 @@ class SummaryScreen:
 
     def __init__(self):
         """Initialize the summary screen."""
-        self._results: List[ExportResult] = []
+        self._results: list[ExportResult] = []
         self._total_duration: float = 0.0
-        self._output_path: Optional[str] = None
+        self._output_path: str | None = None
         self._show_details: bool = True
         self._selected_tab: int = 0  # 0=All, 1=Completed, 2=Failed, 3=Skipped
 
@@ -61,7 +59,7 @@ class SummaryScreen:
         """Get number of skipped exports."""
         return sum(1 for r in self._results if r.status == ChatStatus.SKIPPED)
 
-    def set_results(self, results: List[ExportResult]) -> None:
+    def set_results(self, results: list[ExportResult]) -> None:
         """Set the export results."""
         self._results = results
 
@@ -103,7 +101,7 @@ class SummaryScreen:
         """Move to previous tab."""
         self._selected_tab = (self._selected_tab - 1) % 4
 
-    def _filtered_results(self) -> List[ExportResult]:
+    def _filtered_results(self) -> list[ExportResult]:
         """Get results filtered by current tab."""
         if self._selected_tab == 0:
             return self._results

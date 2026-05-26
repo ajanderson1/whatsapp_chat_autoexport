@@ -7,12 +7,12 @@ dependency injection and testability.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Protocol, Optional, List, Dict, Any, runtime_checkable
-from pathlib import Path
 from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
-from .result import Result
 from .errors import ExportError
+from .result import Result
 
 
 class StepStatus(Enum):
@@ -32,8 +32,8 @@ class StepResult:
 
     status: StepStatus
     message: str
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[ExportError] = None
+    data: dict[str, Any] | None = None
+    error: ExportError | None = None
     duration_seconds: float = 0.0
 
     @classmethod
@@ -61,7 +61,7 @@ class ExportStep(Protocol):
     name: str  # Human-readable step name
     description: str  # Detailed description
 
-    def execute(self, context: Dict[str, Any]) -> StepResult:
+    def execute(self, context: dict[str, Any]) -> StepResult:
         """
         Execute the step.
 
@@ -77,7 +77,7 @@ class ExportStep(Protocol):
         """Check if this step supports retrying on failure."""
         ...
 
-    def rollback(self, context: Dict[str, Any]) -> bool:
+    def rollback(self, context: dict[str, Any]) -> bool:
         """
         Attempt to undo this step's effects.
 
@@ -85,7 +85,7 @@ class ExportStep(Protocol):
         """
         ...
 
-    def validate_preconditions(self, context: Dict[str, Any]) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: dict[str, Any]) -> Result[bool, ExportError]:
         """
         Validate that preconditions for this step are met.
 
@@ -113,8 +113,8 @@ class PhaseResult:
     items_processed: int = 0
     items_failed: int = 0
     items_skipped: int = 0
-    data: Optional[Dict[str, Any]] = None
-    errors: List[ExportError] = None
+    data: dict[str, Any] | None = None
+    errors: list[ExportError] = None
 
     def __post_init__(self):
         if self.errors is None:
@@ -135,7 +135,7 @@ class PhaseResult:
         )
 
     @classmethod
-    def failed(cls, message: str, errors: List[ExportError]) -> "PhaseResult":
+    def failed(cls, message: str, errors: list[ExportError]) -> "PhaseResult":
         return cls(
             status=PhaseStatus.FAILED,
             message=message,
@@ -155,7 +155,7 @@ class PipelinePhase(Protocol):
     name: str  # Phase name (e.g., "download", "transcribe")
     description: str  # Human-readable description
 
-    def execute(self, context: Dict[str, Any]) -> PhaseResult:
+    def execute(self, context: dict[str, Any]) -> PhaseResult:
         """
         Execute the phase.
 
@@ -167,7 +167,7 @@ class PipelinePhase(Protocol):
         """
         ...
 
-    def estimate_work(self, context: Dict[str, Any]) -> int:
+    def estimate_work(self, context: dict[str, Any]) -> int:
         """
         Estimate the number of items to process.
 
@@ -175,7 +175,7 @@ class PipelinePhase(Protocol):
         """
         ...
 
-    def cleanup(self, context: Dict[str, Any]) -> None:
+    def cleanup(self, context: dict[str, Any]) -> None:
         """Clean up temporary files from this phase."""
         ...
 
@@ -203,7 +203,7 @@ class TranscriptionProvider(Protocol):
         """Check if the provider is configured and available."""
         ...
 
-    def get_supported_formats(self) -> List[str]:
+    def get_supported_formats(self) -> list[str]:
         """Get list of supported file extensions."""
         ...
 
@@ -212,7 +212,7 @@ class TranscriptionProvider(Protocol):
 class DeviceConnector(Protocol):
     """Protocol for device connection handlers."""
 
-    def connect(self, device_id: Optional[str] = None) -> Result[str, ExportError]:
+    def connect(self, device_id: str | None = None) -> Result[str, ExportError]:
         """
         Connect to a device.
 
@@ -232,11 +232,11 @@ class DeviceConnector(Protocol):
         """Check if currently connected to a device."""
         ...
 
-    def list_devices(self) -> List[str]:
+    def list_devices(self) -> list[str]:
         """List available devices."""
         ...
 
-    def get_device_info(self) -> Optional[Dict[str, str]]:
+    def get_device_info(self) -> dict[str, str] | None:
         """Get information about the connected device."""
         ...
 
@@ -257,7 +257,7 @@ class ElementFinder(Protocol):
 
     def find(
         self,
-        locators: List[ElementLocator],
+        locators: list[ElementLocator],
         wait_visible: bool = True,
     ) -> Result[Any, ExportError]:
         """
@@ -276,8 +276,8 @@ class ElementFinder(Protocol):
 
     def find_all(
         self,
-        locators: List[ElementLocator],
-    ) -> Result[List[Any], ExportError]:
+        locators: list[ElementLocator],
+    ) -> Result[list[Any], ExportError]:
         """
         Find all matching elements.
 
@@ -291,7 +291,7 @@ class ElementFinder(Protocol):
 
     def is_present(
         self,
-        locators: List[ElementLocator],
+        locators: list[ElementLocator],
         timeout: float = 1.0,
     ) -> bool:
         """
@@ -311,7 +311,7 @@ class ElementFinder(Protocol):
 class StateObserver(Protocol):
     """Protocol for observing state changes."""
 
-    def on_state_change(self, old_state: str, new_state: str, data: Dict[str, Any]) -> None:
+    def on_state_change(self, old_state: str, new_state: str, data: dict[str, Any]) -> None:
         """Called when state changes."""
         ...
 
@@ -362,7 +362,7 @@ class ConfigProvider(ABC):
         ...
 
     @abstractmethod
-    def get_selectors(self, name: str) -> List[ElementLocator]:
+    def get_selectors(self, name: str) -> list[ElementLocator]:
         """Get selectors for a named element."""
         ...
 

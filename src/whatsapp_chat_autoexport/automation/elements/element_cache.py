@@ -5,11 +5,10 @@ Caches successful element finding strategies to avoid repeated
 fallback attempts on subsequent finds.
 """
 
+import json
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, Optional
-import threading
-import json
 from pathlib import Path
 
 from ...config.selectors import SelectorDefinition, SelectorStrategy
@@ -60,7 +59,7 @@ class ElementCache:
         self,
         max_entries: int = 100,
         max_age: timedelta = timedelta(hours=1),
-        persistence_path: Optional[Path] = None,
+        persistence_path: Path | None = None,
     ):
         """
         Initialize the element cache.
@@ -70,7 +69,7 @@ class ElementCache:
             max_age: Maximum age of cache entries before eviction
             persistence_path: Optional path to persist cache to disk
         """
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: dict[str, CacheEntry] = {}
         self._max_entries = max_entries
         self._max_age = max_age
         self._persistence_path = persistence_path
@@ -80,7 +79,7 @@ class ElementCache:
         if persistence_path and persistence_path.exists():
             self._load_from_disk()
 
-    def get(self, key: str) -> Optional[SelectorDefinition]:
+    def get(self, key: str) -> SelectorDefinition | None:
         """
         Get a cached strategy for a key.
 
@@ -153,7 +152,7 @@ class ElementCache:
         with self._lock:
             self._cache.clear()
 
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> dict[str, any]:
         """Get cache statistics."""
         with self._lock:
             total_hits = sum(e.hit_count for e in self._cache.values())
@@ -163,9 +162,7 @@ class ElementCache:
                 "max_entries": self._max_entries,
                 "total_hits": total_hits,
                 "total_misses": total_misses,
-                "hit_rate": total_hits / (total_hits + total_misses)
-                if (total_hits + total_misses) > 0
-                else 0.0,
+                "hit_rate": total_hits / (total_hits + total_misses) if (total_hits + total_misses) > 0 else 0.0,
             }
 
     def _evict_oldest(self) -> None:
@@ -209,7 +206,7 @@ class ElementCache:
             return
 
         try:
-            with open(self._persistence_path, "r") as f:
+            with open(self._persistence_path) as f:
                 data = json.load(f)
 
             for key, entry_data in data.items():

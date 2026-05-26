@@ -8,11 +8,9 @@ Tests cover:
 - Wizard command
 """
 
-import pytest
 from typer.testing import CliRunner
 
 from whatsapp_chat_autoexport.legacy.cli.main import app
-
 
 runner = CliRunner()
 
@@ -207,8 +205,10 @@ class TestCLIIntegration:
             app,
             [
                 "export",
-                "--output", "/tmp/test",
-                "--limit", "5",
+                "--output",
+                "/tmp/test",
+                "--limit",
+                "5",
                 "--without-media",
                 "--no-transcribe",
                 "--dry-run",

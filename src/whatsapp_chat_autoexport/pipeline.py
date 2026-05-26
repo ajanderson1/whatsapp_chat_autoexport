@@ -4,25 +4,24 @@ Pipeline Orchestrator for WhatsApp Chat Auto-Export.
 Coordinates the complete end-to-end workflow from Google Drive to organized output.
 """
 
-import os
-from pathlib import Path
-from typing import Optional, Dict, List, Callable
-from dataclasses import dataclass
-import tempfile
 import shutil
+import tempfile
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
-from .utils.logger import Logger
 from .google_drive.drive_manager import GoogleDriveManager
+from .output import OutputBuilder
 from .processing.archive_extractor import (
-    find_whatsapp_chat_files,
-    move_files_to_processed,
     add_zip_extension,
     extract_zip_files,
-    organize_extracted_content
+    find_whatsapp_chat_files,
+    move_files_to_processed,
+    organize_extracted_content,
 )
 from .transcription import TranscriptionManager
 from .transcription.transcriber_factory import TranscriberFactory
-from .output import OutputBuilder
+from .utils.logger import Logger
 
 
 @dataclass
@@ -30,15 +29,15 @@ class PipelineConfig:
     """Configuration for pipeline execution."""
 
     # Google Drive settings
-    google_drive_folder: Optional[str] = None
+    google_drive_folder: str | None = None
     delete_from_drive: bool = False
     cleanup_drive_duplicates: bool = True
     skip_download: bool = False
-    
+
     # Google Drive polling settings (for waiting after phone export)
     initial_interval: int = 2  # Starting seconds between polls (adaptive backoff)
     max_interval: int = 8  # Maximum seconds between polls (adaptive backoff cap)
-    poll_interval: Optional[int] = None  # Deprecated — ignored, use initial_interval
+    poll_interval: int | None = None  # Deprecated — ignored, use initial_interval
     poll_timeout: int = 300  # Maximum wait time (5 minutes)
     created_within_seconds: int = 300  # Only consider files created within last 5 minutes
 
@@ -46,13 +45,13 @@ class PipelineConfig:
     max_concurrent: int = 2  # Maximum parallel pipeline tasks
 
     # Processing settings
-    download_dir: Optional[Path] = None
+    download_dir: Path | None = None
     keep_archives: bool = False
 
     # Transcription settings
     transcribe_audio_video: bool = True
-    transcription_language: Optional[str] = None
-    transcription_provider: str = 'whisper'  # 'whisper' or 'elevenlabs'
+    transcription_language: str | None = None
+    transcription_provider: str = "whisper"  # 'whisper' or 'elevenlabs'
     skip_existing_transcriptions: bool = True
     convert_opus_to_m4a: bool = True  # Convert Opus files to M4A for better API compatibility
 
@@ -65,8 +64,8 @@ class PipelineConfig:
     # General settings
     cleanup_temp: bool = True
     dry_run: bool = False
-    limit: Optional[int] = None  # Limit number of files to download/process
-    chat_names: Optional[List[str]] = None  # Specific chat names to download (filters by name)
+    limit: int | None = None  # Limit number of files to download/process
+    chat_names: list[str] | None = None  # Specific chat names to download (filters by name)
 
     # Output format
     format_version: str = "v2"  # "v2" (default) or "legacy"
@@ -88,8 +87,7 @@ class WhatsAppPipeline:
     6. Cleanup temporary files
     """
 
-    def __init__(self, config: PipelineConfig, logger: Optional[Logger] = None,
-                 on_progress: Optional[Callable] = None):
+    def __init__(self, config: PipelineConfig, logger: Logger | None = None, on_progress: Callable | None = None):
         """
         Initialize pipeline.
 
@@ -102,7 +100,7 @@ class WhatsAppPipeline:
         self.config = config
         self.logger = logger or Logger()
         self.on_progress = on_progress
-        self.temp_dir: Optional[Path] = None
+        self.temp_dir: Path | None = None
 
         # Initialize components
         self.drive_manager = None
@@ -110,8 +108,7 @@ class WhatsAppPipeline:
         self.transcription_manager = None
         self.output_builder = OutputBuilder(logger=self.logger, format_version=config.format_version)
 
-    def _fire_progress(self, phase: str, message: str, current: int, total: int,
-                       item_name: str = "") -> None:
+    def _fire_progress(self, phase: str, message: str, current: int, total: int, item_name: str = "") -> None:
         """Safely invoke the on_progress callback, if set."""
         if self.on_progress:
             try:
@@ -119,10 +116,10 @@ class WhatsAppPipeline:
             except Exception:
                 pass  # Never let callback errors crash the pipeline
 
-    def process_single_export(self, chat_name: str, google_drive_folder: Optional[str] = None) -> Dict:
+    def process_single_export(self, chat_name: str, google_drive_folder: str | None = None) -> dict:
         """
         Process a single chat export immediately after it's been exported to Google Drive.
-        
+
         This method:
         1. Waits for and downloads the specific chat export from Google Drive
            (and deletes the just-downloaded file from Drive if delete_from_drive is set)
@@ -131,39 +128,33 @@ class WhatsAppPipeline:
         4. Transcribes audio/video (if enabled)
         5. Builds the final organized output
         6. Cleans up temporary files
-        
+
         Args:
             chat_name: Name of the chat that was just exported
             google_drive_folder: Optional specific Google Drive folder (unused, for compatibility)
-            
+
         Returns:
             Dictionary with processing results
         """
         self.logger.info("\n" + "=" * 70)
         self.logger.info(f"Processing export: '{chat_name}'")
         self.logger.info("=" * 70)
-        
-        results = {
-            'success': False,
-            'chat_name': chat_name,
-            'output_path': None,
-            'phases_completed': [],
-            'errors': []
-        }
-        
+
+        results = {"success": False, "chat_name": chat_name, "output_path": None, "phases_completed": [], "errors": []}
+
         temp_dir = None
-        
+
         try:
             # Create temp directory for this chat's processing
             temp_dir = Path(tempfile.mkdtemp(prefix=f"whatsapp_{chat_name.replace(' ', '_')}_"))
             self.logger.debug_msg(f"Temp directory: {temp_dir}")
-            
+
             # Phase 1: Wait for and download this specific chat from Google Drive
             self.logger.info("\n" + "-" * 70)
             self.logger.info("Phase 1: Wait for Export & Download from Google Drive")
             self.logger.info("-" * 70)
             self._fire_progress("download", "Waiting for export on Google Drive", 0, 1, chat_name)
-            
+
             # Initialize Google Drive manager
             self.drive_manager = GoogleDriveManager(logger=self.logger)
 
@@ -173,7 +164,7 @@ class WhatsAppPipeline:
             # Use the new polling method to wait for the export to appear
             # WhatsApp uploads files to Drive root WITHOUT .zip extension
             self.logger.info(f"Waiting for '{chat_name}' export to appear on Google Drive...")
-            
+
             matching_file = self.drive_manager.wait_for_new_export(
                 initial_interval=self.config.initial_interval,
                 max_interval=self.config.max_interval,
@@ -182,17 +173,15 @@ class WhatsAppPipeline:
                 chat_name=chat_name,
                 include_media=self.config.include_media,
             )
-            
+
             # Download the file
             download_dir = temp_dir / "downloads"
             download_dir.mkdir(parents=True, exist_ok=True)
-            
+
             downloaded = self.drive_manager.batch_download_exports(
-                [matching_file],
-                download_dir,
-                delete_after=self.config.delete_from_drive
+                [matching_file], download_dir, delete_after=self.config.delete_from_drive
             )
-            
+
             if not downloaded:
                 raise RuntimeError(f"Failed to download export for '{chat_name}'")
 
@@ -205,24 +194,19 @@ class WhatsAppPipeline:
                     removed = self.drive_manager.delete_sibling_exports(chat_name)
                     if removed:
                         self.logger.info(
-                            f"Drive cleanup: removed {removed} duplicate(s) for "
-                            f"'{chat_name}' from Drive root"
+                            f"Drive cleanup: removed {removed} duplicate(s) for '{chat_name}' from Drive root"
                         )
                     else:
-                        self.logger.debug_msg(
-                            f"Drive cleanup: nothing to prune for '{chat_name}'"
-                        )
+                        self.logger.debug_msg(f"Drive cleanup: nothing to prune for '{chat_name}'")
                 except Exception as e:
                     # delete_sibling_exports is not supposed to raise, but if it does,
                     # don't fail the chat — we already have the file on local disk.
-                    self.logger.warning(
-                        f"Drive cleanup: unexpected error for '{chat_name}' — {e}"
-                    )
+                    self.logger.warning(f"Drive cleanup: unexpected error for '{chat_name}' — {e}")
 
             self.logger.success(f"Downloaded: {matching_file['name']}")
             self._fire_progress("download", "Download complete", 1, 1, chat_name)
-            results['phases_completed'].append('download')
-            
+            results["phases_completed"].append("download")
+
             # Phase 2: Extract and organize
             self.logger.info("\n" + "-" * 70)
             self.logger.info("Phase 2: Extract and Organize")
@@ -235,8 +219,8 @@ class WhatsAppPipeline:
                 raise RuntimeError(f"No transcript found after extraction for '{chat_name}'")
 
             self._fire_progress("extract", "Extraction complete", 1, 1, chat_name)
-            results['phases_completed'].append('extract')
-            
+            results["phases_completed"].append("extract")
+
             # Phase 3: Transcribe (optional)
             if self.config.transcribe_audio_video:
                 self.logger.info("\n" + "-" * 70)
@@ -246,7 +230,7 @@ class WhatsAppPipeline:
 
                 self._phase3_transcribe(transcript_files)
                 self._fire_progress("transcribe", "Transcription complete", 1, 1, chat_name)
-                results['phases_completed'].append('transcribe')
+                results["phases_completed"].append("transcribe")
 
             # Phase 4: Build output
             self.logger.info("\n" + "-" * 70)
@@ -255,30 +239,31 @@ class WhatsAppPipeline:
             self._fire_progress("build_output", "Building final output", 0, 1, chat_name)
 
             outputs = self._phase4_build_outputs(transcript_files)
-            
+
             if outputs:
-                results['output_path'] = outputs[0]
+                results["output_path"] = outputs[0]
                 self._fire_progress("build_output", "Output build complete", 1, 1, chat_name)
-                results['phases_completed'].append('build_output')
+                results["phases_completed"].append("build_output")
 
             # Phase 5: Cleanup
             if self.config.cleanup_temp:
                 self.logger.debug_msg("Cleaning up temporary files...")
                 self._fire_progress("cleanup", "Cleaning up", 0, 1, chat_name)
                 self._fire_progress("cleanup", "Cleanup complete", 1, 1, chat_name)
-                results['phases_completed'].append('cleanup')
-            
-            results['success'] = True
+                results["phases_completed"].append("cleanup")
+
+            results["success"] = True
             self.logger.success(f"\n✅ Successfully processed '{chat_name}'")
-            if results['output_path']:
+            if results["output_path"]:
                 self.logger.info(f"   Output: {results['output_path']}")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to process '{chat_name}': {e}")
-            results['errors'].append(str(e))
+            results["errors"].append(str(e))
             import traceback
+
             traceback.print_exc()
-        
+
         finally:
             # Always cleanup temp directory
             if temp_dir and temp_dir.exists() and self.config.cleanup_temp:
@@ -286,10 +271,10 @@ class WhatsAppPipeline:
                     shutil.rmtree(temp_dir)
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup temp directory: {e}")
-        
+
         return results
 
-    def run(self, source_dir: Optional[Path] = None) -> Dict:
+    def run(self, source_dir: Path | None = None) -> dict:
         """
         Run complete pipeline.
 
@@ -306,12 +291,7 @@ class WhatsAppPipeline:
         if self.config.dry_run:
             self.logger.warning("DRY RUN MODE - No files will be modified")
 
-        results = {
-            'success': False,
-            'phases_completed': [],
-            'outputs_created': [],
-            'errors': []
-        }
+        results = {"success": False, "phases_completed": [], "outputs_created": [], "errors": []}
 
         try:
             # Create temp directory for processing
@@ -323,7 +303,7 @@ class WhatsAppPipeline:
                 self._fire_progress("download", "Starting download from Google Drive", 0, 1)
                 download_dir = self._phase1_download()
                 self._fire_progress("download", "Download complete", 1, 1)
-                results['phases_completed'].append('download')
+                results["phases_completed"].append("download")
             else:
                 download_dir = source_dir or self.config.download_dir
                 self.logger.info("Skipping download phase (using existing files)")
@@ -335,7 +315,7 @@ class WhatsAppPipeline:
             self._fire_progress("extract", "Extracting and organizing", 0, 1)
             transcript_files = self._phase2_extract_and_organize(download_dir)
             self._fire_progress("extract", "Extraction complete", 1, 1)
-            results['phases_completed'].append('extract')
+            results["phases_completed"].append("extract")
 
             if not transcript_files:
                 self.logger.warning("No WhatsApp exports found to process")
@@ -346,28 +326,29 @@ class WhatsAppPipeline:
                 self._fire_progress("transcribe", "Starting transcription", 0, 1)
                 self._phase3_transcribe(transcript_files)
                 self._fire_progress("transcribe", "Transcription complete", 1, 1)
-                results['phases_completed'].append('transcribe')
+                results["phases_completed"].append("transcribe")
 
             # Phase 4: Build final outputs
             self._fire_progress("build_output", "Building final outputs", 0, 1)
             outputs = self._phase4_build_outputs(transcript_files)
             self._fire_progress("build_output", "Output build complete", 1, 1)
-            results['phases_completed'].append('build_output')
-            results['outputs_created'] = outputs
+            results["phases_completed"].append("build_output")
+            results["outputs_created"] = outputs
 
             # Phase 5: Cleanup
             if self.config.cleanup_temp:
                 self._fire_progress("cleanup", "Cleaning up", 0, 1)
                 self._phase5_cleanup()
                 self._fire_progress("cleanup", "Cleanup complete", 1, 1)
-                results['phases_completed'].append('cleanup')
+                results["phases_completed"].append("cleanup")
 
-            results['success'] = True
+            results["success"] = True
 
         except Exception as e:
             self.logger.error(f"Pipeline failed: {e}")
-            results['errors'].append(str(e))
+            results["errors"].append(str(e))
             import traceback
+
             # Log full traceback to both console and log file
             tb_str = traceback.format_exc()
             self.logger.error(f"Full traceback:\n{tb_str}")
@@ -411,9 +392,7 @@ class WhatsAppPipeline:
         # List exports
         folder_id = None
         if self.config.google_drive_folder:
-            folder_id, _ = self.drive_manager.find_exports_in_folder(
-                self.config.google_drive_folder
-            )
+            folder_id, _ = self.drive_manager.find_exports_in_folder(self.config.google_drive_folder)
 
         files = self.drive_manager.list_whatsapp_exports(folder_id=folder_id)
 
@@ -426,35 +405,34 @@ class WhatsAppPipeline:
             original_count = len(files)
             filtered_files = []
             for f in files:
-                file_name = f.get('name', '')
+                file_name = f.get("name", "")
                 # Match "WhatsApp Chat with {chat_name}" pattern
                 for chat_name in self.config.chat_names:
                     if chat_name in file_name:
                         filtered_files.append(f)
                         break
             files = filtered_files
-            self.logger.info(f"Filtered to {len(files)} of {original_count} files (matching {len(self.config.chat_names)} selected chats)")
+            self.logger.info(
+                f"Filtered to {len(files)} of {original_count} files (matching {len(self.config.chat_names)} selected chats)"
+            )
 
         # Apply limit if specified (as a fallback)
         if self.config.limit and len(files) > self.config.limit:
             self.logger.info(f"Limiting download to {self.config.limit} of {len(files)} files")
-            files = files[:self.config.limit]
+            files = files[: self.config.limit]
 
         # Download
         download_dir = self.temp_dir / "downloads"
         download_dir.mkdir(parents=True, exist_ok=True)
 
         downloaded = self.drive_manager.batch_download_exports(
-            files,
-            download_dir,
-            delete_after=self.config.delete_from_drive,
-            on_progress=self.on_progress
+            files, download_dir, delete_after=self.config.delete_from_drive, on_progress=self.on_progress
         )
 
         self.logger.success(f"Downloaded {len(downloaded)} file(s)")
         return download_dir
 
-    def _phase2_extract_and_organize(self, source_dir: Path) -> List[tuple]:
+    def _phase2_extract_and_organize(self, source_dir: Path) -> list[tuple]:
         """
         Phase 2: Extract ZIP files and organize content.
 
@@ -527,7 +505,7 @@ class WhatsAppPipeline:
         self.logger.success(f"Organized {len(transcript_files)} chat(s)")
         return transcript_files
 
-    def _phase3_transcribe(self, transcript_files: List[tuple]):
+    def _phase3_transcribe(self, transcript_files: list[tuple]):
         """
         Phase 3: Transcribe audio and video files.
 
@@ -557,7 +535,7 @@ class WhatsAppPipeline:
                 provider=self.config.transcription_provider,
                 logger=self.logger,
                 convert_opus=self.config.convert_opus_to_m4a,
-                debug_dir=debug_dir
+                debug_dir=debug_dir,
             )
         except ValueError as e:
             self.logger.error(f"Failed to create transcriber: {e}")
@@ -566,20 +544,21 @@ class WhatsAppPipeline:
 
         if not self.transcriber.is_available():
             provider_upper = self.config.transcription_provider.upper()
-            env_var = 'OPENAI_API_KEY' if self.config.transcription_provider == 'whisper' else 'ELEVENLABS_API_KEY'
+            env_var = "OPENAI_API_KEY" if self.config.transcription_provider == "whisper" else "ELEVENLABS_API_KEY"
             self.logger.warning(f"Transcription service not available (check {env_var})")
             self.logger.warning("Skipping transcription phase")
             return
 
         # Import OutputBuilder to get contact name extractor
         from .output.output_builder import OutputBuilder
+
         output_builder = OutputBuilder(logger=self.logger, format_version=self.config.format_version)
 
         self.transcription_manager = TranscriptionManager(
             self.transcriber,
             logger=self.logger,
             output_dir=self.config.output_dir,
-            contact_name_extractor=output_builder._extract_contact_name
+            contact_name_extractor=output_builder._extract_contact_name,
         )
 
         # Transcribe files in each media directory
@@ -590,10 +569,7 @@ class WhatsAppPipeline:
                 continue
 
             # Find transcribable files
-            media_files = self.transcription_manager.get_transcribable_files(
-                media_dir,
-                recursive=False
-            )
+            media_files = self.transcription_manager.get_transcribable_files(media_dir, recursive=False)
 
             if not media_files:
                 continue
@@ -607,14 +583,14 @@ class WhatsAppPipeline:
                 show_progress=True,
                 transcript_path=transcript_path,
                 on_progress=self.on_progress,
-                language=self.config.transcription_language
+                language=self.config.transcription_language,
             )
 
-            total_transcribed += results['successful']
+            total_transcribed += results["successful"]
 
         self.logger.success(f"Total transcriptions: {total_transcribed}")
 
-    def _phase4_build_outputs(self, transcript_files: List[tuple]) -> List[Path]:
+    def _phase4_build_outputs(self, transcript_files: list[tuple]) -> list[Path]:
         """
         Phase 4: Build final organized outputs.
 
@@ -650,12 +626,12 @@ class WhatsAppPipeline:
             format_version="legacy",
         )
 
-        output_dirs = [r['output_dir'] for r in results]
+        output_dirs = [r["output_dir"] for r in results]
 
         self.logger.success(f"Created {len(output_dirs)} output(s) in: {self.config.output_dir}")
         return output_dirs
 
-    def _phase4_build_spec_outputs(self, transcript_files: List[tuple]) -> List[Path]:
+    def _phase4_build_spec_outputs(self, transcript_files: list[tuple]) -> list[Path]:
         """Build outputs in spec format (index.md + transcript.md)."""
         from .output.spec_formatter import SpecFormatter
 
@@ -696,13 +672,13 @@ class WhatsAppPipeline:
         # Cleanup handled in finally block
         self.logger.success("Cleanup complete")
 
-    def _print_summary(self, results: Dict):
+    def _print_summary(self, results: dict):
         """Print pipeline execution summary."""
         self.logger.info("\n" + "=" * 70)
         self.logger.info("Pipeline Summary")
         self.logger.info("=" * 70)
 
-        if results['success']:
+        if results["success"]:
             self.logger.success("Pipeline completed successfully!")
         else:
             self.logger.error("Pipeline failed")
@@ -710,13 +686,13 @@ class WhatsAppPipeline:
         self.logger.info(f"Phases completed: {', '.join(results['phases_completed'])}")
         self.logger.info(f"Outputs created: {len(results['outputs_created'])}")
 
-        if results['outputs_created']:
-            for output_dir in results['outputs_created']:
+        if results["outputs_created"]:
+            for output_dir in results["outputs_created"]:
                 self.logger.info(f"  - {output_dir}")
 
-        if results['errors']:
+        if results["errors"]:
             self.logger.error(f"Errors: {len(results['errors'])}")
-            for error in results['errors']:
+            for error in results["errors"]:
                 self.logger.error(f"  - {error}")
 
         self.logger.info("=" * 70)
@@ -729,5 +705,5 @@ def create_default_config() -> PipelineConfig:
         delete_from_drive=False,
         transcribe_audio_video=True,
         cleanup_temp=True,
-        dry_run=False
+        dry_run=False,
     )

@@ -6,12 +6,12 @@ in a compact bottom pane format with activity log.
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+
 from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.widgets import Static, ProgressBar, RichLog
-from textual.containers import Vertical, Horizontal
+from textual.containers import Vertical
 from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import ProgressBar, RichLog, Static
 
 
 class ProgressPane(Widget):
@@ -198,7 +198,7 @@ class ProgressPane(Widget):
         super().__init__(**kwargs)
         self.mode = mode
         self.total_chats = total_chats
-        self._activity_messages: List[str] = []
+        self._activity_messages: list[str] = []
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
@@ -289,10 +289,7 @@ class ProgressPane(Widget):
         # Show per-item progress in step line
         if self.pipeline_item and self.pipeline_item_total > 0:
             step.display = True
-            step.update(
-                f"[cyan]{self.pipeline_item}[/cyan]"
-                f" ({self.pipeline_item_current}/{self.pipeline_item_total})"
-            )
+            step.update(f"[cyan]{self.pipeline_item}[/cyan] ({self.pipeline_item_current}/{self.pipeline_item_total})")
         else:
             step.display = False
 
@@ -318,9 +315,7 @@ class ProgressPane(Widget):
         if self.pipeline_item_total > 0:
             overall.display = True
             item_percent = (self.pipeline_item_current / self.pipeline_item_total) * 100
-            overall.update(
-                f"Items: {self.pipeline_item_current}/{self.pipeline_item_total} ({item_percent:.0f}%)"
-            )
+            overall.update(f"Items: {self.pipeline_item_current}/{self.pipeline_item_total} ({item_percent:.0f}%)")
         else:
             overall.display = False
 
@@ -436,10 +431,10 @@ class ProgressPane(Widget):
 
     def update_export_progress(
         self,
-        chat: Optional[str] = None,
-        step: Optional[str] = None,
-        step_num: Optional[int] = None,
-        completed: Optional[int] = None,
+        chat: str | None = None,
+        step: str | None = None,
+        step_num: int | None = None,
+        completed: int | None = None,
     ) -> None:
         """
         Update export progress.
@@ -515,8 +510,8 @@ class ProgressPane(Widget):
 
     def update_processing_progress(
         self,
-        phase: Optional[str] = None,
-        phase_num: Optional[int] = None,
+        phase: str | None = None,
+        phase_num: int | None = None,
     ) -> None:
         """
         Update processing progress.

@@ -7,17 +7,15 @@ This module provides backward compatibility with the original whatsapp_export.py
 #!/usr/bin/env python3
 
 import argparse
-import signal
 import sys
-
 from pathlib import Path
 
+from ..pipeline import PipelineConfig, WhatsAppPipeline
+from ..utils.logger import Logger
 from .appium_manager import AppiumManager
-from .whatsapp_driver import WhatsAppDriver
 from .chat_exporter import ChatExporter, validate_resume_directory
 from .interactive import interactive_mode
-from ..utils.logger import Logger
-from ..pipeline import WhatsAppPipeline, PipelineConfig
+from .whatsapp_driver import WhatsAppDriver
 
 
 def create_parser():
@@ -58,173 +56,129 @@ Examples:
     %(prog)s --wireless-adb     # Wireless ADB connection
 
 For more information, visit: https://github.com/yourusername/whatsapp_chat_autoexport
-        """
+        """,
     )
-    
+
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode (verbose output)")
+
     parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode (verbose output)'
+        "--skip-appium", action="store_true", help="Skip starting Appium server (assume it is already running)"
     )
-    
-    parser.add_argument(
-        '--skip-appium',
-        action='store_true',
-        help='Skip starting Appium server (assume it is already running)'
-    )
-    
+
     # Limit argument
     parser.add_argument(
-        '--limit',
-        nargs='?',
+        "--limit",
+        nargs="?",
         type=int,
         const=10,
-        metavar='N',
-        help='Limit the number of chats to process (default: 10 if flag used without value, no limit otherwise)'
+        metavar="N",
+        help="Limit the number of chats to process (default: 10 if flag used without value, no limit otherwise)",
     )
-    
+
     # Media options (mutually exclusive)
     media_group = parser.add_mutually_exclusive_group()
     media_group.add_argument(
-        '--with-media',
-        action='store_true',
-        default=True,
-        help='Export chats with media (default)'
+        "--with-media", action="store_true", default=True, help="Export chats with media (default)"
     )
     media_group.add_argument(
-        '--without-media',
-        dest='with_media',
-        action='store_false',
-        help='Export chats without media'
+        "--without-media", dest="with_media", action="store_false", help="Export chats without media"
     )
-    
+
     # Sort order for chat display
     parser.add_argument(
-        '--sort-order',
-        choices=['original', 'alphabetical'],
-        default='alphabetical',
-        help='How to sort/display chats: "original" (WhatsApp order) or "alphabetical" (default)'
+        "--sort-order",
+        choices=["original", "alphabetical"],
+        default="alphabetical",
+        help='How to sort/display chats: "original" (WhatsApp order) or "alphabetical" (default)',
     )
-    
+
     # Resume functionality - specify Google Drive folder to check for existing exports
     parser.add_argument(
-        '--resume',
+        "--resume",
         type=str,
-        metavar='DRIVE_FOLDER',
-        help='Path to Google Drive folder to check for existing exports. Chats already present will be skipped.'
+        metavar="DRIVE_FOLDER",
+        help="Path to Google Drive folder to check for existing exports. Chats already present will be skipped.",
     )
-    
+
     # Auto-select all chats with timeout
-    parser.add_argument(
-        '--all',
-        action='store_true',
-        help='Auto-select all chats after timeout if no input provided'
-    )
+    parser.add_argument("--all", action="store_true", help="Auto-select all chats after timeout if no input provided")
 
     # Pre-select chat range
     parser.add_argument(
-        '--range',
+        "--range",
         type=str,
-        metavar='RANGE',
-        help='Pre-select chat range for export (e.g., "300-500" or "1,5,10-20"). Also becomes default on timeout.'
+        metavar="RANGE",
+        help='Pre-select chat range for export (e.g., "300-500" or "1,5,10-20"). Also becomes default on timeout.',
     )
 
     # Wireless ADB support
     parser.add_argument(
-        '--wireless-adb',
-        nargs='*',
-        metavar=('ADDRESS', 'CODE'),
-        help='Connect to device via wireless ADB. Usage: --wireless-adb [PAIRING_IP:PORT] [6_DIGIT_CODE]'
+        "--wireless-adb",
+        nargs="*",
+        metavar=("ADDRESS", "CODE"),
+        help="Connect to device via wireless ADB. Usage: --wireless-adb [PAIRING_IP:PORT] [6_DIGIT_CODE]",
     )
 
     # Pipeline options
-    pipeline_group = parser.add_argument_group('Pipeline Options', 'Automatically process exports after downloading')
+    pipeline_group = parser.add_argument_group("Pipeline Options", "Automatically process exports after downloading")
     pipeline_group.add_argument(
-        '--output',
+        "--output", type=str, metavar="DIR", help="Output directory for processed chats (enables pipeline processing)"
+    )
+    pipeline_group.add_argument(
+        "--google-drive-folder", type=str, metavar="FOLDER", help="Google Drive folder name to download from"
+    )
+    pipeline_group.add_argument(
+        "--delete-from-drive", action="store_true", help="Delete files from Google Drive after downloading"
+    )
+    pipeline_group.add_argument("--no-transcribe", action="store_true", help="Skip audio/video transcription")
+    pipeline_group.add_argument(
+        "--transcription-language", type=str, metavar="LANG", help="Language code for transcription (e.g., en, es, fr)"
+    )
+    pipeline_group.add_argument(
+        "--transcription-provider",
         type=str,
-        metavar='DIR',
-        help='Output directory for processed chats (enables pipeline processing)'
+        choices=["whisper", "elevenlabs"],
+        default="whisper",
+        metavar="PROVIDER",
+        help="Transcription service provider (whisper or elevenlabs, default: whisper)",
     )
     pipeline_group.add_argument(
-        '--google-drive-folder',
-        type=str,
-        metavar='FOLDER',
-        help='Google Drive folder name to download from'
-    )
-    pipeline_group.add_argument(
-        '--delete-from-drive',
-        action='store_true',
-        help='Delete files from Google Drive after downloading'
-    )
-    pipeline_group.add_argument(
-        '--no-transcribe',
-        action='store_true',
-        help='Skip audio/video transcription'
-    )
-    pipeline_group.add_argument(
-        '--transcription-language',
-        type=str,
-        metavar='LANG',
-        help='Language code for transcription (e.g., en, es, fr)'
-    )
-    pipeline_group.add_argument(
-        '--transcription-provider',
-        type=str,
-        choices=['whisper', 'elevenlabs'],
-        default='whisper',
-        metavar='PROVIDER',
-        help='Transcription service provider (whisper or elevenlabs, default: whisper)'
-    )
-    pipeline_group.add_argument(
-        '--poll-interval',
+        "--poll-interval",
         type=int,
         default=8,
-        metavar='SECONDS',
-        help='Seconds between Google Drive polls (default: 8)'
+        metavar="SECONDS",
+        help="Seconds between Google Drive polls (default: 8)",
     )
     pipeline_group.add_argument(
-        '--poll-timeout',
+        "--poll-timeout",
         type=int,
         default=300,
-        metavar='SECONDS',
-        help='Maximum wait time for Google Drive upload (default: 300 / 5 minutes)'
+        metavar="SECONDS",
+        help="Maximum wait time for Google Drive upload (default: 300 / 5 minutes)",
     )
     pipeline_group.add_argument(
-        '--skip-opus-conversion',
-        action='store_true',
-        help='Skip Opus to M4A conversion (requires FFmpeg)'
+        "--skip-opus-conversion", action="store_true", help="Skip Opus to M4A conversion (requires FFmpeg)"
     )
     pipeline_group.add_argument(
-        '--force-transcribe',
-        action='store_true',
-        help='Re-transcribe even if transcription already exists'
+        "--force-transcribe", action="store_true", help="Re-transcribe even if transcription already exists"
     )
     pipeline_group.add_argument(
-        '--no-output-media',
-        action='store_true',
-        help='Exclude media files from final output (transcriptions still created if media exported)'
+        "--no-output-media",
+        action="store_true",
+        help="Exclude media files from final output (transcriptions still created if media exported)",
     )
 
     # Logging options
-    logging_group = parser.add_argument_group('Logging Options', 'Configure file logging')
+    logging_group = parser.add_argument_group("Logging Options", "Configure file logging")
+    logging_group.add_argument("--log-dir", type=str, metavar="DIR", help="Directory for log files (default: .logs/)")
+    logging_group.add_argument("--no-log-file", action="store_true", help="Disable file logging (console only)")
     logging_group.add_argument(
-        '--log-dir',
+        "--log-level",
         type=str,
-        metavar='DIR',
-        help='Directory for log files (default: .logs/)'
-    )
-    logging_group.add_argument(
-        '--no-log-file',
-        action='store_true',
-        help='Disable file logging (console only)'
-    )
-    logging_group.add_argument(
-        '--log-level',
-        type=str,
-        choices=['debug', 'info', 'warning', 'error'],
-        default='info',
-        metavar='LEVEL',
-        help='File log level: debug|info|warning|error (default: info)'
+        choices=["debug", "info", "warning", "error"],
+        default="info",
+        metavar="LEVEL",
+        help="File log level: debug|info|warning|error (default: info)",
     )
 
     return parser
@@ -239,12 +193,7 @@ def main():
 
     # Create logger with file logging options
     log_dir = PathLib(args.log_dir).expanduser() if args.log_dir else None
-    logger = Logger(
-        debug=args.debug,
-        log_dir=log_dir,
-        log_file_enabled=not args.no_log_file,
-        log_level=args.log_level
-    )
+    logger = Logger(debug=args.debug, log_dir=log_dir, log_file_enabled=not args.no_log_file, log_level=args.log_level)
 
     # Determine sort order
     # Pipeline mode: use original order (most recent chats first) for automation
@@ -255,8 +204,8 @@ def main():
         sort_alphabetical = False
     else:
         # Normal mode: respect user's choice (defaults to alphabetical)
-        sort_alphabetical = (args.sort_order == 'alphabetical')
-    
+        sort_alphabetical = args.sort_order == "alphabetical"
+
     # Validate resume directory if provided
     resume_folder = None
     if args.resume:
@@ -268,14 +217,12 @@ def main():
     # Validate API key if transcription is enabled
     if not args.no_transcribe and args.output:
         import os
+
         from whatsapp_chat_autoexport.transcription.transcriber_factory import TranscriberFactory
 
         # Determine which environment variable to check
-        env_var_map = {
-            'whisper': 'OPENAI_API_KEY',
-            'elevenlabs': 'ELEVENLABS_API_KEY'
-        }
-        required_env_var = env_var_map.get(args.transcription_provider.lower(), 'OPENAI_API_KEY')
+        env_var_map = {"whisper": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
+        required_env_var = env_var_map.get(args.transcription_provider.lower(), "OPENAI_API_KEY")
 
         # Check if API key is set
         api_key = os.environ.get(required_env_var)
@@ -286,7 +233,7 @@ def main():
             success, error_msg = TranscriberFactory.validate_provider(args.transcription_provider)
 
             if not success:
-                logger.error(f"❌ API key validation failed:")
+                logger.error("❌ API key validation failed:")
                 logger.error(f"   {error_msg}")
                 sys.exit(1)
 
@@ -320,13 +267,13 @@ def main():
         else:
             logger.info("Skipping Appium startup (--skip-appium flag set)")
             logger.info("Assuming Appium is already running on port 4723")
-        
+
         # Step 2: Connect to device
         driver = WhatsAppDriver(logger, wireless_adb=args.wireless_adb)
         if not driver.check_device_connection():
             logger.error("No device connected. Exiting.")
             sys.exit(1)
-        
+
         # Step 3: Connect to WhatsApp
         logger.step(2, "Connecting to WhatsApp...")
         if not driver.connect():
@@ -338,7 +285,7 @@ def main():
         if not driver.navigate_to_main():
             logger.error("Failed to navigate to main screen. Exiting.")
             sys.exit(1)
-        
+
         # Step 5: Create pipeline if output directory specified
         pipeline = None
         if args.output:
@@ -361,7 +308,7 @@ def main():
                 include_media=not args.no_output_media,
                 include_transcriptions=True,
                 cleanup_temp=True,
-                dry_run=False
+                dry_run=False,
             )
 
             pipeline = WhatsAppPipeline(pipeline_config, logger=logger)
@@ -401,14 +348,15 @@ def main():
             resume_folder=resume_folder,
             auto_all=auto_all,
             google_drive_folder=args.google_drive_folder,
-            default_range=args.range
+            default_range=args.range,
         )
-        
+
     except KeyboardInterrupt:
         logger.warning("\nInterrupted by user. Cleaning up...")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         # Cleanup

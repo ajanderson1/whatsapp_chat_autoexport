@@ -6,16 +6,13 @@ export and processing pipeline.
 """
 
 import sys
-import time
-from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich.prompt import Prompt, Confirm
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 app = typer.Typer(
     name="wizard",
@@ -26,7 +23,7 @@ app = typer.Typer(
 console = Console()
 
 
-def _scan_adb_devices() -> List[Tuple[str, str]]:
+def _scan_adb_devices() -> list[tuple[str, str]]:
     """
     Scan for connected ADB devices.
 
@@ -41,14 +38,14 @@ def _scan_adb_devices() -> List[Tuple[str, str]]:
             capture_output=True,
             text=True,
             timeout=10,
-            close_fds=True  # Prevent fd inheritance issues in threaded contexts
+            close_fds=True,  # Prevent fd inheritance issues in threaded contexts
         )
 
         if result.returncode != 0:
             return []
 
         devices = []
-        for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
             if not line.strip():
                 continue
 
@@ -78,7 +75,7 @@ def _scan_adb_devices() -> List[Tuple[str, str]]:
         return []
 
 
-def _select_device_wizard() -> Tuple[Optional[str], Optional[str]]:
+def _select_device_wizard() -> tuple[str | None, str | None]:
     """
     Scan for devices and let user select one in the wizard flow.
 
@@ -131,11 +128,7 @@ def _select_device_wizard() -> Tuple[Optional[str], Optional[str]]:
     console.print(f"\n  {len(devices) + 1}. Connect new wireless device")
     console.print(f"  {len(devices) + 2}. Rescan")
 
-    choice = Prompt.ask(
-        "Select device",
-        choices=[str(i) for i in range(1, len(devices) + 3)],
-        default="1"
-    )
+    choice = Prompt.ask("Select device", choices=[str(i) for i in range(1, len(devices) + 3)], default="1")
 
     choice_num = int(choice)
 
@@ -160,7 +153,7 @@ def _select_device_wizard() -> Tuple[Optional[str], Optional[str]]:
 
 
 def _run_wizard_flow(
-    output: Optional[Path],
+    output: Path | None,
     debug: bool = False,
 ) -> None:
     """
@@ -173,10 +166,9 @@ def _run_wizard_flow(
     4. Export - Run export with progress
     5. Summary - Show results
     """
-    from whatsapp_chat_autoexport.utils.logger import Logger
-    from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
     from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
-    from whatsapp_chat_autoexport.legacy.tui.screens.device_connect import DeviceInfo
+    from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+    from whatsapp_chat_autoexport.utils.logger import Logger
 
     driver = None
     appium_manager = None
@@ -186,15 +178,17 @@ def _run_wizard_flow(
         # =====================================================
         # STEP 1: WELCOME
         # =====================================================
-        console.print(Panel.fit(
-            "[bold cyan]WhatsApp Export Wizard[/]\n\n"
-            "This wizard will guide you through:\n"
-            "  1. Connecting to your Android device\n"
-            "  2. Selecting chats to export\n"
-            "  3. Exporting to Google Drive\n"
-            "  4. (Optional) Processing exports",
-            title="Welcome",
-        ))
+        console.print(
+            Panel.fit(
+                "[bold cyan]WhatsApp Export Wizard[/]\n\n"
+                "This wizard will guide you through:\n"
+                "  1. Connecting to your Android device\n"
+                "  2. Selecting chats to export\n"
+                "  3. Exporting to Google Drive\n"
+                "  4. (Optional) Processing exports",
+                title="Welcome",
+            )
+        )
 
         console.print("\n[bold]Options:[/]")
         console.print("  1. Full Export - Export all chats with guidance")
@@ -202,30 +196,28 @@ def _run_wizard_flow(
         console.print("  3. Exit")
         console.print()
 
-        choice = Prompt.ask(
-            "Select an option",
-            choices=["1", "2", "3"],
-            default="1"
-        )
+        choice = Prompt.ask("Select an option", choices=["1", "2", "3"], default="1")
 
         if choice == "3":
             console.print("[yellow]Exiting wizard[/]")
             return
 
-        quick_mode = (choice == "2")
+        quick_mode = choice == "2"
 
         # =====================================================
         # STEP 2: DEVICE CONNECTION
         # =====================================================
         console.print("\n" + "=" * 60)
-        console.print(Panel.fit(
-            "Connect to your Android device.\n\n"
-            "Make sure:\n"
-            "  • USB debugging is enabled\n"
-            "  • Device is connected via USB\n"
-            "  • WhatsApp is open on the device",
-            title="Step 2: Device Connection",
-        ))
+        console.print(
+            Panel.fit(
+                "Connect to your Android device.\n\n"
+                "Make sure:\n"
+                "  • USB debugging is enabled\n"
+                "  • Device is connected via USB\n"
+                "  • WhatsApp is open on the device",
+                title="Step 2: Device Connection",
+            )
+        )
 
         # Scan for devices and let user select
         selected_device_id, wireless_address = _select_device_wizard()
@@ -237,6 +229,7 @@ def _run_wizard_flow(
         # Start Appium
         try:
             from whatsapp_chat_autoexport.export.appium_manager import AppiumManager
+
             appium_manager = AppiumManager(logger=logger)
 
             with console.status("[bold cyan]Starting Appium server..."):
@@ -281,12 +274,14 @@ def _run_wizard_flow(
         # STEP 3: CHAT SELECTION
         # =====================================================
         console.print("\n" + "=" * 60)
-        console.print(Panel.fit(
-            "Select which chats to export.\n\n"
-            "The wizard will scan your chat list\n"
-            "and let you choose which ones to export.",
-            title="Step 3: Chat Selection",
-        ))
+        console.print(
+            Panel.fit(
+                "Select which chats to export.\n\n"
+                "The wizard will scan your chat list\n"
+                "and let you choose which ones to export.",
+                title="Step 3: Chat Selection",
+            )
+        )
 
         # Collect chats
         chats = []
@@ -323,11 +318,7 @@ def _run_wizard_flow(
             console.print("  2. Export first N chats")
             console.print("  3. Enter specific chat numbers")
 
-            sel_choice = Prompt.ask(
-                "Select option",
-                choices=["1", "2", "3"],
-                default="1"
-            )
+            sel_choice = Prompt.ask("Select option", choices=["1", "2", "3"], default="1")
 
             if sel_choice == "1":
                 selected_chats = chats
@@ -350,11 +341,12 @@ def _run_wizard_flow(
         # STEP 4: EXPORT
         # =====================================================
         console.print("\n" + "=" * 60)
-        console.print(Panel.fit(
-            f"Ready to export {len(selected_chats)} chats.\n\n"
-            f"Media: {'Included' if include_media else 'Excluded'}",
-            title="Step 4: Export",
-        ))
+        console.print(
+            Panel.fit(
+                f"Ready to export {len(selected_chats)} chats.\n\nMedia: {'Included' if include_media else 'Excluded'}",
+                title="Step 4: Export",
+            )
+        )
 
         if not Confirm.ask("Start export?", default=True):
             console.print("[yellow]Export cancelled[/]")
@@ -400,12 +392,13 @@ def _run_wizard_flow(
 
         # Pipeline option
         if output and successful > 0:
-            console.print(f"\n[bold]Processing Pipeline[/]")
+            console.print("\n[bold]Processing Pipeline[/]")
             if Confirm.ask("Run processing pipeline?", default=True):
                 console.print("\n[bold]Running pipeline...[/]")
                 try:
-                    from whatsapp_chat_autoexport.pipeline import WhatsAppPipeline
                     import tempfile
+
+                    from whatsapp_chat_autoexport.pipeline import WhatsAppPipeline
 
                     with tempfile.TemporaryDirectory() as temp_dir:
                         pipeline = WhatsAppPipeline(
@@ -444,6 +437,7 @@ def _run_wizard_flow(
         console.print(f"\n[red]✗[/] Error: {e}")
         if debug:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
 
@@ -461,11 +455,11 @@ def _run_wizard_flow(
 
 
 def _run_textual_tui(
-    output: Optional[Path],
+    output: Path | None,
     include_media: bool = True,
     transcribe_audio: bool = True,
     delete_from_drive: bool = False,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     debug: bool = False,
     dry_run: bool = False,
 ) -> None:
@@ -481,7 +475,6 @@ def _run_textual_tui(
         debug: Enable debug mode
         dry_run: Run in dry-run mode
     """
-    import sys
     from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp
     from whatsapp_chat_autoexport.utils.logger import Logger
 
@@ -516,7 +509,7 @@ def _run_textual_tui(
 @app.callback(invoke_without_command=True)
 def wizard_main(
     ctx: typer.Context,
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None,
         "--output",
         "-o",
@@ -543,7 +536,7 @@ def wizard_main(
         "--delete-from-drive",
         help="Delete files from Drive after processing",
     ),
-    limit: Optional[int] = typer.Option(
+    limit: int | None = typer.Option(
         None,
         "--limit",
         "-l",
@@ -656,7 +649,7 @@ def quick(
         "-o",
         help="Output directory for processed files",
     ),
-    limit: Optional[int] = typer.Option(
+    limit: int | None = typer.Option(
         None,
         "--limit",
         "-l",

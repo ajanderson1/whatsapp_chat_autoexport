@@ -5,32 +5,30 @@ Coordinates the execution of all export steps for a single chat.
 """
 
 import time
-from typing import List, Optional, Any, Dict
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
-from .steps import (
-    BaseExportStep,
-    StepContext,
-    StepResult,
-    StepStatus,
-    OpenMenuStep,
-    ClickMoreStep,
-    ClickExportStep,
-    SelectMediaStep,
-    SelectDriveStep,
-    ClickUploadStep,
-)
-from ...core.result import Result, Ok, Err
-from ...core.errors import ExportError, ExportWorkflowError
+from ...automation.elements import ElementFinder
+from ...config.timeouts import TimeoutConfig, get_timeout_config
+from ...core.errors import ExportError
 from ...core.events import (
     EventBus,
-    EventType,
     ExportProgressEvent,
     emit,
 )
-from ...automation.elements import ElementFinder
-from ...config.timeouts import TimeoutConfig, get_timeout_config
+from .steps import (
+    BaseExportStep,
+    ClickExportStep,
+    ClickMoreStep,
+    ClickUploadStep,
+    OpenMenuStep,
+    SelectDriveStep,
+    SelectMediaStep,
+    StepContext,
+    StepResult,
+    StepStatus,
+)
 
 
 class WorkflowStatus(Enum):
@@ -53,8 +51,8 @@ class WorkflowResult:
     message: str
     steps_completed: int = 0
     steps_total: int = 6
-    step_results: List[StepResult] = field(default_factory=list)
-    error: Optional[ExportError] = None
+    step_results: list[StepResult] = field(default_factory=list)
+    error: ExportError | None = None
     duration_seconds: float = 0.0
 
     @property
@@ -79,9 +77,9 @@ class ExportWorkflow:
         self,
         driver: Any,
         element_finder: ElementFinder,
-        logger: Optional[Any] = None,
-        event_bus: Optional[EventBus] = None,
-        timeout_config: Optional[TimeoutConfig] = None,
+        logger: Any | None = None,
+        event_bus: EventBus | None = None,
+        timeout_config: TimeoutConfig | None = None,
     ):
         """
         Initialize the workflow.
@@ -100,7 +98,7 @@ class ExportWorkflow:
         self.timeout_config = timeout_config or get_timeout_config()
 
         # Initialize steps
-        self.steps: List[BaseExportStep] = [
+        self.steps: list[BaseExportStep] = [
             OpenMenuStep(),
             ClickMoreStep(),
             ClickExportStep(),
@@ -113,9 +111,9 @@ class ExportWorkflow:
     def from_whatsapp_driver(
         cls,
         whatsapp_driver: Any,
-        logger: Optional[Any] = None,
-        event_bus: Optional[EventBus] = None,
-        cache: Optional[Any] = None,
+        logger: Any | None = None,
+        event_bus: EventBus | None = None,
+        cache: Any | None = None,
     ) -> "ExportWorkflow":
         """
         Create an ExportWorkflow from an existing WhatsAppDriver.
@@ -148,9 +146,7 @@ class ExportWorkflow:
         appium_driver = whatsapp_driver.driver
 
         if appium_driver is None:
-            raise ValueError(
-                "WhatsAppDriver is not connected. Call connect() first."
-            )
+            raise ValueError("WhatsAppDriver is not connected. Call connect() first.")
 
         # Create ElementFinder with the raw Appium driver
         element_finder = ElementFinder(
@@ -209,8 +205,8 @@ class ExportWorkflow:
             message=f"Starting export for {chat_name}",
         )
 
-        step_results: List[StepResult] = []
-        last_error: Optional[ExportError] = None
+        step_results: list[StepResult] = []
+        last_error: ExportError | None = None
 
         for i, step in enumerate(self.steps):
             context.current_step = step.name
@@ -231,9 +227,7 @@ class ExportWorkflow:
                 error = precondition_result.error
                 self._log_error(f"Precondition failed for {step.name}: {error}")
 
-                step_results.append(
-                    StepResult.failed(error, f"Precondition failed: {error}")
-                )
+                step_results.append(StepResult.failed(error, f"Precondition failed: {error}"))
                 last_error = error
 
                 # Emit failure event
@@ -301,9 +295,7 @@ class ExportWorkflow:
         duration = time.time() - start_time
 
         # Determine final status
-        completed_count = sum(
-            1 for r in step_results if r.status == StepStatus.COMPLETED
-        )
+        completed_count = sum(1 for r in step_results if r.status == StepStatus.COMPLETED)
 
         if completed_count == len(self.steps):
             status = WorkflowStatus.COMPLETED
@@ -342,7 +334,7 @@ class ExportWorkflow:
     def _rollback_steps(
         self,
         context: StepContext,
-        step_results: List[StepResult],
+        step_results: list[StepResult],
     ) -> None:
         """
         Rollback completed steps in reverse order.

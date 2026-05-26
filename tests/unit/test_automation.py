@@ -2,27 +2,26 @@
 Tests for automation layer.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
-from datetime import datetime, timedelta
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
 
 from whatsapp_chat_autoexport.automation import (
+    CacheEntry,
+    ElementCache,
     ElementFinder,
     FindResult,
-    ElementCache,
-    CacheEntry,
     RuntimeSelectorRegistry,
 )
 from whatsapp_chat_autoexport.config.selectors import (
+    ElementSelectors,
     SelectorDefinition,
     SelectorStrategy,
-    ElementSelectors,
-    create_default_selectors,
-    SelectorRegistry,
 )
-from whatsapp_chat_autoexport.core.result import is_ok, is_err
+from whatsapp_chat_autoexport.core.result import is_err, is_ok
 
 
 class TestCacheEntry:
@@ -453,9 +452,7 @@ class TestElementFinder:
 
     def test_find_failure(self):
         """Test element find failure returns error."""
-        mock_driver, _, finder = self.create_mock_driver_and_finder(
-            find_raises=Exception("Not found")
-        )
+        mock_driver, _, finder = self.create_mock_driver_and_finder(find_raises=Exception("Not found"))
 
         selectors = ElementSelectors(
             name="test_button",
@@ -512,9 +509,7 @@ class TestElementFinder:
 
     def test_is_present_not_found(self):
         """Test is_present returns False when not found."""
-        mock_driver, _, finder = self.create_mock_driver_and_finder(
-            find_raises=Exception("Not found")
-        )
+        mock_driver, _, finder = self.create_mock_driver_and_finder(find_raises=Exception("Not found"))
 
         selectors = ElementSelectors(
             name="test_button",

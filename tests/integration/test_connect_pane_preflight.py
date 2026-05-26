@@ -15,18 +15,15 @@ an empty device list so no real ADB is required.
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from textual.app import App, ComposeResult
 
+from whatsapp_chat_autoexport.preflight.report import CheckResult, PreflightReport, Status
 from whatsapp_chat_autoexport.tui.textual_panes.connect_pane import ConnectPane
 from whatsapp_chat_autoexport.tui.textual_widgets.activity_log import ActivityLog
 from whatsapp_chat_autoexport.tui.textual_widgets.preflight_panel import PreflightPanel
-from whatsapp_chat_autoexport.preflight.report import CheckResult, PreflightReport, Status
-
 
 # ---------------------------------------------------------------------------
 # Helper factories
@@ -102,9 +99,12 @@ class _Host(App):
 async def test_preflight_panel_present():
     """#preflight-panel must exist in the DOM when ConnectPane is mounted."""
     app = _Host()
-    with patch("subprocess.run", return_value=_make_empty_adb_result()), patch(
-        "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
-        return_value=_ok_report(),
+    with (
+        patch("subprocess.run", return_value=_make_empty_adb_result()),
+        patch(
+            "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
+            return_value=_ok_report(),
+        ),
     ):
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -117,9 +117,10 @@ async def test_preflight_panel_present():
 async def test_preflight_skipped_when_skip_preflight_true():
     """When app.skip_preflight=True, run_preflight must never be called."""
     app = _Host(skip_preflight=True)
-    with patch("subprocess.run", return_value=_make_empty_adb_result()), patch(
-        "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight"
-    ) as preflight_mock:
+    with (
+        patch("subprocess.run", return_value=_make_empty_adb_result()),
+        patch("whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight") as preflight_mock,
+    ):
         async with app.run_test(size=(120, 40)) as pilot:
             # Give any workers a moment to complete
             await pilot.pause()
@@ -134,9 +135,12 @@ async def test_preflight_skipped_when_skip_preflight_true():
 async def test_preflight_panel_shows_report():
     """After set_report() with an OK result, render_text() contains the provider name."""
     app = _Host()
-    with patch("subprocess.run", return_value=_make_empty_adb_result()), patch(
-        "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
-        return_value=_ok_report(),
+    with (
+        patch("subprocess.run", return_value=_make_empty_adb_result()),
+        patch(
+            "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
+            return_value=_ok_report(),
+        ),
     ):
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -156,9 +160,12 @@ async def test_preflight_panel_shows_report():
 async def test_preflight_blocks_dry_run_on_hard_fail():
     """When the panel holds a HARD_FAIL report, action_use_dry_run must NOT post Connected."""
     app = _Host()
-    with patch("subprocess.run", return_value=_make_empty_adb_result()), patch(
-        "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
-        return_value=_hard_fail_report(),
+    with (
+        patch("subprocess.run", return_value=_make_empty_adb_result()),
+        patch(
+            "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
+            return_value=_hard_fail_report(),
+        ),
     ):
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -182,9 +189,12 @@ async def test_preflight_blocks_dry_run_on_hard_fail():
 async def test_preflight_allows_dry_run_on_ok():
     """When the panel holds an OK report, action_use_dry_run MUST post Connected."""
     app = _Host()
-    with patch("subprocess.run", return_value=_make_empty_adb_result()), patch(
-        "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
-        return_value=_ok_report(),
+    with (
+        patch("subprocess.run", return_value=_make_empty_adb_result()),
+        patch(
+            "whatsapp_chat_autoexport.tui.textual_panes.connect_pane.run_preflight",
+            return_value=_ok_report(),
+        ),
     ):
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()

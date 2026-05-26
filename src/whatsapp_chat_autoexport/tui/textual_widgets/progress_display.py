@@ -7,12 +7,11 @@ Shows:
 - Step-by-step breakdown with status indicators
 """
 
-from typing import List, Optional
 from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.widgets import Static, ProgressBar, Label
-from textual.containers import Vertical, Horizontal
+from textual.containers import Vertical
 from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import ProgressBar, Static
 
 
 class ProgressDisplay(Widget):
@@ -51,7 +50,7 @@ class ProgressDisplay(Widget):
     def __init__(
         self,
         title: str = "EXPORT PROGRESS",
-        steps: Optional[List[str]] = None,
+        steps: list[str] | None = None,
         **kwargs,
     ) -> None:
         """
@@ -168,7 +167,7 @@ class ProgressDisplay(Widget):
         self.current_step = 0
         self._update_display()
 
-    def advance_step(self, step_index: Optional[int] = None) -> None:
+    def advance_step(self, step_index: int | None = None) -> None:
         """
         Advance to the next step.
 
@@ -212,7 +211,7 @@ class ProgressDisplay(Widget):
         self._is_paused = False
         self._update_display()
 
-    def set_steps(self, steps: List[str]) -> None:
+    def set_steps(self, steps: list[str]) -> None:
         """
         Set custom step names.
 

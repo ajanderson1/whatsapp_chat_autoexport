@@ -9,19 +9,17 @@ Tests cover:
 """
 
 import pytest
-
-from whatsapp_chat_autoexport.tui.textual_panes.export_pane import ExportPane
-from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
-from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import (
-    ChatListWidget,
-    ChatDisplayStatus,
-)
-from whatsapp_chat_autoexport.tui.textual_widgets.progress_pane import ProgressPane
-
 from textual.containers import Container
 from textual.message import Message
 from textual.widgets import Button, Static, TabbedContent
 
+from whatsapp_chat_autoexport.tui.textual_panes.export_pane import ExportPane
+from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
+from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import (
+    ChatDisplayStatus,
+    ChatListWidget,
+)
+from whatsapp_chat_autoexport.tui.textual_widgets.progress_pane import ProgressPane
 
 # =============================================================================
 # ExportPane Initialisation
@@ -303,6 +301,7 @@ async def test_no_duplicate_listview_ids_with_both_panes(tui_app):
 
         # Both panes are mounted (ContentSwitcher keeps both in DOM)
         from textual.widgets import ListView
+
         listviews = screen.query(ListView)
         ids = [lv.id for lv in listviews if lv.id and "listview" in lv.id]
         # Should have at least two distinct IDs (one from each ChatListWidget)
@@ -313,7 +312,7 @@ async def test_no_duplicate_listview_ids_with_both_panes(tui_app):
 # ExportPane settle-wait integration
 # =============================================================================
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 
 class TestExportPaneSettleWait:
@@ -343,26 +342,20 @@ class TestExportPaneSettleWait:
         mock_app = MagicMock()
         mock_app.debug_mode = False
 
-        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app), \
-             patch(
-                 "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
-             ) as mock_exporter_cls:
+        with (
+            patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app),
+            patch("whatsapp_chat_autoexport.export.chat_exporter.ChatExporter") as mock_exporter_cls,
+        ):
             mock_exporter = mock_exporter_cls.return_value
             mock_exporter.export_chat_to_google_drive.return_value = True
 
-            result = pane._export_single_chat(
-                driver, "ChatA", include_media=False, log_callback=None
-            )
+            result = pane._export_single_chat(driver, "ChatA", include_media=False, log_callback=None)
 
         assert result is True
         driver.wait_for_whatsapp_foreground.assert_called_once()
         driver.verify_whatsapp_is_open.assert_called_once()
         # Settle must precede verify
-        order = [
-            c[0]
-            for c in driver.mock_calls
-            if c[0] in ("wait_for_whatsapp_foreground", "verify_whatsapp_is_open")
-        ]
+        order = [c[0] for c in driver.mock_calls if c[0] in ("wait_for_whatsapp_foreground", "verify_whatsapp_is_open")]
         assert order[0] == "wait_for_whatsapp_foreground"
 
     def test_settle_timeout_still_calls_verify(self):
@@ -372,9 +365,7 @@ class TestExportPaneSettleWait:
         mock_app.debug_mode = False
 
         with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app):
-            result = pane._export_single_chat(
-                driver, "ChatA", include_media=False, log_callback=None
-            )
+            result = pane._export_single_chat(driver, "ChatA", include_media=False, log_callback=None)
 
         # _export_single_chat now returns ExportOutcome (falsy when not SUCCESS)
         assert bool(result) is False
@@ -410,18 +401,16 @@ class TestExportPaneTriStateResult:
         mock_app = MagicMock()
         mock_app.debug_mode = False
 
-        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app), \
-             patch(
-                "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
-             ) as mock_exporter_cls:
+        with (
+            patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app),
+            patch("whatsapp_chat_autoexport.export.chat_exporter.ChatExporter") as mock_exporter_cls,
+        ):
             mock_exporter = mock_exporter_cls.return_value
             mock_exporter.export_chat_to_google_drive.return_value = ExportOutcome(
                 kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
                 reason="Community chat",
             )
-            outcome = pane._export_single_chat(
-                driver, "ChatC", include_media=False, log_callback=None
-            )
+            outcome = pane._export_single_chat(driver, "ChatC", include_media=False, log_callback=None)
 
         assert isinstance(outcome, ExportOutcome)
         assert outcome.kind == ExportOutcomeKind.SKIPPED_COMMUNITY
@@ -451,10 +440,10 @@ class TestExportPaneTriStateResult:
         mock_progress = MagicMock()
         pane.query_one = MagicMock(return_value=mock_progress)
 
-        with patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app), \
-             patch(
-                "whatsapp_chat_autoexport.export.chat_exporter.ChatExporter"
-             ) as mock_exporter_cls:
+        with (
+            patch.object(type(pane), "app", new_callable=PropertyMock, return_value=mock_app),
+            patch("whatsapp_chat_autoexport.export.chat_exporter.ChatExporter") as mock_exporter_cls,
+        ):
             mock_exporter = mock_exporter_cls.return_value
             mock_exporter.export_chat_to_google_drive.return_value = ExportOutcome(
                 kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
@@ -462,9 +451,8 @@ class TestExportPaneTriStateResult:
             )
 
             import asyncio
-            results = asyncio.run(
-                pane._run_export(chats=["CommunityX"])
-            )
+
+            results = asyncio.run(pane._run_export(chats=["CommunityX"]))
 
         assert "CommunityX" in results["skipped"]
         assert "CommunityX" not in results["failed"]
@@ -504,9 +492,7 @@ class TestExportPaneReasonPlumbing:
         chat_list.update_chat_status.assert_called_once()
         args, kwargs = chat_list.update_chat_status.call_args
         assert args[0] == "ChatA"
-        assert kwargs.get("reason") == "Verify failed" or (
-            len(args) >= 3 and args[2] == "Verify failed"
-        )
+        assert kwargs.get("reason") == "Verify failed" or (len(args) >= 3 and args[2] == "Verify failed")
         # Pane-local record also stored for end-of-run reconcile
         assert pane._per_chat_reasons["ChatA"] == "Verify failed"
 
@@ -531,9 +517,7 @@ class TestExportPaneReasonPlumbing:
 
         args, kwargs = chat_list.update_chat_status.call_args
         assert args[0] == "ChatB"
-        assert kwargs.get("reason") == "Community chat" or (
-            len(args) >= 3 and args[2] == "Community chat"
-        )
+        assert kwargs.get("reason") == "Community chat" or (len(args) >= 3 and args[2] == "Community chat")
         assert pane._per_chat_reasons["ChatB"] == "Community chat"
         # Progress pane must receive the "Skipped:" activity log line
         progress.log_activity.assert_called_once()
@@ -564,10 +548,12 @@ class TestExportPaneReconcile:
         }
 
         chat_list = MagicMock()
+
         def query_one(selector, cls):
             if "chat-status-list" in selector:
                 return chat_list
             raise RuntimeError()
+
         pane.query_one = query_one
 
         pane._reconcile_chat_list_statuses()
@@ -583,9 +569,7 @@ class TestExportPaneReconcile:
         assert status_by_name["D"] == ChatDisplayStatus.SKIPPED
 
         # Reasons propagated on failure/skip entries
-        reason_by_name = {
-            c.args[0]: c.kwargs.get("reason") for c in calls
-        }
+        reason_by_name = {c.args[0]: c.kwargs.get("reason") for c in calls}
         assert reason_by_name["B"] == "Verify failed"
         assert reason_by_name["C"] == "Timeout"
         assert reason_by_name["D"] == "Community"

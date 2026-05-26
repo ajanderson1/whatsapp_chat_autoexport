@@ -14,15 +14,13 @@ Flow:
 import asyncio
 import subprocess
 import sys
-from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
-from textual.widgets import Button, Static
+from textual.widgets import Button
 from textual.worker import Worker, WorkerState
 
-from ..textual_widgets.activity_log import ActivityLog
 from ..textual_widgets.progress_pane import ProgressPane
 
 
@@ -47,7 +45,7 @@ class SummaryPane(Container):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._export_results: dict = {}
-        self._processing_worker: Optional[Worker] = None
+        self._processing_worker: Worker | None = None
         self._cancelled: bool = False
 
     def compose(self) -> ComposeResult:
@@ -136,34 +134,31 @@ class SummaryPane(Container):
         if not output_dir:
             for i, phase_name in enumerate(phases):
                 self.app.call_from_thread(
-                    self._update_processing_phase, phase_name, i + 1,
+                    self._update_processing_phase,
+                    phase_name,
+                    i + 1,
                 )
                 await asyncio.sleep(1.0)
                 self.app.call_from_thread(
-                    self._complete_processing_phase, phase_name,
+                    self._complete_processing_phase,
+                    phase_name,
                 )
             return results
 
         try:
-            from ...pipeline import WhatsAppPipeline, PipelineConfig
+            from ...pipeline import PipelineConfig, WhatsAppPipeline
             from ...utils.logger import Logger
 
             def _tui_log_callback(message: str, level: str) -> None:
                 try:
-                    self.app.call_from_thread(
-                        progress.log_activity, message, level
-                    )
+                    self.app.call_from_thread(progress.log_activity, message, level)
                 except Exception:
                     pass
 
             debug_mode = getattr(self.app, "debug_mode", False)
             logger = Logger(debug=debug_mode, on_message=_tui_log_callback)
 
-            exported_chats = (
-                self._export_results.get("completed", [])
-                if self._export_results
-                else []
-            )
+            exported_chats = self._export_results.get("completed", []) if self._export_results else []
 
             config = PipelineConfig(
                 output_dir=output_dir,
@@ -190,16 +185,10 @@ class SummaryPane(Container):
                 try:
                     if phase != _last_phase[0]:
                         if _last_phase[0] is not None:
-                            prev_display = progress.PHASE_DISPLAY_MAP.get(
-                                _last_phase[0], _last_phase[0].title()
-                            )
-                            self.app.call_from_thread(
-                                self._complete_processing_phase, prev_display
-                            )
+                            prev_display = progress.PHASE_DISPLAY_MAP.get(_last_phase[0], _last_phase[0].title())
+                            self.app.call_from_thread(self._complete_processing_phase, prev_display)
                         _last_phase[0] = phase
-                        self.app.call_from_thread(
-                            self._update_pipeline_phase, phase
-                        )
+                        self.app.call_from_thread(self._update_pipeline_phase, phase)
 
                     if item_name or total > 0:
                         self.app.call_from_thread(
@@ -210,41 +199,23 @@ class SummaryPane(Container):
                         )
 
                     if message:
-                        self.app.call_from_thread(
-                            progress.log_activity, message, "info"
-                        )
+                        self.app.call_from_thread(progress.log_activity, message, "info")
                 except Exception:
                     pass
 
-            pipeline = WhatsAppPipeline(
-                config, logger=logger, on_progress=_pipeline_progress_callback
-            )
+            pipeline = WhatsAppPipeline(config, logger=logger, on_progress=_pipeline_progress_callback)
 
             self.app.call_from_thread(self._update_processing_phase, "Download", 1)
-            pipeline_results = await asyncio.to_thread(
-                pipeline.run, output_dir / "downloads"
-            )
+            pipeline_results = await asyncio.to_thread(pipeline.run, output_dir / "downloads")
 
             if _last_phase[0] is not None:
-                last_display = progress.PHASE_DISPLAY_MAP.get(
-                    _last_phase[0], _last_phase[0].title()
-                )
-                self.app.call_from_thread(
-                    self._complete_processing_phase, last_display
-                )
+                last_display = progress.PHASE_DISPLAY_MAP.get(_last_phase[0], _last_phase[0].title())
+                self.app.call_from_thread(self._complete_processing_phase, last_display)
 
-            results["downloaded"] = (
-                1 if "download" in pipeline_results.get("phases_completed", []) else 0
-            )
-            results["extracted"] = (
-                1 if "extract" in pipeline_results.get("phases_completed", []) else 0
-            )
-            results["transcribed"] = (
-                1 if "transcribe" in pipeline_results.get("phases_completed", []) else 0
-            )
-            results["output_files"] = len(
-                pipeline_results.get("outputs_created", [])
-            )
+            results["downloaded"] = 1 if "download" in pipeline_results.get("phases_completed", []) else 0
+            results["extracted"] = 1 if "extract" in pipeline_results.get("phases_completed", []) else 0
+            results["transcribed"] = 1 if "transcribe" in pipeline_results.get("phases_completed", []) else 0
+            results["output_files"] = len(pipeline_results.get("outputs_created", []))
             results["errors"] = pipeline_results.get("errors", [])
 
             for phase_name in ["Download", "Extract", "Transcribe", "Build", "Cleanup"]:
@@ -260,14 +231,10 @@ class SummaryPane(Container):
     # Progress helpers (called on main thread via call_from_thread)
     # ------------------------------------------------------------------
 
-    def _update_processing_phase(
-        self, phase_name_or_key: str, phase_num: int = 0
-    ) -> None:
+    def _update_processing_phase(self, phase_name_or_key: str, phase_num: int = 0) -> None:
         progress = self.query_one("#summary-progress", ProgressPane)
         if phase_num > 0:
-            progress.update_processing_progress(
-                phase=phase_name_or_key, phase_num=phase_num
-            )
+            progress.update_processing_progress(phase=phase_name_or_key, phase_num=phase_num)
             progress.log_activity(f"Starting: {phase_name_or_key}", "info")
         else:
             progress.update_pipeline_phase(phase_name_or_key)
@@ -276,9 +243,7 @@ class SummaryPane(Container):
         progress = self.query_one("#summary-progress", ProgressPane)
         progress.update_pipeline_phase(phase_key)
 
-    def _update_pipeline_item(
-        self, item_name: str, current: int, total: int
-    ) -> None:
+    def _update_pipeline_item(self, item_name: str, current: int, total: int) -> None:
         progress = self.query_one("#summary-progress", ProgressPane)
         progress.update_pipeline_item(item_name, current, total)
 
@@ -316,9 +281,7 @@ class SummaryPane(Container):
             "exported": len(self._export_results.get("completed", [])),
             "failed": len(self._export_results.get("failed", [])),
             "transcribed": processing_results.get("transcribed", 0),
-            "output_path": (
-                str(self.app.output_dir) if self.app.output_dir else ""
-            ),
+            "output_path": (str(self.app.output_dir) if self.app.output_dir else ""),
         }
         self.show_results(summary, cancelled=self._cancelled)
 
@@ -330,13 +293,9 @@ class SummaryPane(Container):
         """Open the output folder in the system file manager."""
         if self.app.output_dir:
             if sys.platform == "darwin":
-                subprocess.run(
-                    ["open", str(self.app.output_dir)], close_fds=True
-                )
+                subprocess.run(["open", str(self.app.output_dir)], close_fds=True)
             elif sys.platform == "linux":
-                subprocess.run(
-                    ["xdg-open", str(self.app.output_dir)], close_fds=True
-                )
+                subprocess.run(["xdg-open", str(self.app.output_dir)], close_fds=True)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""

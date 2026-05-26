@@ -3,28 +3,12 @@ Tests for export step classes.
 """
 
 import time
-import pytest
-from unittest.mock import Mock, MagicMock, patch, call
-from dataclasses import dataclass
+from unittest.mock import Mock, patch
 
-from whatsapp_chat_autoexport.whatsapp.export.steps import (
-    BaseExportStep,
-    StepContext,
-    StepResult,
-    StepStatus,
-    OpenMenuStep,
-    ClickMoreStep,
-    ClickExportStep,
-    SelectMediaStep,
-    SelectDriveStep,
-    ClickUploadStep,
-)
-from whatsapp_chat_autoexport.whatsapp.export import ExportWorkflow, WorkflowStatus
-from whatsapp_chat_autoexport.automation import ElementFinder, ElementCache, FindResult
+from whatsapp_chat_autoexport.automation import FindResult
 from whatsapp_chat_autoexport.config.selectors import (
     SelectorDefinition,
     SelectorStrategy,
-    ElementSelectors,
 )
 from whatsapp_chat_autoexport.config.timeouts import (
     TimeoutConfig,
@@ -32,7 +16,19 @@ from whatsapp_chat_autoexport.config.timeouts import (
     get_timeout_config,
     reset_timeout_config,
 )
-from whatsapp_chat_autoexport.core.result import Ok, Err
+from whatsapp_chat_autoexport.core.result import Err, Ok
+from whatsapp_chat_autoexport.whatsapp.export import ExportWorkflow, WorkflowStatus
+from whatsapp_chat_autoexport.whatsapp.export.steps import (
+    ClickExportStep,
+    ClickMoreStep,
+    ClickUploadStep,
+    OpenMenuStep,
+    SelectDriveStep,
+    SelectMediaStep,
+    StepContext,
+    StepResult,
+    StepStatus,
+)
 
 
 class MockElementFinder:
@@ -459,9 +455,7 @@ class TestExportWorkflow:
         workflow = ExportWorkflow(driver=mock_driver, element_finder=finder)
 
         # Patch ClickExportStep._is_community_chat
-        with patch.object(
-            ClickExportStep, "_is_community_chat", return_value=True
-        ):
+        with patch.object(ClickExportStep, "_is_community_chat", return_value=True):
             result = workflow.execute(chat_name="Community Chat")
 
         assert result.status == WorkflowStatus.SKIPPED
@@ -544,13 +538,16 @@ class TrackingElementFinder(MockElementFinder):
         self.find_call_details = []
 
     def find(self, selectors, timeout=5.0, wait_visible=True, context=None):
-        self.find_call_details.append({
-            "selectors_name": selectors.name,
-            "timeout": timeout,
-            "context": context,
-        })
+        self.find_call_details.append(
+            {
+                "selectors_name": selectors.name,
+                "timeout": timeout,
+                "context": context,
+            }
+        )
         if context and any(fc in context for fc in self.fail_contexts):
             from whatsapp_chat_autoexport.core.errors import ElementNotFoundError
+
             return Err(
                 ElementNotFoundError(
                     message="Element not found",
@@ -566,7 +563,9 @@ class TestClickMoreStepSmartWaits:
     def test_no_time_sleep_in_source(self):
         """Verify no time.sleep() calls exist in click_more.py."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.click_more import ClickMoreStep
+
         source = inspect.getsource(ClickMoreStep)
         assert "time.sleep" not in source
 
@@ -607,7 +606,9 @@ class TestClickExportStepSmartWaits:
     def test_no_time_sleep_in_source(self):
         """Verify no time.sleep() calls exist in click_export.py."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.click_export import ClickExportStep
+
         source = inspect.getsource(ClickExportStep)
         assert "time.sleep" not in source
 
@@ -674,7 +675,9 @@ class TestSelectMediaStepSmartWaits:
     def test_no_time_sleep_in_source(self):
         """Verify no time.sleep() calls exist in select_media.py."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.select_media import SelectMediaStep
+
         source = inspect.getsource(SelectMediaStep)
         assert "time.sleep" not in source
 
@@ -690,10 +693,7 @@ class TestSelectMediaStepSmartWaits:
 
         assert result.status == StepStatus.COMPLETED
         # Should have find calls: media option + share dialog wait
-        share_wait_calls = [
-            c for c in finder.find_call_details
-            if c["context"] and "share_dialog_wait" in c["context"]
-        ]
+        share_wait_calls = [c for c in finder.find_call_details if c["context"] and "share_dialog_wait" in c["context"]]
         assert len(share_wait_calls) == 1
         assert share_wait_calls[0]["timeout"] == context.timeout_config.screen_transition_wait
 
@@ -719,7 +719,9 @@ class TestSelectDriveStepSmartWaits:
     def test_no_time_sleep_in_source(self):
         """Verify no time.sleep() calls exist in select_drive.py."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.select_drive import SelectDriveStep
+
         source = inspect.getsource(SelectDriveStep)
         assert "time.sleep" not in source
 
@@ -736,8 +738,7 @@ class TestSelectDriveStepSmartWaits:
         assert result.status == StepStatus.COMPLETED
         # Should have a wait call for upload button after My Drive click
         folder_wait_calls = [
-            c for c in finder.find_call_details
-            if c["context"] and "drive_folder_wait" in c["context"]
+            c for c in finder.find_call_details if c["context"] and "drive_folder_wait" in c["context"]
         ]
         assert len(folder_wait_calls) == 1
         assert folder_wait_calls[0]["timeout"] == context.timeout_config.screen_transition_wait
@@ -770,8 +771,7 @@ class TestSelectDriveStepSmartWaits:
         step.execute(context)
 
         folder_wait_calls = [
-            c for c in finder.find_call_details
-            if c["context"] and "drive_folder_wait" in c["context"]
+            c for c in finder.find_call_details if c["context"] and "drive_folder_wait" in c["context"]
         ]
         assert len(folder_wait_calls) == 1
         assert folder_wait_calls[0]["timeout"] == 0.5  # FAST profile screen_transition_wait
@@ -783,7 +783,9 @@ class TestClickUploadStepSmartWaits:
     def test_no_hardcoded_sleep_in_main_execute_path(self):
         """Verify no hardcoded time.sleep() calls in main execute flow (only in poll loop)."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.click_upload import ClickUploadStep
+
         source = inspect.getsource(ClickUploadStep)
         # time.sleep is only allowed inside _poll_upload_started
         # Check that it doesn't appear in execute() itself
@@ -838,6 +840,7 @@ class TestClickUploadStepSmartWaits:
 
         # First call: still in Drive; subsequent calls: back in WhatsApp
         call_count = [0]
+
         def mock_current_package():
             call_count[0] += 1
             if call_count[0] <= 2:
@@ -921,34 +924,43 @@ class TestNoSleepsInStepFiles:
     def test_no_time_sleep_in_click_more(self):
         """click_more.py has no time.sleep() calls."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps import click_more
+
         source = inspect.getsource(click_more)
         assert "time.sleep" not in source
 
     def test_no_time_sleep_in_click_export(self):
         """click_export.py has no time.sleep() calls."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps import click_export
+
         source = inspect.getsource(click_export)
         assert "time.sleep" not in source
 
     def test_no_time_sleep_in_select_media(self):
         """select_media.py has no time.sleep() calls."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps import select_media
+
         source = inspect.getsource(select_media)
         assert "time.sleep" not in source
 
     def test_no_time_sleep_in_select_drive(self):
         """select_drive.py has no time.sleep() calls."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps import select_drive
+
         source = inspect.getsource(select_drive)
         assert "time.sleep" not in source
 
     def test_time_sleep_only_in_poll_loop_for_click_upload(self):
         """click_upload.py only has time.sleep inside _poll_upload_started."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.click_upload import ClickUploadStep
 
         # No sleep in execute()
@@ -966,7 +978,9 @@ class TestNoSleepsInStepFiles:
     def test_base_step_retry_delays_preserved(self):
         """base_step.py retains time.sleep for retry delays (intentional)."""
         import inspect
+
         from whatsapp_chat_autoexport.whatsapp.export.steps.base_step import BaseExportStep
+
         source = inspect.getsource(BaseExportStep.execute_with_retry)
         assert "time.sleep(self.retry_delay_seconds)" in source
 
@@ -1023,8 +1037,7 @@ class TestWorkflowSmartWaitsIntegration:
 
         # Check that screen_transition_wait values were used in find calls
         transition_wait_calls = [
-            c for c in finder.find_call_details
-            if c["timeout"] == fast_config.screen_transition_wait
+            c for c in finder.find_call_details if c["timeout"] == fast_config.screen_transition_wait
         ]
         # Should have at least the post-click waits from click_export, select_media, select_drive
         assert len(transition_wait_calls) >= 3

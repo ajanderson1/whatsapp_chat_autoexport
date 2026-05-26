@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ..pipeline import WhatsAppPipeline, PipelineConfig, create_default_config
+from ..pipeline import PipelineConfig, WhatsAppPipeline
 from ..utils.logger import Logger
 
 
@@ -41,142 +41,92 @@ Examples:
 
   # Dry run (no changes)
   %(prog)s --dry-run --output ~/exports
-        """
+        """,
     )
 
     # Source options
-    source_group = parser.add_argument_group('Source Options')
+    source_group = parser.add_argument_group("Source Options")
     source_group.add_argument(
-        '--source',
-        type=str,
-        metavar='DIR',
-        help='Source directory with ZIP files (if skipping download)'
+        "--source", type=str, metavar="DIR", help="Source directory with ZIP files (if skipping download)"
     )
     source_group.add_argument(
-        '--skip-download',
-        action='store_true',
-        help='Skip Google Drive download, use local files'
+        "--skip-download", action="store_true", help="Skip Google Drive download, use local files"
     )
     source_group.add_argument(
-        '--google-drive-folder',
-        type=str,
-        metavar='NAME',
-        help='Google Drive folder name to download from'
+        "--google-drive-folder", type=str, metavar="NAME", help="Google Drive folder name to download from"
     )
     source_group.add_argument(
-        '--delete-from-drive',
-        action='store_true',
-        help='Delete files from Google Drive after download'
+        "--delete-from-drive", action="store_true", help="Delete files from Google Drive after download"
     )
 
     # Output options
-    output_group = parser.add_argument_group('Output Options')
+    output_group = parser.add_argument_group("Output Options")
     output_group.add_argument(
-        '--output',
-        type=str,
-        metavar='DIR',
-        required=True,
-        help='Output directory for organized exports'
+        "--output", type=str, metavar="DIR", required=True, help="Output directory for organized exports"
     )
     output_group.add_argument(
-        '--no-media',
-        action='store_true',
-        help='Exclude media files from final output (transcriptions still created)'
+        "--no-media", action="store_true", help="Exclude media files from final output (transcriptions still created)"
     )
     output_group.add_argument(
-        '--no-transcriptions',
-        action='store_true',
-        help='Do not include transcriptions in output'
+        "--no-transcriptions", action="store_true", help="Do not include transcriptions in output"
     )
 
     # Transcription options
-    transcribe_group = parser.add_argument_group('Transcription Options')
+    transcribe_group = parser.add_argument_group("Transcription Options")
+    transcribe_group.add_argument("--no-transcribe", action="store_true", help="Skip audio/video transcription")
     transcribe_group.add_argument(
-        '--no-transcribe',
-        action='store_true',
-        help='Skip audio/video transcription'
+        "--transcription-language", type=str, metavar="LANG", help="Language code for transcription (e.g., en, es, fr)"
     )
     transcribe_group.add_argument(
-        '--transcription-language',
+        "--transcription-provider",
         type=str,
-        metavar='LANG',
-        help='Language code for transcription (e.g., en, es, fr)'
+        choices=["whisper", "elevenlabs"],
+        default="whisper",
+        metavar="PROVIDER",
+        help="Transcription service provider (whisper or elevenlabs, default: whisper)",
     )
     transcribe_group.add_argument(
-        '--transcription-provider',
-        type=str,
-        choices=['whisper', 'elevenlabs'],
-        default='whisper',
-        metavar='PROVIDER',
-        help='Transcription service provider (whisper or elevenlabs, default: whisper)'
+        "--force-transcribe", action="store_true", help="Re-transcribe even if transcription exists"
     )
     transcribe_group.add_argument(
-        '--force-transcribe',
-        action='store_true',
-        help='Re-transcribe even if transcription exists'
-    )
-    transcribe_group.add_argument(
-        '--skip-opus-conversion',
-        action='store_true',
-        help='Skip Opus to M4A conversion (requires FFmpeg)'
+        "--skip-opus-conversion", action="store_true", help="Skip Opus to M4A conversion (requires FFmpeg)"
     )
 
     # Format options
-    format_group = parser.add_argument_group('Format Options')
+    format_group = parser.add_argument_group("Format Options")
     format_group.add_argument(
-        '--format-version',
+        "--format-version",
         type=str,
-        choices=['v2', 'legacy'],
-        default='v2',
-        metavar='VERSION',
-        help='Output format: v2 (default, companion notes + day headers) or legacy (old transcript.txt)'
+        choices=["v2", "legacy"],
+        default="v2",
+        metavar="VERSION",
+        help="Output format: v2 (default, companion notes + day headers) or legacy (old transcript.txt)",
     )
 
     # General options
-    parser.add_argument(
-        '--keep-temp',
-        action='store_true',
-        help='Keep temporary files after processing'
-    )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Dry run mode (no file modifications)'
-    )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode (verbose output)'
-    )
+    parser.add_argument("--keep-temp", action="store_true", help="Keep temporary files after processing")
+    parser.add_argument("--dry-run", action="store_true", help="Dry run mode (no file modifications)")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode (verbose output)")
 
     # Logging options
-    logging_group = parser.add_argument_group('Logging Options', 'Configure file logging')
+    logging_group = parser.add_argument_group("Logging Options", "Configure file logging")
+    logging_group.add_argument("--log-dir", type=str, metavar="DIR", help="Directory for log files (default: .logs/)")
+    logging_group.add_argument("--no-log-file", action="store_true", help="Disable file logging (console only)")
     logging_group.add_argument(
-        '--log-dir',
+        "--log-level",
         type=str,
-        metavar='DIR',
-        help='Directory for log files (default: .logs/)'
-    )
-    logging_group.add_argument(
-        '--no-log-file',
-        action='store_true',
-        help='Disable file logging (console only)'
-    )
-    logging_group.add_argument(
-        '--log-level',
-        type=str,
-        choices=['debug', 'info', 'warning', 'error'],
-        default='info',
-        metavar='LEVEL',
-        help='File log level: debug|info|warning|error (default: info)'
+        choices=["debug", "info", "warning", "error"],
+        default="info",
+        metavar="LEVEL",
+        help="File log level: debug|info|warning|error (default: info)",
     )
 
     # Debug/testing options
-    debug_group = parser.add_argument_group('Debug/Testing Options')
+    debug_group = parser.add_argument_group("Debug/Testing Options")
     debug_group.add_argument(
-        '--video-test',
-        action='store_true',
-        help='Video transcription test mode: only process video files, keep extracted audio files for inspection, auto-enable debug'
+        "--video-test",
+        action="store_true",
+        help="Video transcription test mode: only process video files, keep extracted audio files for inspection, auto-enable debug",
     )
 
     return parser
@@ -194,7 +144,7 @@ def main():
         log_dir=log_dir,
         log_file_enabled=not args.no_log_file,
         log_level=args.log_level,
-        logger_name="whatsapp_pipeline"
+        logger_name="whatsapp_pipeline",
     )
 
     # Show log file location
@@ -212,14 +162,12 @@ def main():
     # Validate API key if transcription is enabled
     if not args.no_transcribe:
         import os
+
         from whatsapp_chat_autoexport.transcription.transcriber_factory import TranscriberFactory
 
         # Determine which environment variable to check
-        env_var_map = {
-            'whisper': 'OPENAI_API_KEY',
-            'elevenlabs': 'ELEVENLABS_API_KEY'
-        }
-        required_env_var = env_var_map.get(args.transcription_provider.lower(), 'OPENAI_API_KEY')
+        env_var_map = {"whisper": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
+        required_env_var = env_var_map.get(args.transcription_provider.lower(), "OPENAI_API_KEY")
 
         # Check if API key is set
         api_key = os.environ.get(required_env_var)
@@ -230,7 +178,7 @@ def main():
             success, error_msg = TranscriberFactory.validate_provider(args.transcription_provider)
 
             if not success:
-                logger.error(f"❌ API key validation failed:")
+                logger.error("❌ API key validation failed:")
                 logger.error(f"   {error_msg}")
                 return 1
 
@@ -248,23 +196,19 @@ def main():
         delete_from_drive=args.delete_from_drive,
         skip_download=args.skip_download,
         download_dir=Path(args.source).expanduser() if args.source else None,
-
         # Output
         output_dir=Path(args.output).expanduser(),
         include_media=not args.no_media,
         include_transcriptions=not args.no_transcriptions,
-
         # Transcription
         transcribe_audio_video=not args.no_transcribe,
         transcription_language=args.transcription_language,
         transcription_provider=args.transcription_provider,
         skip_existing_transcriptions=not args.force_transcribe,
         convert_opus_to_m4a=not args.skip_opus_conversion,
-
         # General
         cleanup_temp=not args.keep_temp,
         dry_run=args.dry_run,
-
         # Format
         format_version=args.format_version,
     )
@@ -276,7 +220,7 @@ def main():
         source_dir = Path(args.source).expanduser() if args.source else None
         results = pipeline.run(source_dir=source_dir)
 
-        if results['success']:
+        if results["success"]:
             logger.success("\nPipeline completed successfully!")
             logger.info(f"\nOutputs created in: {config.output_dir}")
             return 0
@@ -290,6 +234,7 @@ def main():
     except Exception as e:
         logger.error(f"\nUnexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
     finally:

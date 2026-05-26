@@ -2,12 +2,10 @@
 Step 3: Click the 'Export chat' option.
 """
 
-from typing import Any, Dict, Optional
-
-from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
-from ....core.result import Result, Ok, Err
-from ....core.errors import ExportError, ExportWorkflowError, ErrorCategory
 from ....config.selectors import create_default_selectors
+from ....core.errors import ExportError, ExportWorkflowError
+from ....core.result import Err, Ok, Result
+from .base_step import BaseExportStep, StepContext, StepResult
 
 
 class ClickExportStep(BaseExportStep):
@@ -95,9 +93,7 @@ class ClickExportStep(BaseExportStep):
 
             # Check for privacy error dialog
             if self._check_privacy_error(context):
-                context.log_warning(
-                    f"Chat has privacy restrictions: {context.chat_name}"
-                )
+                context.log_warning(f"Chat has privacy restrictions: {context.chat_name}")
                 return StepResult.skipped("Advanced chat privacy enabled")
 
             context.step_data["export_dialog_open"] = True
@@ -198,9 +194,7 @@ class ClickExportStep(BaseExportStep):
                 return False
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate that submenu is open.
 

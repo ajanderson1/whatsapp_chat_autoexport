@@ -7,18 +7,13 @@ same schema as the Go-based WhatsApp MCP bridge.
 
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
 from whatsapp_chat_autoexport.mcp.bridge_reader import (
     BridgeReader,
-    BridgeChat,
-    BridgeMessage,
-    BridgeReaderError,
     DatabaseNotFoundError,
 )
-
 
 # =========================================================================
 # Fixtures
@@ -97,7 +92,16 @@ def populated_db(bridge_db):
     conn.execute(
         "INSERT INTO messages (id, chat_jid, sender, content, timestamp, is_from_me, media_type, filename) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        ("msg004", "447837370336@s.whatsapp.net", "447837370336@s.whatsapp.net", "JID sender", "2026-03-25 10:30:00", 0, None, None),
+        (
+            "msg004",
+            "447837370336@s.whatsapp.net",
+            "447837370336@s.whatsapp.net",
+            "JID sender",
+            "2026-03-25 10:30:00",
+            0,
+            None,
+            None,
+        ),
     )
 
     # Insert messages for group
@@ -225,9 +229,7 @@ class TestGetMessages:
         """Both after and limit work together."""
         reader = make_reader(populated_db)
         cutoff = datetime(2026, 3, 25, 10, 0, 0)
-        msgs = reader.get_messages(
-            "447837370336@s.whatsapp.net", after=cutoff, limit=1
-        )
+        msgs = reader.get_messages("447837370336@s.whatsapp.net", after=cutoff, limit=1)
         assert len(msgs) == 1
 
     def test_message_fields(self, populated_db):

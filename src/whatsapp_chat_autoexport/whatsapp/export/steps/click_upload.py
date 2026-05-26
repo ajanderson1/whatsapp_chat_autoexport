@@ -3,12 +3,11 @@ Step 6: Click the upload/save button to complete export.
 """
 
 import time
-from typing import Any, Dict, Optional
 
-from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
-from ....core.result import Result, Ok, Err
+from ....config.selectors import ElementSelectors, SelectorDefinition, SelectorStrategy, create_default_selectors
 from ....core.errors import ExportError, ExportWorkflowError
-from ....config.selectors import create_default_selectors, ElementSelectors, SelectorDefinition, SelectorStrategy
+from ....core.result import Err, Ok, Result
+from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
 
 
 class ClickUploadStep(BaseExportStep):
@@ -126,8 +125,7 @@ class ClickUploadStep(BaseExportStep):
         try:
             # Strategy: Look for any visible button in the toolbar area
             buttons = context.driver.find_elements(
-                "xpath",
-                "//*[@clickable='true' and (contains(@class, 'Button') or contains(@class, 'ImageButton'))]"
+                "xpath", "//*[@clickable='true' and (contains(@class, 'Button') or contains(@class, 'ImageButton'))]"
             )
 
             # Find button with save/upload related attributes
@@ -145,7 +143,7 @@ class ClickUploadStep(BaseExportStep):
                         if self._poll_upload_started(context):
                             context.step_data["upload_started"] = True
                             return StepResult.success(
-                                f"Export initiated via alternate strategy",
+                                "Export initiated via alternate strategy",
                                 strategy="button_scan",
                             )
                 except Exception:
@@ -193,7 +191,7 @@ class ClickUploadStep(BaseExportStep):
             # Check for upload progress indicator
             progress_elements = context.driver.find_elements(
                 "xpath",
-                "//*[contains(@class, 'ProgressBar') or contains(@text, 'Uploading') or contains(@text, 'Saving')]"
+                "//*[contains(@class, 'ProgressBar') or contains(@text, 'Uploading') or contains(@text, 'Saving')]",
             )
             if progress_elements:
                 return True
@@ -224,9 +222,7 @@ class ClickUploadStep(BaseExportStep):
                 return True  # Upload may have completed
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate that Drive is selected.
 

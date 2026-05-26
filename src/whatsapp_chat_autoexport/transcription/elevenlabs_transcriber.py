@@ -7,20 +7,17 @@ Uses ElevenLabs' Scribe API for audio/video transcription.
 import os
 import time
 from pathlib import Path
-from typing import Optional
-from io import BytesIO
 
-from .base_transcriber import BaseTranscriber, TranscriptionResult
 from ..utils.audio_converter import (
     AudioConverter,
     is_whatsapp_video_message,
-    ExtractionResult,
-    ExtractionErrorCode,
 )
+from .base_transcriber import BaseTranscriber, TranscriptionResult
 
 # ElevenLabs import (will be optional)
 try:
     from elevenlabs import ElevenLabs
+
     ELEVENLABS_AVAILABLE = True
 except ImportError:
     ELEVENLABS_AVAILABLE = False
@@ -43,21 +40,32 @@ class ElevenLabsTranscriber(BaseTranscriber):
     # Supported formats - ElevenLabs supports common audio/video formats
     # Based on their documentation, they support most common formats
     SUPPORTED_FORMATS = [
-        '.mp3', '.mp4', '.mpeg', '.mpga',
-        '.m4a', '.wav', '.webm', '.ogg',
-        '.opus', '.flac', '.avi', '.mov',
-        '.mkv', '.aac', '.wma'
+        ".mp3",
+        ".mp4",
+        ".mpeg",
+        ".mpga",
+        ".m4a",
+        ".wav",
+        ".webm",
+        ".ogg",
+        ".opus",
+        ".flac",
+        ".avi",
+        ".mov",
+        ".mkv",
+        ".aac",
+        ".wma",
     ]
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         logger=None,
         model: str = "scribe_v1",
         convert_opus: bool = True,
         diarize: bool = False,
         tag_audio_events: bool = False,
-        debug_dir: Optional[Path] = None
+        debug_dir: Path | None = None,
     ):
         """
         Initialize ElevenLabs transcriber.
@@ -83,7 +91,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
             return
 
         # Check for API key early to provide helpful error message
-        effective_api_key = api_key or os.environ.get('ELEVENLABS_API_KEY')
+        effective_api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
         if not effective_api_key:
             self.log_error(
                 "ElevenLabs API key not found!\n"
@@ -139,7 +147,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
         """
         return self.SUPPORTED_FORMATS.copy()
 
-    def _check_existing_transcription(self, audio_path: Path) -> Optional[str]:
+    def _check_existing_transcription(self, audio_path: Path) -> str | None:
         """
         Check if transcription already exists for this audio file.
 
@@ -162,7 +170,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
                 return None
 
             # Read the transcription file
-            with open(transcription_path, 'r', encoding='utf-8') as f:
+            with open(transcription_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Extract text, skipping metadata lines (starting with #)
@@ -170,13 +178,15 @@ class ElevenLabsTranscriber(BaseTranscriber):
             for line in lines:
                 stripped = line.strip()
                 # Skip metadata headers and empty lines
-                if stripped and not stripped.startswith('#'):
+                if stripped and not stripped.startswith("#"):
                     text_lines.append(stripped)
 
-            transcription_text = '\n'.join(text_lines)
+            transcription_text = "\n".join(text_lines)
 
             if transcription_text:
-                self.log_debug(f"Found existing transcription: {transcription_path.name} ({len(transcription_text)} chars)")
+                self.log_debug(
+                    f"Found existing transcription: {transcription_path.name} ({len(transcription_text)} chars)"
+                )
                 return transcription_text
             else:
                 return None
@@ -186,11 +196,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
             return None
 
     def transcribe(
-        self,
-        audio_path: Path,
-        language: Optional[str] = None,
-        skip_existing: bool = True,
-        **kwargs
+        self, audio_path: Path, language: str | None = None, skip_existing: bool = True, **kwargs
     ) -> TranscriptionResult:
         """
         Transcribe an audio or video file using ElevenLabs Scribe.
@@ -207,8 +213,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
         # Check if service is available
         if not self.is_available():
             return TranscriptionResult(
-                success=False,
-                error="ElevenLabs Scribe service not available. Check API key and installation."
+                success=False, error="ElevenLabs Scribe service not available. Check API key and installation."
             )
 
         # DEFENSIVE CHECK: Skip if transcription already exists (if skip_existing=True)
@@ -221,43 +226,31 @@ class ElevenLabsTranscriber(BaseTranscriber):
                     text=existing_transcription,
                     duration_seconds=0.0,
                     language=language,
-                    metadata={
-                        'cached': True,
-                        'source': 'existing_transcription'
-                    }
+                    metadata={"cached": True, "source": "existing_transcription"},
                 )
 
         # Validate file
         is_valid, error_msg = self.validate_file(audio_path)
         if not is_valid:
-            return TranscriptionResult(
-                success=False,
-                error=error_msg
-            )
+            return TranscriptionResult(success=False, error=error_msg)
 
         # Check if file is Opus and needs conversion
         temp_m4a_file = None
         actual_file_to_transcribe = audio_path
 
-        if audio_path.suffix.lower() == '.opus':
+        if audio_path.suffix.lower() == ".opus":
             if self.convert_opus and self.audio_converter:
                 if not self.audio_converter.is_ffmpeg_available():
                     return TranscriptionResult(
                         success=False,
-                        error="Opus file requires FFmpeg for conversion. Install FFmpeg or use --skip-opus-conversion."
+                        error="Opus file requires FFmpeg for conversion. Install FFmpeg or use --skip-opus-conversion.",
                     )
 
-                self.log_info(f"🔄 Converting Opus to M4A for better compatibility...")
-                temp_m4a_file = self.audio_converter.convert_opus_to_m4a(
-                    audio_path,
-                    temp_dir=audio_path.parent
-                )
+                self.log_info("🔄 Converting Opus to M4A for better compatibility...")
+                temp_m4a_file = self.audio_converter.convert_opus_to_m4a(audio_path, temp_dir=audio_path.parent)
 
                 if not temp_m4a_file:
-                    return TranscriptionResult(
-                        success=False,
-                        error="Failed to convert Opus file to M4A"
-                    )
+                    return TranscriptionResult(success=False, error="Failed to convert Opus file to M4A")
 
                 actual_file_to_transcribe = temp_m4a_file
                 self.log_debug(f"✓ Converted to: {temp_m4a_file.name}")
@@ -270,16 +263,16 @@ class ElevenLabsTranscriber(BaseTranscriber):
                 if not self.audio_converter.is_ffmpeg_available():
                     return TranscriptionResult(
                         success=False,
-                        error="WhatsApp video message requires FFmpeg for audio extraction. Install FFmpeg."
+                        error="WhatsApp video message requires FFmpeg for audio extraction. Install FFmpeg.",
                     )
 
-                self.log_info(f"🎬 Extracting audio from WhatsApp video message...")
+                self.log_info("🎬 Extracting audio from WhatsApp video message...")
 
                 # Use detailed extraction for better error reporting
                 extraction_result = self.audio_converter.extract_audio_from_video_detailed(
                     audio_path,
                     temp_dir=audio_path.parent,
-                    contact_name=audio_path.parent.name  # Use parent folder as contact name
+                    contact_name=audio_path.parent.name,  # Use parent folder as contact name
                 )
 
                 if not extraction_result.success:
@@ -288,10 +281,10 @@ class ElevenLabsTranscriber(BaseTranscriber):
                         success=False,
                         error=extraction_result.user_friendly_message,
                         metadata={
-                            'error_code': extraction_result.error_code.value,
-                            'video_info': extraction_result.video_info,
-                            'ffmpeg_stderr': extraction_result.ffmpeg_stderr,
-                        }
+                            "error_code": extraction_result.error_code.value,
+                            "video_info": extraction_result.video_info,
+                            "ffmpeg_stderr": extraction_result.ffmpeg_stderr,
+                        },
                     )
 
                 temp_m4a_file = extraction_result.output_path
@@ -300,7 +293,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
             else:
                 return TranscriptionResult(
                     success=False,
-                    error="WhatsApp video message requires audio extraction but AudioConverter not initialized"
+                    error="WhatsApp video message requires audio extraction but AudioConverter not initialized",
                 )
 
         # Check file size
@@ -311,8 +304,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
                 temp_m4a_file.unlink()
 
             return TranscriptionResult(
-                success=False,
-                error=f"File too large: {file_size_mb:.1f} MB (max: {self.MAX_FILE_SIZE_MB} MB)"
+                success=False, error=f"File too large: {file_size_mb:.1f} MB (max: {self.MAX_FILE_SIZE_MB} MB)"
             )
 
         self.log_info(f"Transcribing: {audio_path.name} ({file_size_mb:.2f} MB)")
@@ -321,30 +313,30 @@ class ElevenLabsTranscriber(BaseTranscriber):
 
         try:
             # Read file into memory
-            with open(actual_file_to_transcribe, 'rb') as audio_file:
+            with open(actual_file_to_transcribe, "rb") as audio_file:
                 audio_data = audio_file.read()
 
             # Determine content type based on file extension
             # This helps ElevenLabs correctly identify the file format
             extension_to_mime = {
-                '.m4a': 'audio/mp4',
-                '.mp4': 'video/mp4',
-                '.mp3': 'audio/mpeg',
-                '.wav': 'audio/wav',
-                '.opus': 'audio/opus',
-                '.ogg': 'audio/ogg',
-                '.flac': 'audio/flac',
-                '.webm': 'audio/webm',
-                '.aac': 'audio/aac',
+                ".m4a": "audio/mp4",
+                ".mp4": "video/mp4",
+                ".mp3": "audio/mpeg",
+                ".wav": "audio/wav",
+                ".opus": "audio/opus",
+                ".ogg": "audio/ogg",
+                ".flac": "audio/flac",
+                ".webm": "audio/webm",
+                ".aac": "audio/aac",
             }
             file_ext = actual_file_to_transcribe.suffix.lower()
-            content_type = extension_to_mime.get(file_ext, 'application/octet-stream')
+            content_type = extension_to_mime.get(file_ext, "application/octet-stream")
 
             # Build request parameters
             # Pass file as tuple (filename, bytes, content_type) for better format detection
             request_params = {
-                'model_id': self.model,
-                'file': (actual_file_to_transcribe.name, audio_data, content_type),
+                "model_id": self.model,
+                "file": (actual_file_to_transcribe.name, audio_data, content_type),
             }
 
             # Add optional parameters
@@ -352,29 +344,29 @@ class ElevenLabsTranscriber(BaseTranscriber):
                 # ElevenLabs uses 3-letter ISO codes (e.g., 'eng' instead of 'en')
                 # Try to convert common 2-letter codes to 3-letter
                 language_mapping = {
-                    'en': 'eng',
-                    'es': 'spa',
-                    'fr': 'fra',
-                    'de': 'deu',
-                    'it': 'ita',
-                    'pt': 'por',
-                    'ru': 'rus',
-                    'ja': 'jpn',
-                    'ko': 'kor',
-                    'zh': 'chi',
-                    'ar': 'ara',
-                    'hi': 'hin',
+                    "en": "eng",
+                    "es": "spa",
+                    "fr": "fra",
+                    "de": "deu",
+                    "it": "ita",
+                    "pt": "por",
+                    "ru": "rus",
+                    "ja": "jpn",
+                    "ko": "kor",
+                    "zh": "chi",
+                    "ar": "ara",
+                    "hi": "hin",
                 }
                 language_code = language_mapping.get(language, language)
-                request_params['language_code'] = language_code
+                request_params["language_code"] = language_code
 
             # Add diarization if enabled
             if self.diarize:
-                request_params['diarize'] = True
+                request_params["diarize"] = True
 
             # Add audio event tagging if enabled
             if self.tag_audio_events:
-                request_params['tag_audio_events'] = True
+                request_params["tag_audio_events"] = True
 
             # Add any additional kwargs
             request_params.update(kwargs)
@@ -386,39 +378,37 @@ class ElevenLabsTranscriber(BaseTranscriber):
 
             # Extract text from response
             # The response structure includes a 'text' field
-            transcription_text = response.text.strip() if hasattr(response, 'text') else str(response).strip()
+            transcription_text = response.text.strip() if hasattr(response, "text") else str(response).strip()
 
             if not transcription_text:
                 return TranscriptionResult(
-                    success=False,
-                    error="Transcription returned empty text",
-                    duration_seconds=duration
+                    success=False, error="Transcription returned empty text", duration_seconds=duration
                 )
 
             self.log_success(f"✓ Transcribed {audio_path.name} in {duration:.1f}s ({len(transcription_text)} chars)")
 
             # Extract metadata from response
             metadata = {
-                'model': self.model,
-                'file_size_mb': file_size_mb,
-                'was_converted': temp_m4a_file is not None,
-                'original_format': audio_path.suffix if temp_m4a_file else None,
-                'diarization_enabled': self.diarize,
-                'audio_events_enabled': self.tag_audio_events
+                "model": self.model,
+                "file_size_mb": file_size_mb,
+                "was_converted": temp_m4a_file is not None,
+                "original_format": audio_path.suffix if temp_m4a_file else None,
+                "diarization_enabled": self.diarize,
+                "audio_events_enabled": self.tag_audio_events,
             }
 
             # Add detected language if available
             detected_language = None
-            if hasattr(response, 'language'):
+            if hasattr(response, "language"):
                 detected_language = response.language
-                metadata['detected_language'] = detected_language
+                metadata["detected_language"] = detected_language
 
             return TranscriptionResult(
                 success=True,
                 text=transcription_text,
                 duration_seconds=duration,
                 language=detected_language or language,
-                metadata=metadata
+                metadata=metadata,
             )
 
         except Exception as e:
@@ -426,11 +416,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
             error_msg = f"Transcription failed: {str(e)}"
             self.log_error(error_msg)
 
-            return TranscriptionResult(
-                success=False,
-                error=error_msg,
-                duration_seconds=duration
-            )
+            return TranscriptionResult(success=False, error=error_msg, duration_seconds=duration)
 
         finally:
             # Always cleanup temporary M4A file
@@ -442,11 +428,7 @@ class ElevenLabsTranscriber(BaseTranscriber):
                     self.log_warning(f"Failed to cleanup temp file: {e}")
 
     def transcribe_with_retry(
-        self,
-        audio_path: Path,
-        max_retries: int = 3,
-        retry_delay: float = 2.0,
-        **kwargs
+        self, audio_path: Path, max_retries: int = 3, retry_delay: float = 2.0, **kwargs
     ) -> TranscriptionResult:
         """
         Transcribe with automatic retry on failure.

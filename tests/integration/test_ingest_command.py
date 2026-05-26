@@ -6,14 +6,12 @@ directory, then exercises the ingest flow programmatically via
 ``run_ingest``. No subprocesses are spawned.
 """
 
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from whatsapp_chat_autoexport.cli.commands.ingest import run_ingest
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -85,16 +83,22 @@ def appium_export(tmp_path):
     export_dir = tmp_path / "appium_export"
     export_dir.mkdir()
 
-    _write_appium_transcript(export_dir / "Alice Smith", [
-        ("3/25/26, 2:00 PM", "Alice Smith", "Hello!"),
-        ("3/25/26, 2:01 PM", "Me", "Hi Alice!"),
-        ("3/26/26, 2:00 PM", "Alice Smith", "How are you?"),
-    ])
+    _write_appium_transcript(
+        export_dir / "Alice Smith",
+        [
+            ("3/25/26, 2:00 PM", "Alice Smith", "Hello!"),
+            ("3/25/26, 2:01 PM", "Me", "Hi Alice!"),
+            ("3/26/26, 2:00 PM", "Alice Smith", "How are you?"),
+        ],
+    )
 
-    _write_appium_transcript(export_dir / "Bob Jones", [
-        ("3/25/26, 3:00 PM", "Bob Jones", "Hey!"),
-        ("3/25/26, 3:05 PM", "Me", "Hey Bob!"),
-    ])
+    _write_appium_transcript(
+        export_dir / "Bob Jones",
+        [
+            ("3/25/26, 3:00 PM", "Bob Jones", "Hey!"),
+            ("3/25/26, 3:05 PM", "Me", "Hey Bob!"),
+        ],
+    )
 
     return export_dir
 
@@ -110,6 +114,7 @@ def output_dir(tmp_path):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestIngestFresh:
     """Test ingesting into an empty output directory."""
@@ -146,9 +151,7 @@ class TestIngestFresh:
         assert summary["total_new_messages"] > 0
 
         # Find Alice's result
-        alice_result = next(
-            r for r in summary["chat_results"] if r["name"] == "Alice Smith"
-        )
+        alice_result = next(r for r in summary["chat_results"] if r["name"] == "Alice Smith")
         assert alice_result["appium_messages"] == 3
         assert alice_result["existing_messages"] == 0
 
@@ -169,9 +172,12 @@ class TestIngestGapFill:
     def test_gap_fill_merges_messages(self, appium_export, output_dir):
         """Ingest should merge new Appium messages with existing vault data."""
         # Pre-populate vault with an existing transcript for Alice
-        _write_existing_vault_transcript(output_dir / "Alice Smith", [
-            ("2026-03-25", "14:00", "Alice Smith: Hello!"),
-        ])
+        _write_existing_vault_transcript(
+            output_dir / "Alice Smith",
+            [
+                ("2026-03-25", "14:00", "Alice Smith: Hello!"),
+            ],
+        )
 
         summary = run_ingest(
             export_dir=appium_export,
@@ -180,18 +186,19 @@ class TestIngestGapFill:
 
         assert summary["success"] is True
 
-        alice_result = next(
-            r for r in summary["chat_results"] if r["name"] == "Alice Smith"
-        )
+        alice_result = next(r for r in summary["chat_results"] if r["name"] == "Alice Smith")
         assert alice_result["existing_messages"] >= 1
         # Merged count should be >= appium messages (dedup might reduce)
         assert alice_result["merged_messages"] >= alice_result["appium_messages"]
 
     def test_gap_fill_reports_correctly(self, appium_export, output_dir):
         """Gap-filled chats should be counted in the summary."""
-        _write_existing_vault_transcript(output_dir / "Alice Smith", [
-            ("2026-03-24", "10:00", "Alice Smith: Old message"),
-        ])
+        _write_existing_vault_transcript(
+            output_dir / "Alice Smith",
+            [
+                ("2026-03-24", "10:00", "Alice Smith: Old message"),
+            ],
+        )
 
         summary = run_ingest(
             export_dir=appium_export,
@@ -232,13 +239,15 @@ class TestIngestIdempotent:
                 continue
             lines = transcript.read_text().splitlines()
             # Extract text message lines (have [HH:MM] prefix, contain sender, no media tag)
-            text_msgs = [l for l in lines
-                         if l.startswith("[") and ": " in l
-                         and not any(tag in l for tag in ["<photo>", "<video>", "<voice>",
-                                                          "<document>", "<sticker>", "<media>"])]
+            text_msgs = [
+                l
+                for l in lines
+                if l.startswith("[")
+                and ": " in l
+                and not any(tag in l for tag in ["<photo>", "<video>", "<voice>", "<document>", "<sticker>", "<media>"])
+            ]
             # No text message should appear twice
-            assert len(text_msgs) == len(set(text_msgs)), \
-                f"Duplicate text messages found in {chat_dir.name}"
+            assert len(text_msgs) == len(set(text_msgs)), f"Duplicate text messages found in {chat_dir.name}"
 
 
 class TestIngestDryRun:

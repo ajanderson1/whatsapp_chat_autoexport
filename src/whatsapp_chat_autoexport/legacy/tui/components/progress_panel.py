@@ -4,24 +4,22 @@ Progress panel component for TUI.
 Displays multi-phase progress tracking with visual indicators.
 """
 
-from typing import Optional, List
 from datetime import datetime, timedelta
 
-from rich.console import Console, RenderableType
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.progress import (
-    Progress,
     BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
-    TaskProgressColumn,
-    SpinnerColumn,
 )
 from rich.table import Table
 from rich.text import Text
-from rich.live import Live
 
-from whatsapp_chat_autoexport.state.models import ExportProgress, PipelineProgress
+from whatsapp_chat_autoexport.state.models import ExportProgress
 
 
 class ProgressPanel:
@@ -45,10 +43,10 @@ class ProgressPanel:
             TimeElapsedColumn(),
             expand=True,
         )
-        self._task_id: Optional[int] = None
-        self._current_chat: Optional[str] = None
+        self._task_id: int | None = None
+        self._current_chat: str | None = None
         self._current_step: str = ""
-        self._start_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
 
         # Statistics
         self._total: int = 0

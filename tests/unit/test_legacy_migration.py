@@ -12,9 +12,6 @@ import ast
 import os
 from pathlib import Path
 
-import pytest
-
-
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 TUI_PACKAGE = PROJECT_ROOT / "src" / "whatsapp_chat_autoexport" / "tui"
 LEGACY_PACKAGE = PROJECT_ROOT / "src" / "whatsapp_chat_autoexport" / "legacy"
@@ -38,8 +35,8 @@ class TestActiveImports:
     def test_import_textual_screens(self):
         """Active Textual screens should be importable."""
         from whatsapp_chat_autoexport.tui.textual_screens import (
-            MainScreen,
             HelpScreen,
+            MainScreen,
         )
 
         assert MainScreen is not None
@@ -48,11 +45,11 @@ class TestActiveImports:
     def test_import_textual_widgets(self):
         """Textual widgets should be importable."""
         from whatsapp_chat_autoexport.tui.textual_widgets import (
-            ChatListWidget,
-            SettingsPanel,
             ActivityLog,
-            QueueWidget,
+            ChatListWidget,
             ProgressDisplay,
+            QueueWidget,
+            SettingsPanel,
         )
 
         assert ChatListWidget is not None
@@ -153,9 +150,8 @@ class TestNoRichOrTyperInActiveTUI:
                         rel = filepath.relative_to(PROJECT_ROOT)
                         violations.append(f"{rel}: imports {imp}")
 
-        assert violations == [], (
-            f"Active tui/ code should not import Rich TUI modules:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+        assert violations == [], "Active tui/ code should not import Rich TUI modules:\n" + "\n".join(
+            f"  - {v}" for v in violations
         )
 
     def test_no_typer_imports(self):
@@ -168,9 +164,8 @@ class TestNoRichOrTyperInActiveTUI:
                     rel = filepath.relative_to(PROJECT_ROOT)
                     violations.append(f"{rel}: imports {imp}")
 
-        assert violations == [], (
-            f"Active tui/ code should not import typer:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+        assert violations == [], "Active tui/ code should not import typer:\n" + "\n".join(
+            f"  - {v}" for v in violations
         )
 
 
@@ -191,7 +186,6 @@ class TestHardcodedPathsRemoved:
                             rel = filepath.relative_to(PROJECT_ROOT)
                             violations.append(f"{rel}:{i}: {line.strip()}")
 
-        assert violations == [], (
-            f"Hardcoded /Users/ paths found in active tui/ code:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+        assert violations == [], "Hardcoded /Users/ paths found in active tui/ code:\n" + "\n".join(
+            f"  - {v}" for v in violations
         )

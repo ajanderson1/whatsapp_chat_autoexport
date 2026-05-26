@@ -6,10 +6,9 @@ and correlate them with actual media files.
 """
 
 import re
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 from ..utils.logger import Logger
 
@@ -17,20 +16,22 @@ from ..utils.logger import Logger
 @dataclass
 class Message:
     """Represents a single WhatsApp message."""
+
     timestamp: datetime
     sender: str
     content: str
     is_media: bool = False
-    media_type: Optional[str] = None  # 'image', 'audio', 'video', 'document', etc.
+    media_type: str | None = None  # 'image', 'audio', 'video', 'document', etc.
     raw_line: str = ""
     line_number: int = 0
-    message_id: Optional[str] = None
+    message_id: str | None = None
     source: str = "unknown"
 
 
 @dataclass(frozen=True)
 class MediaReference:
     """Represents a media reference in the transcript."""
+
     message: Message
     media_type: str
     timestamp: datetime
@@ -48,51 +49,51 @@ class TranscriptParser:
     #   12/5/23, 9:05 PM - Bob: audio omitted
     TIMESTAMP_PATTERNS = [
         # US format: M/D/YY, H:MM AM/PM
-        r'^(\d{1,2}/\d{1,2}/\d{2,4},\s+\d{1,2}:\d{2}\s+[AP]M)\s+-\s+([^:]+):\s*(.*)$',
+        r"^(\d{1,2}/\d{1,2}/\d{2,4},\s+\d{1,2}:\d{2}\s+[AP]M)\s+-\s+([^:]+):\s*(.*)$",
         # European format: DD/MM/YYYY, HH:MM
-        r'^(\d{1,2}/\d{1,2}/\d{2,4},\s+\d{1,2}:\d{2})\s+-\s+([^:]+):\s*(.*)$',
+        r"^(\d{1,2}/\d{1,2}/\d{2,4},\s+\d{1,2}:\d{2})\s+-\s+([^:]+):\s*(.*)$",
         # ISO format: YYYY-MM-DD HH:MM:SS
-        r'^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+-\s+([^:]+):\s*(.*)$',
+        r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+-\s+([^:]+):\s*(.*)$",
     ]
 
     # Media reference patterns (case-insensitive)
     MEDIA_PATTERNS = {
-        'image': [
-            r'<media omitted>',
-            r'image omitted',
-            r'IMG-\d+',
-            r'photo omitted',
-            r'picture omitted',
+        "image": [
+            r"<media omitted>",
+            r"image omitted",
+            r"IMG-\d+",
+            r"photo omitted",
+            r"picture omitted",
         ],
-        'audio': [
-            r'audio omitted',
-            r'PTT-\d+',  # Push-to-talk
-            r'AUD-\d+',
-            r'voice message',
+        "audio": [
+            r"audio omitted",
+            r"PTT-\d+",  # Push-to-talk
+            r"AUD-\d+",
+            r"voice message",
         ],
-        'video': [
-            r'video omitted',
-            r'VID-\d+',
+        "video": [
+            r"video omitted",
+            r"VID-\d+",
         ],
-        'document': [
-            r'document omitted',
-            r'DOC-\d+',
-            r'PDF-\d+',
-            r'\.pdf',
-            r'\.docx?',
-            r'\.xlsx?',
+        "document": [
+            r"document omitted",
+            r"DOC-\d+",
+            r"PDF-\d+",
+            r"\.pdf",
+            r"\.docx?",
+            r"\.xlsx?",
         ],
-        'sticker': [
-            r'sticker omitted',
-            r'STK-\d+',
+        "sticker": [
+            r"sticker omitted",
+            r"STK-\d+",
         ],
-        'gif': [
-            r'GIF omitted',
-            r'\.gif',
+        "gif": [
+            r"GIF omitted",
+            r"\.gif",
         ],
     }
 
-    def __init__(self, logger: Optional[Logger] = None):
+    def __init__(self, logger: Logger | None = None):
         """
         Initialize the transcript parser.
 
@@ -102,16 +103,14 @@ class TranscriptParser:
         self.logger = logger or Logger()
         self._compiled_patterns = self._compile_patterns()
 
-    def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
+    def _compile_patterns(self) -> dict[str, list[re.Pattern]]:
         """Compile all media patterns for efficient matching."""
         compiled = {}
         for media_type, patterns in self.MEDIA_PATTERNS.items():
-            compiled[media_type] = [
-                re.compile(pattern, re.IGNORECASE) for pattern in patterns
-            ]
+            compiled[media_type] = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
         return compiled
 
-    def parse_transcript(self, transcript_path: Path) -> Tuple[List[Message], List[MediaReference]]:
+    def parse_transcript(self, transcript_path: Path) -> tuple[list[Message], list[MediaReference]]:
         """
         Parse a WhatsApp transcript file.
 
@@ -135,11 +134,11 @@ class TranscriptParser:
         media_references = []
 
         try:
-            with open(transcript_path, 'r', encoding='utf-8') as f:
+            with open(transcript_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             for line_num, line in enumerate(lines, start=1):
-                line = line.rstrip('\n')
+                line = line.rstrip("\n")
 
                 # Skip empty lines
                 if not line.strip():
@@ -155,17 +154,17 @@ class TranscriptParser:
                     if message.is_media:
                         media_ref = MediaReference(
                             message=message,
-                            media_type=message.media_type or 'unknown',
+                            media_type=message.media_type or "unknown",
                             timestamp=message.timestamp,
                             sender=message.sender,
-                            line_number=line_num
+                            line_number=line_num,
                         )
                         media_references.append(media_ref)
                 else:
                     # If not a valid message, it might be a continuation of the previous message
                     if messages:
                         # Append to the last message's content
-                        messages[-1].content += '\n' + line
+                        messages[-1].content += "\n" + line
 
         except Exception as e:
             self.logger.error(f"Error parsing transcript: {e}")
@@ -174,7 +173,7 @@ class TranscriptParser:
         self.logger.success(f"Parsed {len(messages)} messages, found {len(media_references)} media references")
         return messages, media_references
 
-    def _parse_message_line(self, line: str, line_num: int) -> Optional[Message]:
+    def _parse_message_line(self, line: str, line_num: int) -> Message | None:
         """
         Parse a single line as a WhatsApp message.
 
@@ -210,12 +209,12 @@ class TranscriptParser:
                     is_media=is_media,
                     media_type=media_type,
                     raw_line=line,
-                    line_number=line_num
+                    line_number=line_num,
                 )
 
         return None
 
-    def _parse_timestamp(self, timestamp_str: str) -> Optional[datetime]:
+    def _parse_timestamp(self, timestamp_str: str) -> datetime | None:
         """
         Parse timestamp string into datetime object.
 
@@ -227,12 +226,12 @@ class TranscriptParser:
         """
         # Common timestamp formats
         formats = [
-            '%m/%d/%y, %I:%M %p',      # 1/15/24, 10:30 AM
-            '%m/%d/%Y, %I:%M %p',      # 1/15/2024, 10:30 AM
-            '%d/%m/%y, %H:%M',         # 15/01/24, 10:30
-            '%d/%m/%Y, %H:%M',         # 15/01/2024, 10:30
-            '%Y-%m-%d %H:%M:%S',       # 2024-01-15 10:30:00
-            '%Y-%m-%d %H:%M',          # 2024-01-15 10:30
+            "%m/%d/%y, %I:%M %p",  # 1/15/24, 10:30 AM
+            "%m/%d/%Y, %I:%M %p",  # 1/15/2024, 10:30 AM
+            "%d/%m/%y, %H:%M",  # 15/01/24, 10:30
+            "%d/%m/%Y, %H:%M",  # 15/01/2024, 10:30
+            "%Y-%m-%d %H:%M:%S",  # 2024-01-15 10:30:00
+            "%Y-%m-%d %H:%M",  # 2024-01-15 10:30
         ]
 
         for fmt in formats:
@@ -245,7 +244,7 @@ class TranscriptParser:
         self.logger.debug_msg(f"Could not parse timestamp: {timestamp_str}")
         return None
 
-    def _detect_media(self, content: str) -> Tuple[bool, Optional[str]]:
+    def _detect_media(self, content: str) -> tuple[bool, str | None]:
         """
         Detect if a message contains a media reference.
 
@@ -266,11 +265,8 @@ class TranscriptParser:
         return False, None
 
     def correlate_media_files(
-        self,
-        media_references: List[MediaReference],
-        media_dir: Path,
-        time_tolerance_seconds: int = 300
-    ) -> List[Tuple[MediaReference, Optional[Path]]]:
+        self, media_references: list[MediaReference], media_dir: Path, time_tolerance_seconds: int = 300
+    ) -> list[tuple[MediaReference, Path | None]]:
         """
         Correlate media references in transcript with actual media files.
 
@@ -306,7 +302,7 @@ class TranscriptParser:
             # 3. File naming patterns
 
             best_match = None
-            best_score = float('inf')
+            best_score = float("inf")
 
             for file_path in media_files:
                 score = self._calculate_match_score(ref, file_path, time_tolerance_seconds)
@@ -316,7 +312,7 @@ class TranscriptParser:
                     best_match = file_path
 
             # Only accept match if it's within tolerance
-            if best_match and best_score < float('inf'):
+            if best_match and best_score < float("inf"):
                 correlation_list.append((ref, best_match))
                 self.logger.debug_msg(f"Matched {ref.media_type} from {ref.sender} -> {best_match.name}")
             else:
@@ -328,7 +324,7 @@ class TranscriptParser:
 
         return correlation_list
 
-    def _get_media_files(self, media_dir: Path) -> List[Path]:
+    def _get_media_files(self, media_dir: Path) -> list[Path]:
         """
         Get all media files from directory.
 
@@ -340,29 +336,48 @@ class TranscriptParser:
         """
         media_extensions = {
             # Images
-            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic',
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".webp",
+            ".heic",
             # Audio
-            '.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.amr',
+            ".mp3",
+            ".m4a",
+            ".aac",
+            ".wav",
+            ".ogg",
+            ".opus",
+            ".amr",
             # Video
-            '.mp4', '.mov', '.avi', '.mkv', '.webm', '.3gp',
+            ".mp4",
+            ".mov",
+            ".avi",
+            ".mkv",
+            ".webm",
+            ".3gp",
             # Documents
-            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt',
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".txt",
         }
 
         media_files = []
 
-        for file_path in media_dir.rglob('*'):
+        for file_path in media_dir.rglob("*"):
             if file_path.is_file() and file_path.suffix.lower() in media_extensions:
                 media_files.append(file_path)
 
         return sorted(media_files, key=lambda p: p.stat().st_mtime)
 
-    def _calculate_match_score(
-        self,
-        ref: MediaReference,
-        file_path: Path,
-        time_tolerance: int
-    ) -> float:
+    def _calculate_match_score(self, ref: MediaReference, file_path: Path, time_tolerance: int) -> float:
         """
         Calculate match score between a media reference and a file.
 
@@ -382,29 +397,29 @@ class TranscriptParser:
         """
         # Check media type compatibility
         if not self._is_compatible_type(ref.media_type, file_path):
-            return float('inf')
+            return float("inf")
 
         # Strategy 1: Try exact filename match from transcript content
         # Extract filename from media reference content
         # Common extensions: jpg, jpeg, png, gif, opus, aac, oga, m4a, mp4, pdf, doc, docx, xls, xlsx, ppt, pptx
         import re
-        
+
         # First try WhatsApp-style filenames (IMG/PTT/VID/AUD-YYYYMMDD-WAXXXX.ext)
-        whatsapp_pattern = r'([A-Z]{3}-\d{8}-WA\d{4}\.(jpg|jpeg|png|gif|opus|aac|oga|m4a|mp4|pdf|docx?|xlsx?|pptx?))'
+        whatsapp_pattern = r"([A-Z]{3}-\d{8}-WA\d{4}\.(jpg|jpeg|png|gif|opus|aac|oga|m4a|mp4|pdf|docx?|xlsx?|pptx?))"
         match = re.search(whatsapp_pattern, ref.message.content, re.IGNORECASE)
-        
+
         if match:
             expected_filename = match.group(1)
             if file_path.name == expected_filename:
                 # Perfect match - return score of 0
                 return 0.0
-        
+
         # Try generic filename pattern: "filename.ext (file attached)"
         # Use .+? (non-greedy any char) instead of \S+ to handle spaces in filenames
         # Examples: "null.pdf (file attached)", "Fringe 22.doc (file attached)"
-        generic_pattern = r'(.+?\.(jpg|jpeg|png|gif|opus|aac|oga|m4a|mp4|pdf|docx?|xlsx?|pptx?))\s*\(file attached\)'
+        generic_pattern = r"(.+?\.(jpg|jpeg|png|gif|opus|aac|oga|m4a|mp4|pdf|docx?|xlsx?|pptx?))\s*\(file attached\)"
         match = re.search(generic_pattern, ref.message.content, re.IGNORECASE)
-        
+
         if match:
             expected_filename = match.group(1).strip()
             if file_path.name == expected_filename:
@@ -416,14 +431,14 @@ class TranscriptParser:
         try:
             file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
         except Exception:
-            return float('inf')
+            return float("inf")
 
         # Calculate time difference in seconds
         time_diff = abs((ref.timestamp - file_mtime).total_seconds())
 
         # If outside tolerance, no match
         if time_diff > time_tolerance:
-            return float('inf')
+            return float("inf")
 
         # Score is the time difference (lower is better)
         # Add 1.0 to ensure filename matches (score=0) are preferred
@@ -443,12 +458,12 @@ class TranscriptParser:
         ext = file_path.suffix.lower()
 
         type_extensions = {
-            'image': {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic'},
-            'audio': {'.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.amr'},
-            'video': {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.3gp'},
-            'document': {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'},
-            'sticker': {'.webp', '.png'},
-            'gif': {'.gif'},
+            "image": {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic"},
+            "audio": {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".opus", ".amr"},
+            "video": {".mp4", ".mov", ".avi", ".mkv", ".webm", ".3gp"},
+            "document": {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt"},
+            "sticker": {".webp", ".png"},
+            "gif": {".gif"},
         }
 
         compatible_exts = type_extensions.get(media_type, set())
@@ -456,10 +471,10 @@ class TranscriptParser:
 
     def generate_summary(
         self,
-        messages: List[Message],
-        media_references: List[MediaReference],
-        correlation_list: Optional[List[Tuple[MediaReference, Optional[Path]]]] = None
-    ) -> Dict:
+        messages: list[Message],
+        media_references: list[MediaReference],
+        correlation_list: list[tuple[MediaReference, Path | None]] | None = None,
+    ) -> dict:
         """
         Generate a summary of the parsed transcript.
 
@@ -485,9 +500,9 @@ class TranscriptParser:
         if messages:
             timestamps = [msg.timestamp for msg in messages]
             date_range = {
-                'first': min(timestamps),
-                'last': max(timestamps),
-                'days': (max(timestamps) - min(timestamps)).days + 1
+                "first": min(timestamps),
+                "last": max(timestamps),
+                "days": (max(timestamps) - min(timestamps)).days + 1,
             }
         else:
             date_range = None
@@ -497,19 +512,19 @@ class TranscriptParser:
         if correlation_list:
             matched = sum(1 for _, path in correlation_list if path is not None)
             correlation_stats = {
-                'total_references': len(correlation_list),
-                'matched': matched,
-                'unmatched': len(correlation_list) - matched,
-                'match_rate': matched / len(correlation_list) if correlation_list else 0.0
+                "total_references": len(correlation_list),
+                "matched": matched,
+                "unmatched": len(correlation_list) - matched,
+                "match_rate": matched / len(correlation_list) if correlation_list else 0.0,
             }
 
         return {
-            'total_messages': len(messages),
-            'media_messages': len(media_references),
-            'text_messages': len(messages) - len(media_references),
-            'senders': list(sender_counts.keys()),
-            'sender_counts': sender_counts,
-            'media_type_counts': media_type_counts,
-            'date_range': date_range,
-            'correlation_stats': correlation_stats
+            "total_messages": len(messages),
+            "media_messages": len(media_references),
+            "text_messages": len(messages) - len(media_references),
+            "senders": list(sender_counts.keys()),
+            "sender_counts": sender_counts,
+            "media_type_counts": media_type_counts,
+            "date_range": date_range,
+            "correlation_stats": correlation_stats,
         }

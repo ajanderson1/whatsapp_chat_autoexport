@@ -4,22 +4,22 @@ Export wizard for step-by-step workflow.
 Provides an interactive wizard that guides users through the export process.
 """
 
-from typing import Optional, List, Callable, Any
-from enum import Enum, auto
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Any
 
 from rich.console import Console
-from rich.live import Live
 
 from .screens import (
-    WelcomeScreen,
-    DeviceConnectScreen,
     ChatSelectionScreen,
+    DeviceConnectScreen,
     ExportProgressScreen,
     SummaryScreen,
+    WelcomeScreen,
 )
-from .screens.device_connect import DeviceInfo, ConnectionState
 from .screens.chat_selection import ChatInfo
+from .screens.device_connect import ConnectionState, DeviceInfo
 
 
 class WizardStep(Enum):
@@ -37,12 +37,12 @@ class WizardState:
     """State of the wizard workflow."""
 
     current_step: WizardStep = WizardStep.WELCOME
-    device: Optional[DeviceInfo] = None
-    selected_chats: List[str] = field(default_factory=list)
+    device: DeviceInfo | None = None
+    selected_chats: list[str] = field(default_factory=list)
     include_media: bool = True
     output_path: str = ""
     is_running: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class ExportWizard:
@@ -57,7 +57,7 @@ class ExportWizard:
     5. Summary
     """
 
-    def __init__(self, console: Optional[Console] = None):
+    def __init__(self, console: Console | None = None):
         """
         Initialize the wizard.
 
@@ -75,11 +75,11 @@ class ExportWizard:
         self._summary = SummaryScreen()
 
         # Callbacks
-        self._on_device_connect: Optional[Callable[[str], DeviceInfo]] = None
-        self._on_scan_devices: Optional[Callable[[], List[DeviceInfo]]] = None
-        self._on_collect_chats: Optional[Callable[[], List[ChatInfo]]] = None
-        self._on_start_export: Optional[Callable[[List[str], bool], None]] = None
-        self._on_cancel: Optional[Callable[[], None]] = None
+        self._on_device_connect: Callable[[str], DeviceInfo] | None = None
+        self._on_scan_devices: Callable[[], list[DeviceInfo]] | None = None
+        self._on_collect_chats: Callable[[], list[ChatInfo]] | None = None
+        self._on_start_export: Callable[[list[str], bool], None] | None = None
+        self._on_cancel: Callable[[], None] | None = None
 
     @property
     def state(self) -> WizardState:
@@ -100,21 +100,21 @@ class ExportWizard:
 
     def set_scan_devices_callback(
         self,
-        callback: Callable[[], List[DeviceInfo]],
+        callback: Callable[[], list[DeviceInfo]],
     ) -> None:
         """Set callback for device scanning."""
         self._on_scan_devices = callback
 
     def set_collect_chats_callback(
         self,
-        callback: Callable[[], List[ChatInfo]],
+        callback: Callable[[], list[ChatInfo]],
     ) -> None:
         """Set callback for chat collection."""
         self._on_collect_chats = callback
 
     def set_start_export_callback(
         self,
-        callback: Callable[[List[str], bool], None],
+        callback: Callable[[list[str], bool], None],
     ) -> None:
         """Set callback for starting export."""
         self._on_start_export = callback

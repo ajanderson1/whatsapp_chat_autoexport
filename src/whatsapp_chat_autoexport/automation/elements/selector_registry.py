@@ -6,18 +6,15 @@ selectors for flexible element finding.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any
-from pathlib import Path
+from typing import Any
 
 from ...config.selectors import (
-    SelectorRegistry,
     ElementSelectors,
     SelectorDefinition,
+    SelectorRegistry,
     SelectorStrategy,
     create_default_selectors,
 )
-from ...core.result import Result, Ok, Err
-from ...core.errors import ElementNotFoundError
 
 
 @dataclass
@@ -42,7 +39,7 @@ class RuntimeSelectorRegistry:
 
     def __init__(
         self,
-        base_registry: Optional[SelectorRegistry] = None,
+        base_registry: SelectorRegistry | None = None,
         enable_discovery: bool = True,
     ):
         """
@@ -56,10 +53,10 @@ class RuntimeSelectorRegistry:
         self._enable_discovery = enable_discovery
 
         # Screen-specific overrides: {screen_name: {element_name: ElementSelectors}}
-        self._screen_overrides: Dict[str, Dict[str, ElementSelectors]] = {}
+        self._screen_overrides: dict[str, dict[str, ElementSelectors]] = {}
 
         # Runtime discovered selectors
-        self._discovered: Dict[str, DiscoveredSelector] = {}
+        self._discovered: dict[str, DiscoveredSelector] = {}
 
         # Default selectors as fallback
         self._defaults = create_default_selectors()
@@ -67,8 +64,8 @@ class RuntimeSelectorRegistry:
     def get(
         self,
         element_name: str,
-        screen: Optional[str] = None,
-    ) -> Optional[ElementSelectors]:
+        screen: str | None = None,
+    ) -> ElementSelectors | None:
         """
         Get selectors for an element.
 
@@ -110,7 +107,7 @@ class RuntimeSelectorRegistry:
     def get_required(
         self,
         element_name: str,
-        screen: Optional[str] = None,
+        screen: str | None = None,
     ) -> ElementSelectors:
         """
         Get selectors, raising if not found.
@@ -128,8 +125,7 @@ class RuntimeSelectorRegistry:
         selectors = self.get(element_name, screen)
         if selectors is None:
             raise KeyError(
-                f"No selectors found for element: {element_name}"
-                + (f" on screen: {screen}" if screen else "")
+                f"No selectors found for element: {element_name}" + (f" on screen: {screen}" if screen else "")
             )
         return selectors
 
@@ -180,7 +176,7 @@ class RuntimeSelectorRegistry:
             discovery_time=duration,
         )
 
-    def get_all_element_names(self) -> List[str]:
+    def get_all_element_names(self) -> list[str]:
         """Get all known element names."""
         names = set()
 
@@ -199,7 +195,7 @@ class RuntimeSelectorRegistry:
 
         return sorted(names)
 
-    def get_discovery_stats(self) -> Dict[str, Any]:
+    def get_discovery_stats(self) -> dict[str, Any]:
         """Get statistics about discovered selectors."""
         return {
             "total_discovered": len(self._discovered),
@@ -207,15 +203,15 @@ class RuntimeSelectorRegistry:
             "discovery_enabled": self._enable_discovery,
         }
 
-    def _count_by_screen(self) -> Dict[str, int]:
+    def _count_by_screen(self) -> dict[str, int]:
         """Count discoveries by screen."""
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for discovery in self._discovered.values():
             screen = discovery.discovered_on_screen
             counts[screen] = counts.get(screen, 0) + 1
         return counts
 
-    def export_discoveries(self) -> Dict[str, Any]:
+    def export_discoveries(self) -> dict[str, Any]:
         """
         Export discovered selectors for persistence.
 
@@ -231,7 +227,7 @@ class RuntimeSelectorRegistry:
             }
         return result
 
-    def import_discoveries(self, data: Dict[str, Any]) -> None:
+    def import_discoveries(self, data: dict[str, Any]) -> None:
         """
         Import previously discovered selectors.
 

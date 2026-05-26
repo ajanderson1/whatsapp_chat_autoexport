@@ -6,7 +6,6 @@ a temporary output directory, and exercises the sync flow programmatically
 (via ``run_sync``). No subprocesses are spawned.
 """
 
-import json
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,7 +15,6 @@ import pytest
 
 from whatsapp_chat_autoexport.cli.commands.sync import run_sync
 from whatsapp_chat_autoexport.mcp.state import MCPState
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -82,17 +80,12 @@ def bridge_db(tmp_path):
     ]
     messages = [
         # Alice's messages
-        ("msg_a1", "alice@s.whatsapp.net", "alice@s.whatsapp.net",
-         "Hello!", _ts(_YESTERDAY), 0, None, None),
-        ("msg_a2", "alice@s.whatsapp.net", "",
-         "Hi Alice!", _ts(_YESTERDAY + timedelta(minutes=1)), 1, None, None),
-        ("msg_a3", "alice@s.whatsapp.net", "alice@s.whatsapp.net",
-         "How are you?", _ts(_NOW), 0, None, None),
+        ("msg_a1", "alice@s.whatsapp.net", "alice@s.whatsapp.net", "Hello!", _ts(_YESTERDAY), 0, None, None),
+        ("msg_a2", "alice@s.whatsapp.net", "", "Hi Alice!", _ts(_YESTERDAY + timedelta(minutes=1)), 1, None, None),
+        ("msg_a3", "alice@s.whatsapp.net", "alice@s.whatsapp.net", "How are you?", _ts(_NOW), 0, None, None),
         # Bob's messages
-        ("msg_b1", "bob@s.whatsapp.net", "bob@s.whatsapp.net",
-         "Hey!", _ts(_YESTERDAY), 0, None, None),
-        ("msg_b2", "bob@s.whatsapp.net", "",
-         "Hey Bob!", _ts(_YESTERDAY + timedelta(minutes=5)), 1, None, None),
+        ("msg_b1", "bob@s.whatsapp.net", "bob@s.whatsapp.net", "Hey!", _ts(_YESTERDAY), 0, None, None),
+        ("msg_b2", "bob@s.whatsapp.net", "", "Hey Bob!", _ts(_YESTERDAY + timedelta(minutes=5)), 1, None, None),
     ]
     _create_bridge_db(db_path, chats=chats, messages=messages)
     return db_path
@@ -109,6 +102,7 @@ def output_dir(tmp_path):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSyncCommand:
     """Integration tests for the sync command."""
@@ -194,9 +188,7 @@ class TestSyncCommand:
         assert summary1["success"] is True
 
         # Read Alice's transcript after first run
-        alice_transcript_1 = (output_dir / "Alice Smith" / "transcript.md").read_text(
-            encoding="utf-8"
-        )
+        alice_transcript_1 = (output_dir / "Alice Smith" / "transcript.md").read_text(encoding="utf-8")
 
         # Second run — should skip unchanged chats
         summary2 = run_sync(
@@ -207,9 +199,7 @@ class TestSyncCommand:
         assert summary2["success"] is True
 
         # Alice's transcript should be unchanged (skipped or same content)
-        alice_transcript_2 = (output_dir / "Alice Smith" / "transcript.md").read_text(
-            encoding="utf-8"
-        )
+        alice_transcript_2 = (output_dir / "Alice Smith" / "transcript.md").read_text(encoding="utf-8")
         # The message body lines should be identical (header timestamps may differ)
         # We compare the message sections only
         body1 = _extract_body(alice_transcript_1)
@@ -291,9 +281,7 @@ class TestSyncCommand:
         )
         assert summary1["success"] is True
 
-        alice_transcript_1 = (output_dir / "Alice Smith" / "transcript.md").read_text(
-            encoding="utf-8"
-        )
+        alice_transcript_1 = (output_dir / "Alice Smith" / "transcript.md").read_text(encoding="utf-8")
         assert "How are you?" in alice_transcript_1
 
         # Add a new message to the bridge DB
@@ -302,8 +290,16 @@ class TestSyncCommand:
         conn.execute(
             "INSERT INTO messages (id, chat_jid, sender, content, timestamp, is_from_me, media_type, filename) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("msg_a4", "alice@s.whatsapp.net", "alice@s.whatsapp.net",
-             "New message after sync!", _ts(new_time), 0, None, None),
+            (
+                "msg_a4",
+                "alice@s.whatsapp.net",
+                "alice@s.whatsapp.net",
+                "New message after sync!",
+                _ts(new_time),
+                0,
+                None,
+                None,
+            ),
         )
         conn.execute(
             "UPDATE chats SET last_message_time = ? WHERE jid = ?",
@@ -319,9 +315,7 @@ class TestSyncCommand:
             state_file=state_path,
         )
 
-        alice_transcript_2 = (output_dir / "Alice Smith" / "transcript.md").read_text(
-            encoding="utf-8"
-        )
+        alice_transcript_2 = (output_dir / "Alice Smith" / "transcript.md").read_text(encoding="utf-8")
         # Should contain the new message
         assert "New message after sync!" in alice_transcript_2
         # Should still contain old messages
@@ -358,9 +352,7 @@ class TestSyncCommand:
         )
         assert summary["success"] is True
 
-        transcript = (output_dir / "Alice Smith" / "transcript.md").read_text(
-            encoding="utf-8"
-        )
+        transcript = (output_dir / "Alice Smith" / "transcript.md").read_text(encoding="utf-8")
         # msg_a2 is is_from_me=1, should show "Test User"
         assert "Test User" in transcript
 
@@ -368,6 +360,7 @@ class TestSyncCommand:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_body(transcript_content: str) -> str:
     """

@@ -10,25 +10,22 @@ Provides an interactive terminal interface with:
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, List, Any, TYPE_CHECKING
-import asyncio
+from typing import TYPE_CHECKING, Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.screen import Screen
+from textual.reactive import reactive
 from textual.widgets import Footer, Header
-from textual.reactive import reactive, var
 
+from ..core.events import Event, EventBus, EventType, get_event_bus
 from ..export.models import ChatMetadata
-from ..state.models import SessionState, ChatState, SessionStatus
 from ..state.state_manager import StateManager
-from ..core.events import EventBus, EventType, Event, get_event_bus
 from ..utils.logger import Logger
 
 if TYPE_CHECKING:
-    from ..export.whatsapp_driver import WhatsAppDriver
-    from ..export.chat_exporter import ChatExporter
     from ..export.appium_manager import AppiumManager
+    from ..export.chat_exporter import ChatExporter
+    from ..export.whatsapp_driver import WhatsAppDriver
 
 
 class PipelineStage(Enum):
@@ -37,6 +34,7 @@ class PipelineStage(Enum):
     Deprecated: will be removed once all references are migrated to the
     tab-based MainScreen workflow.
     """
+
     CONNECT = auto()
     DISCOVER = auto()
     SELECT = auto()
@@ -83,14 +81,14 @@ class WhatsAppExporterApp(App):
 
     def __init__(
         self,
-        state_manager: Optional[StateManager] = None,
-        event_bus: Optional[EventBus] = None,
-        output_dir: Optional[Path] = None,
+        state_manager: StateManager | None = None,
+        event_bus: EventBus | None = None,
+        output_dir: Path | None = None,
         include_media: bool = True,
         transcribe_audio: bool = True,
         delete_from_drive: bool = False,
         transcription_provider: str = "whisper",
-        limit: Optional[int] = None,
+        limit: int | None = None,
         debug: bool = False,
         dry_run: bool = False,
         skip_preflight: bool = False,
@@ -129,29 +127,29 @@ class WhatsAppExporterApp(App):
         self._event_bus = event_bus or get_event_bus()
 
         # Driver and exporter (set during discovery)
-        self._whatsapp_driver: Optional["WhatsAppDriver"] = None
-        self._exporter: Optional["ChatExporter"] = None
-        self._appium_manager: Optional["AppiumManager"] = None
+        self._whatsapp_driver: WhatsAppDriver | None = None
+        self._exporter: ChatExporter | None = None
+        self._appium_manager: AppiumManager | None = None
 
         # Chat data
-        self._discovered_chats: List[ChatMetadata] = []
-        self._selected_chats: List[str] = []
+        self._discovered_chats: list[ChatMetadata] = []
+        self._selected_chats: list[str] = []
 
         # Selection state (locked after export starts)
         self._selection_locked = False
 
         # WhatsApp version (set on device connect)
-        self._whatsapp_version: Optional[str] = None
+        self._whatsapp_version: str | None = None
 
         # Google Drive auth state (set when user authenticates via Settings)
         self._drive_credentials = None  # google.oauth2.credentials.Credentials
-        self._drive_user_email: Optional[str] = None
+        self._drive_user_email: str | None = None
 
         # Per-session confirmation flag for delete_from_drive
         self._delete_from_drive_confirmed: bool = False
 
         # Activity log
-        self._activity_log: List[str] = []
+        self._activity_log: list[str] = []
 
         # Subscribe to events
         self._setup_event_handlers()
@@ -223,8 +221,8 @@ class WhatsAppExporterApp(App):
     async def on_mount(self) -> None:
         """Handle app mount - register themes and show initial screen."""
         # Register all color themes
-        from ..config.themes import ALL_THEMES
         from ..config.theme_manager import get_theme_manager
+        from ..config.themes import ALL_THEMES
 
         for theme in ALL_THEMES:
             self.register_theme(theme)
@@ -236,6 +234,7 @@ class WhatsAppExporterApp(App):
 
         # Show initial screen
         from .textual_screens.main_screen import MainScreen
+
         await self.push_screen(MainScreen())
 
     def watch_current_stage(self, stage: PipelineStage) -> None:
@@ -297,6 +296,7 @@ class WhatsAppExporterApp(App):
     def action_show_help(self) -> None:
         """Show help overlay."""
         from .textual_screens.help_screen import HelpScreen
+
         self.push_screen(HelpScreen())
 
     def action_go_back(self) -> None:
@@ -311,11 +311,13 @@ class WhatsAppExporterApp(App):
     def action_show_secret_settings(self) -> None:
         """Show the secret settings modal (triggered by '/' key)."""
         from .textual_widgets import SecretSettingsModal
+
         self.push_screen(SecretSettingsModal())
 
     def action_switch_tab(self, tab_id: str) -> None:
         """Delegate tab switching to MainScreen."""
         from .textual_screens.main_screen import MainScreen
+
         if isinstance(self.screen, MainScreen):
             self.screen.action_switch_tab(tab_id)
 
@@ -323,7 +325,7 @@ class WhatsAppExporterApp(App):
     # Stage transitions
     # =========================================================================
 
-    def start_export_session(self, selected_chats: List[str]) -> None:
+    def start_export_session(self, selected_chats: list[str]) -> None:
         """
         Initialize an export session (called from ExportPane).
 
@@ -359,12 +361,12 @@ class WhatsAppExporterApp(App):
         return self._whatsapp_driver
 
     @property
-    def discovered_chats(self) -> List[ChatMetadata]:
+    def discovered_chats(self) -> list[ChatMetadata]:
         """Get list of discovered chats."""
         return self._discovered_chats
 
     @property
-    def selected_chats(self) -> List[str]:
+    def selected_chats(self) -> list[str]:
         """Get list of selected chats."""
         return self._selected_chats
 
@@ -374,7 +376,7 @@ class WhatsAppExporterApp(App):
         return self._selection_locked
 
     @property
-    def whatsapp_version(self) -> Optional[str]:
+    def whatsapp_version(self) -> str | None:
         """Get the detected WhatsApp version on the connected device."""
         return self._whatsapp_version
 
@@ -384,7 +386,7 @@ class WhatsAppExporterApp(App):
         return self._drive_credentials
 
     @property
-    def drive_user_email(self) -> Optional[str]:
+    def drive_user_email(self) -> str | None:
         """Get the Google account email used for Drive auth (or None)."""
         return self._drive_user_email
 
@@ -394,6 +396,6 @@ class WhatsAppExporterApp(App):
         return self._delete_from_drive_confirmed
 
     @property
-    def activity_log(self) -> List[str]:
+    def activity_log(self) -> list[str]:
         """Get the activity log."""
         return self._activity_log

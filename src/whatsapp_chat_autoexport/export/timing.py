@@ -8,9 +8,9 @@ a PhaseTimer context-manager helper, and a summary formatter.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..utils.logger import Logger
@@ -43,12 +43,7 @@ class ChatTiming:
 
     def compute_total(self) -> None:
         """Set *total_time_s* to the sum of all phase times."""
-        self.total_time_s = (
-            self.ui_time_s
-            + self.poll_time_s
-            + self.download_time_s
-            + self.process_time_s
-        )
+        self.total_time_s = self.ui_time_s + self.poll_time_s + self.download_time_s + self.process_time_s
 
 
 class PhaseTimer:
@@ -69,10 +64,10 @@ class PhaseTimer:
     """
 
     def __init__(self) -> None:
-        self._start: Optional[float] = None
+        self._start: float | None = None
         self._elapsed: float = 0.0
 
-    def start(self) -> "PhaseTimer":
+    def start(self) -> PhaseTimer:
         """Record the start timestamp and return *self* for chaining."""
         self._start = time.monotonic()
         return self
@@ -90,7 +85,7 @@ class PhaseTimer:
         return self._elapsed
 
     # Context-manager protocol
-    def __enter__(self) -> "PhaseTimer":
+    def __enter__(self) -> PhaseTimer:
         self.start()
         return self
 
@@ -113,7 +108,7 @@ def format_duration(seconds: float) -> str:
         return f"{hours}h {minutes}m {secs:.1f}s"
 
 
-def print_timing_summary(timings: List[ChatTiming], logger: "Logger") -> None:
+def print_timing_summary(timings: list[ChatTiming], logger: Logger) -> None:
     """Print a timing summary table to *logger*.
 
     The table contains one row per chat plus a totals row.
@@ -127,10 +122,7 @@ def print_timing_summary(timings: List[ChatTiming], logger: "Logger") -> None:
     logger.info("=" * 80)
 
     # Header
-    header = (
-        f"{'Chat':<30}  {'UI':>7}  {'Poll':>7}  {'DL':>7}  "
-        f"{'Proc':>7}  {'Total':>7}  {'Status':<8}"
-    )
+    header = f"{'Chat':<30}  {'UI':>7}  {'Poll':>7}  {'DL':>7}  {'Proc':>7}  {'Total':>7}  {'Status':<8}"
     logger.info(header)
     logger.info("-" * 80)
 

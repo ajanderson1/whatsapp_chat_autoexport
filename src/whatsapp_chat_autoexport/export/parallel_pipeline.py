@@ -13,7 +13,7 @@ import traceback
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..pipeline import WhatsAppPipeline
@@ -26,9 +26,9 @@ class PipelineTaskResult:
 
     chat_name: str
     success: bool = False
-    output_path: Optional[str] = None
-    phases_completed: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    output_path: str | None = None
+    phases_completed: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     elapsed_s: float = 0.0
 
     # Timing breakdown (set by the task wrapper)
@@ -56,15 +56,15 @@ class ParallelPipeline:
 
     def __init__(
         self,
-        pipeline: "WhatsAppPipeline",
-        logger: "Logger",
+        pipeline: WhatsAppPipeline,
+        logger: Logger,
         max_workers: int = 2,
     ) -> None:
         self._pipeline = pipeline
         self._logger = logger
         self._max_workers = max_workers
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
-        self._futures: Dict[str, Future[PipelineTaskResult]] = {}
+        self._futures: dict[str, Future[PipelineTaskResult]] = {}
         self._lock = RLock()
         self._shutdown = False
 
@@ -75,7 +75,7 @@ class ParallelPipeline:
     def submit(
         self,
         chat_name: str,
-        google_drive_folder: Optional[str] = None,
+        google_drive_folder: str | None = None,
     ) -> None:
         """Submit a pipeline task for *chat_name*.
 
@@ -88,20 +88,13 @@ class ParallelPipeline:
         """
         with self._lock:
             if self._shutdown:
-                self._logger.warning(
-                    f"ParallelPipeline already shut down; ignoring submit for '{chat_name}'"
-                )
+                self._logger.warning(f"ParallelPipeline already shut down; ignoring submit for '{chat_name}'")
                 return
-            future = self._executor.submit(
-                self._run_task, chat_name, google_drive_folder
-            )
+            future = self._executor.submit(self._run_task, chat_name, google_drive_folder)
             self._futures[chat_name] = future
-            self._logger.debug_msg(
-                f"Submitted pipeline task for '{chat_name}' "
-                f"({len(self._futures)} task(s) queued)"
-            )
+            self._logger.debug_msg(f"Submitted pipeline task for '{chat_name}' ({len(self._futures)} task(s) queued)")
 
-    def collect_results(self, timeout: Optional[float] = None) -> List[PipelineTaskResult]:
+    def collect_results(self, timeout: float | None = None) -> list[PipelineTaskResult]:
         """Wait for all submitted tasks and return their results.
 
         Args:
@@ -111,7 +104,7 @@ class ParallelPipeline:
         Returns:
             List of :class:`PipelineTaskResult`, one per submitted chat.
         """
-        results: List[PipelineTaskResult] = []
+        results: list[PipelineTaskResult] = []
 
         with self._lock:
             futures_snapshot = dict(self._futures)
@@ -124,9 +117,7 @@ class ParallelPipeline:
                 # Should never happen because _run_task catches everything,
                 # but guard against truly unexpected issues.
                 chat_name = self._chat_name_for_future(future, futures_snapshot)
-                self._logger.error(
-                    f"Unexpected error collecting result for '{chat_name}': {exc}"
-                )
+                self._logger.error(f"Unexpected error collecting result for '{chat_name}': {exc}")
                 results.append(
                     PipelineTaskResult(
                         chat_name=chat_name,
@@ -137,7 +128,7 @@ class ParallelPipeline:
 
         return results
 
-    def shutdown(self, wait: bool = True, cancel_pending: bool = False) -> List[PipelineTaskResult]:
+    def shutdown(self, wait: bool = True, cancel_pending: bool = False) -> list[PipelineTaskResult]:
         """Shut down the executor and optionally collect completed results.
 
         Args:
@@ -158,15 +149,13 @@ class ParallelPipeline:
                     if not future.done():
                         cancelled = future.cancel()
                         if cancelled:
-                            self._logger.debug_msg(
-                                f"Cancelled pending pipeline task for '{chat_name}'"
-                            )
+                            self._logger.debug_msg(f"Cancelled pending pipeline task for '{chat_name}'")
 
         # Shut down the executor first (waits for in-flight tasks if wait=True)
         self._executor.shutdown(wait=wait)
 
         # Now collect results from completed futures
-        completed_results: List[PipelineTaskResult] = []
+        completed_results: list[PipelineTaskResult] = []
         with self._lock:
             for chat_name, future in self._futures.items():
                 if future.done() and not future.cancelled():
@@ -202,7 +191,7 @@ class ParallelPipeline:
     def _run_task(
         self,
         chat_name: str,
-        google_drive_folder: Optional[str],
+        google_drive_folder: str | None,
     ) -> PipelineTaskResult:
         """Execute the pipeline for a single chat.  Captures all exceptions.
 
@@ -212,9 +201,7 @@ class ParallelPipeline:
         start = time.monotonic()
 
         try:
-            self._logger.info(
-                f"[pipeline-bg] Starting background processing for '{chat_name}'"
-            )
+            self._logger.info(f"[pipeline-bg] Starting background processing for '{chat_name}'")
             pipeline_result = self._pipeline.process_single_export(
                 chat_name=chat_name,
                 google_drive_folder=google_drive_folder,
@@ -226,21 +213,14 @@ class ParallelPipeline:
             result.errors = pipeline_result.get("errors", [])
 
             if result.success:
-                self._logger.info(
-                    f"[pipeline-bg] Completed '{chat_name}' successfully"
-                )
+                self._logger.info(f"[pipeline-bg] Completed '{chat_name}' successfully")
             else:
-                self._logger.warning(
-                    f"[pipeline-bg] '{chat_name}' finished with errors: "
-                    f"{result.errors}"
-                )
+                self._logger.warning(f"[pipeline-bg] '{chat_name}' finished with errors: {result.errors}")
 
         except Exception as exc:
             result.success = False
             result.errors.append(str(exc))
-            self._logger.error(
-                f"[pipeline-bg] Exception processing '{chat_name}': {exc}"
-            )
+            self._logger.error(f"[pipeline-bg] Exception processing '{chat_name}': {exc}")
             self._logger.debug_msg(traceback.format_exc())
 
         result.elapsed_s = time.monotonic() - start
@@ -251,9 +231,7 @@ class ParallelPipeline:
         return result
 
     @staticmethod
-    def _chat_name_for_future(
-        target: Future, mapping: Dict[str, Future]
-    ) -> str:
+    def _chat_name_for_future(target: Future, mapping: dict[str, Future]) -> str:
         """Reverse-lookup the chat name for a future from the mapping."""
         for name, fut in mapping.items():
             if fut is target:

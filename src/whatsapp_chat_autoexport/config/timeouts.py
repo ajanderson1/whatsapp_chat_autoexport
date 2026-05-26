@@ -7,7 +7,6 @@ and device performance profiles.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
 
 
 class TimeoutProfile(Enum):
@@ -125,7 +124,7 @@ class TimeoutConfig:
 
 
 # Global timeout configuration
-_timeout_config: Optional[TimeoutConfig] = None
+_timeout_config: TimeoutConfig | None = None
 
 
 def get_timeout_config() -> TimeoutConfig:
@@ -155,7 +154,7 @@ def get_timeout(operation: str) -> float:
     config = get_timeout_config()
 
     # Map common operation names to config attributes
-    timeout_map: Dict[str, str] = {
+    timeout_map: dict[str, str] = {
         "element": "element_find_timeout",
         "element_find": "element_find_timeout",
         "find": "element_find_timeout",

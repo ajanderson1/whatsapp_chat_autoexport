@@ -5,11 +5,10 @@ Verifies that the WhatsAppPipeline fires on_progress callbacks at each phase
 boundary and that callback errors do not crash the pipeline.
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-from whatsapp_chat_autoexport.pipeline import WhatsAppPipeline, PipelineConfig
+from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
 
 class TestPipelineProgressCallbacks:
@@ -93,6 +92,7 @@ class TestPipelineProgressCallbacks:
 
     def test_run_callback_error_does_not_crash(self, tmp_path):
         """Callback exceptions do not crash the pipeline run."""
+
         def bad_callback(phase, message, current, total, item_name=""):
             raise ValueError("callback error")
 
@@ -134,8 +134,8 @@ class TestPipelineProgressCallbacks:
         mock_drive.batch_download_exports.return_value = [fake_zip]
 
         # Patch GoogleDriveManager constructor — process_single_export creates it at line 157
-        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
-            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+        with patch("whatsapp_chat_autoexport.pipeline.GoogleDriveManager", return_value=mock_drive):
+            with patch.object(pipeline, "_phase2_extract_and_organize", return_value=[]):
                 result = pipeline.process_single_export("Test")
 
         # Should have download start/end events
@@ -157,7 +157,7 @@ class TestDriveManagerProgressCallbacks:
         def recorder(phase, message, current, total, item_name=""):
             events.append((phase, message, current, total, item_name))
 
-        with patch.object(GoogleDriveManager, '__init__', lambda self, **kw: None):
+        with patch.object(GoogleDriveManager, "__init__", lambda self, **kw: None):
             mgr = GoogleDriveManager.__new__(GoogleDriveManager)
             mgr.logger = MagicMock()
 
@@ -169,9 +169,7 @@ class TestDriveManagerProgressCallbacks:
                 {"id": "2", "name": "file2.zip"},
             ]
 
-            result = mgr.batch_download_exports(
-                files, Path("/tmp/dest"), on_progress=recorder
-            )
+            result = mgr.batch_download_exports(files, Path("/tmp/dest"), on_progress=recorder)
 
         assert len(result) == 2
         assert len(events) == 2
@@ -185,15 +183,13 @@ class TestDriveManagerProgressCallbacks:
         def bad_callback(phase, message, current, total, item_name=""):
             raise RuntimeError("boom")
 
-        with patch.object(GoogleDriveManager, '__init__', lambda self, **kw: None):
+        with patch.object(GoogleDriveManager, "__init__", lambda self, **kw: None):
             mgr = GoogleDriveManager.__new__(GoogleDriveManager)
             mgr.logger = MagicMock()
             mgr.download_export = MagicMock(return_value=(True, Path("/tmp/f.zip")))
 
             files = [{"id": "1", "name": "f.zip"}]
-            result = mgr.batch_download_exports(
-                files, Path("/tmp/dest"), on_progress=bad_callback
-            )
+            result = mgr.batch_download_exports(files, Path("/tmp/dest"), on_progress=bad_callback)
 
         assert len(result) == 1  # Download still succeeded
 
@@ -249,8 +245,8 @@ class TestTranscriptionManagerProgressCallbacks:
             raise RuntimeError("boom")
 
         results = mgr.batch_transcribe([file1], on_progress=bad_cb)
-        assert results['total'] == 1
-        assert results['successful'] == 1
+        assert results["total"] == 1
+        assert results["successful"] == 1
 
 
 class TestOutputBuilderProgressCallbacks:
@@ -268,24 +264,24 @@ class TestOutputBuilderProgressCallbacks:
         builder = OutputBuilder(logger=MagicMock())
 
         # Mock build_output to succeed
-        builder.build_output = MagicMock(return_value={
-            'contact_name': 'Test',
-            'output_dir': tmp_path / 'Test',
-            'transcript_path': tmp_path / 'transcript.txt',
-            'total_messages': 10,
-            'media_messages': 2,
-            'media_copied': 2,
-            'transcriptions_copied': 1,
-        })
+        builder.build_output = MagicMock(
+            return_value={
+                "contact_name": "Test",
+                "output_dir": tmp_path / "Test",
+                "transcript_path": tmp_path / "transcript.txt",
+                "total_messages": 10,
+                "media_messages": 2,
+                "media_copied": 2,
+                "transcriptions_copied": 1,
+            }
+        )
 
         transcript_files = [
             (tmp_path / "chat1.txt", tmp_path / "media1"),
             (tmp_path / "chat2.txt", tmp_path / "media2"),
         ]
 
-        results = builder.batch_build_outputs(
-            transcript_files, tmp_path / "output", on_progress=recorder
-        )
+        results = builder.batch_build_outputs(transcript_files, tmp_path / "output", on_progress=recorder)
 
         assert len(results) == 2
         assert len(events) == 2
@@ -297,23 +293,23 @@ class TestOutputBuilderProgressCallbacks:
         from whatsapp_chat_autoexport.output.output_builder import OutputBuilder
 
         builder = OutputBuilder(logger=MagicMock())
-        builder.build_output = MagicMock(return_value={
-            'contact_name': 'Test',
-            'output_dir': tmp_path / 'Test',
-            'transcript_path': tmp_path / 'transcript.txt',
-            'total_messages': 10,
-            'media_messages': 0,
-            'media_copied': 0,
-            'transcriptions_copied': 0,
-        })
+        builder.build_output = MagicMock(
+            return_value={
+                "contact_name": "Test",
+                "output_dir": tmp_path / "Test",
+                "transcript_path": tmp_path / "transcript.txt",
+                "total_messages": 10,
+                "media_messages": 0,
+                "media_copied": 0,
+                "transcriptions_copied": 0,
+            }
+        )
 
         def bad_cb(*args, **kwargs):
             raise RuntimeError("boom")
 
         transcript_files = [(tmp_path / "chat.txt", tmp_path / "media")]
-        results = builder.batch_build_outputs(
-            transcript_files, tmp_path / "output", on_progress=bad_cb
-        )
+        results = builder.batch_build_outputs(transcript_files, tmp_path / "output", on_progress=bad_cb)
         assert len(results) == 1
 
 
@@ -323,19 +319,22 @@ class TestCleanupDuplicatesConfig:
     def test_pipeline_config_default_is_true(self):
         """PipelineConfig.cleanup_drive_duplicates defaults to True."""
         from whatsapp_chat_autoexport.pipeline import PipelineConfig
+
         cfg = PipelineConfig()
         assert cfg.cleanup_drive_duplicates is True
 
     def test_pipeline_config_can_be_disabled(self):
         """PipelineConfig accepts cleanup_drive_duplicates=False."""
         from whatsapp_chat_autoexport.pipeline import PipelineConfig
+
         cfg = PipelineConfig(cleanup_drive_duplicates=False)
         assert cfg.cleanup_drive_duplicates is False
 
     def test_pipeline_calls_cleanup_after_successful_download(self, tmp_path):
         """When cleanup_drive_duplicates=True, process_single_export calls
         drive_manager.delete_sibling_exports(chat_name) after a successful download."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
         config = PipelineConfig(
@@ -356,15 +355,16 @@ class TestCleanupDuplicatesConfig:
         fake_zip.write_text("fake")
         mock_drive.batch_download_exports.return_value = [fake_zip]
 
-        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
-            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+        with patch("whatsapp_chat_autoexport.pipeline.GoogleDriveManager", return_value=mock_drive):
+            with patch.object(pipeline, "_phase2_extract_and_organize", return_value=[]):
                 pipeline.process_single_export("Test")
 
         mock_drive.delete_sibling_exports.assert_called_once_with("Test")
 
     def test_pipeline_skips_cleanup_when_flag_off(self, tmp_path):
         """When cleanup_drive_duplicates=False, cleanup is not called."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
         config = PipelineConfig(
@@ -385,8 +385,8 @@ class TestCleanupDuplicatesConfig:
         fake_zip.write_text("fake")
         mock_drive.batch_download_exports.return_value = [fake_zip]
 
-        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
-            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+        with patch("whatsapp_chat_autoexport.pipeline.GoogleDriveManager", return_value=mock_drive):
+            with patch.object(pipeline, "_phase2_extract_and_organize", return_value=[]):
                 pipeline.process_single_export("Test")
 
         mock_drive.delete_sibling_exports.assert_not_called()
@@ -396,7 +396,8 @@ class TestCleanupFailureDoesNotFailChat:
     def test_cleanup_raising_does_not_abort_pipeline(self, tmp_path):
         """Defensive: even if delete_sibling_exports raises (it shouldn't), the
         chat's pipeline run continues. We guard with try/except in the call site."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
         config = PipelineConfig(
@@ -418,8 +419,8 @@ class TestCleanupFailureDoesNotFailChat:
         mock_drive.batch_download_exports.return_value = [fake_zip]
         mock_drive.delete_sibling_exports.side_effect = RuntimeError("boom")
 
-        with patch('whatsapp_chat_autoexport.pipeline.GoogleDriveManager', return_value=mock_drive):
-            with patch.object(pipeline, '_phase2_extract_and_organize', return_value=[]):
+        with patch("whatsapp_chat_autoexport.pipeline.GoogleDriveManager", return_value=mock_drive):
+            with patch.object(pipeline, "_phase2_extract_and_organize", return_value=[]):
                 # Should NOT raise — the RuntimeError from cleanup must be caught.
                 result = pipeline.process_single_export("Test")
 

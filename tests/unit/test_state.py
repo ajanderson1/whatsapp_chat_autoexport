@@ -9,27 +9,22 @@ Tests cover:
 """
 
 import json
-import pytest
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-from whatsapp_chat_autoexport.state import (
-    ChatStatus,
-    ChatState,
-    SessionStatus,
-    SessionState,
-    ExportProgress,
-    PipelineProgress,
-    StateManager,
-    CheckpointManager,
-    ExportQueue,
-    QueueItem,
-    QueuePriority,
-)
 from whatsapp_chat_autoexport.core.events import EventBus, EventType
-
+from whatsapp_chat_autoexport.state import (
+    ChatState,
+    ChatStatus,
+    CheckpointManager,
+    ExportProgress,
+    ExportQueue,
+    PipelineProgress,
+    QueuePriority,
+    SessionState,
+    SessionStatus,
+    StateManager,
+)
 
 # =============================================================================
 # ChatState Model Tests
@@ -876,9 +871,7 @@ class TestExportQueue:
         queue.add("Chat 2", priority=QueuePriority.LOW)
         queue.add("Chat 3", priority=QueuePriority.HIGH)
 
-        high_priority = queue.filter(
-            lambda item: item.priority == QueuePriority.HIGH.value
-        )
+        high_priority = queue.filter(lambda item: item.priority == QueuePriority.HIGH.value)
 
         assert len(high_priority) == 2
 

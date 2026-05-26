@@ -11,50 +11,67 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # Default location of the MCP bridge's SQLite database
-DEFAULT_DB_PATH = Path.home() / "GitHub" / "claude" / "mcps" / "third_party" / "whatsapp" / "repo" / "whatsapp-bridge" / "store" / "messages.db"
+DEFAULT_DB_PATH = (
+    Path.home()
+    / "GitHub"
+    / "claude"
+    / "mcps"
+    / "third_party"
+    / "whatsapp"
+    / "repo"
+    / "whatsapp-bridge"
+    / "store"
+    / "messages.db"
+)
 
 # Default location of the bridge's media store directory
-DEFAULT_STORE_DIR = Path.home() / "GitHub" / "claude" / "mcps" / "third_party" / "whatsapp" / "repo" / "whatsapp-bridge" / "store"
+DEFAULT_STORE_DIR = (
+    Path.home() / "GitHub" / "claude" / "mcps" / "third_party" / "whatsapp" / "repo" / "whatsapp-bridge" / "store"
+)
 
 
 @dataclass
 class BridgeChat:
     """A chat record from the MCP bridge database."""
+
     jid: str
-    name: Optional[str]
-    last_message_time: Optional[datetime]
+    name: str | None
+    last_message_time: datetime | None
 
 
 @dataclass
 class BridgeMessage:
     """A message record from the MCP bridge database."""
+
     id: str
     chat_jid: str
     sender: str
     content: str
     timestamp: datetime
     is_from_me: bool
-    media_type: Optional[str] = None
-    filename: Optional[str] = None
+    media_type: str | None = None
+    filename: str | None = None
 
 
 class BridgeReaderError(Exception):
     """Base exception for BridgeReader errors."""
+
     pass
 
 
 class DatabaseNotFoundError(BridgeReaderError):
     """Raised when the MCP bridge database file does not exist."""
+
     pass
 
 
 class DatabaseLockedError(BridgeReaderError):
     """Raised when the MCP bridge database is locked."""
+
     pass
 
 
@@ -72,8 +89,8 @@ class BridgeReader:
 
     def __init__(
         self,
-        db_path: Optional[Path] = None,
-        store_dir: Optional[Path] = None,
+        db_path: Path | None = None,
+        store_dir: Path | None = None,
         busy_timeout_ms: int = 5000,
     ):
         """
@@ -92,7 +109,7 @@ class BridgeReader:
         self.busy_timeout_ms = busy_timeout_ms
 
         # Cache for sender name resolution
-        self._name_cache: Dict[str, str] = {}
+        self._name_cache: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Connection helpers
@@ -108,9 +125,7 @@ class BridgeReader:
                 to a persistent lock.
         """
         if not self.db_path.exists():
-            raise DatabaseNotFoundError(
-                f"MCP bridge database not found at {self.db_path}"
-            )
+            raise DatabaseNotFoundError(f"MCP bridge database not found at {self.db_path}")
 
         try:
             conn = sqlite3.connect(
@@ -122,18 +137,14 @@ class BridgeReader:
             return conn
         except sqlite3.OperationalError as exc:
             if "locked" in str(exc).lower() or "readonly" in str(exc).lower():
-                raise DatabaseLockedError(
-                    f"MCP bridge database is locked: {exc}"
-                ) from exc
-            raise BridgeReaderError(
-                f"Failed to open database: {exc}"
-            ) from exc
+                raise DatabaseLockedError(f"MCP bridge database is locked: {exc}") from exc
+            raise BridgeReaderError(f"Failed to open database: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def list_chats(self) -> List[BridgeChat]:
+    def list_chats(self) -> list[BridgeChat]:
         """
         List all chats in the bridge database.
 
@@ -143,19 +154,13 @@ class BridgeReader:
         """
         conn = self._connect()
         try:
-            cursor = conn.execute(
-                "SELECT jid, name, last_message_time "
-                "FROM chats "
-                "ORDER BY last_message_time DESC"
-            )
-            chats: List[BridgeChat] = []
+            cursor = conn.execute("SELECT jid, name, last_message_time FROM chats ORDER BY last_message_time DESC")
+            chats: list[BridgeChat] = []
             for row in cursor.fetchall():
                 last_time = None
                 if row["last_message_time"]:
                     try:
-                        last_time = datetime.fromisoformat(
-                            str(row["last_message_time"])
-                        )
+                        last_time = datetime.fromisoformat(str(row["last_message_time"]))
                     except (ValueError, TypeError):
                         logger.warning(
                             "Could not parse last_message_time for %s: %s",
@@ -176,9 +181,9 @@ class BridgeReader:
     def get_messages(
         self,
         jid: str,
-        after: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> List[BridgeMessage]:
+        after: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[BridgeMessage]:
         """
         Retrieve messages for a chat, optionally filtered by time.
 
@@ -215,7 +220,7 @@ class BridgeReader:
                 params.append(limit)
 
             cursor = conn.execute(" ".join(query_parts), params)
-            messages: List[BridgeMessage] = []
+            messages: list[BridgeMessage] = []
             for row in cursor.fetchall():
                 try:
                     ts = datetime.fromisoformat(str(row["timestamp"]))
@@ -269,9 +274,7 @@ class BridgeReader:
         self._name_cache[sender_value] = resolved
         return resolved
 
-    def download_media(
-        self, message_id: str, chat_jid: str
-    ) -> Optional[Path]:
+    def download_media(self, message_id: str, chat_jid: str) -> Path | None:
         """
         Locate a previously-downloaded media file on disk.
 
@@ -297,8 +300,7 @@ class BridgeReader:
 
         try:
             cursor = conn.execute(
-                "SELECT filename FROM messages "
-                "WHERE id = ? AND chat_jid = ?",
+                "SELECT filename FROM messages WHERE id = ? AND chat_jid = ?",
                 (message_id, chat_jid),
             )
             row = cursor.fetchone()

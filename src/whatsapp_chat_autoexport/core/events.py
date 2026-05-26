@@ -5,11 +5,12 @@ Provides a simple pub/sub event system for decoupling components
 and enabling real-time UI updates.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Dict, Any, List, Callable, Optional
 from threading import Lock
+from typing import Any
 
 
 class EventType(Enum):
@@ -86,9 +87,9 @@ class Event:
     """Base event class."""
 
     type: EventType = field(default=None)  # type: ignore  # Set by subclass or required for base
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
-    source: Optional[str] = None  # Component that emitted the event
+    source: str | None = None  # Component that emitted the event
 
     def __post_init__(self):
         if self.type is None:
@@ -173,7 +174,7 @@ class ErrorEvent(Event):
     error_message: str = ""
     error_category: str = ""
     recoverable: bool = False
-    recovery_action: Optional[str] = None
+    recovery_action: str | None = None
 
     def __post_init__(self):
         # Set type before parent validation
@@ -209,9 +210,9 @@ class EventBus:
     """
 
     def __init__(self):
-        self._handlers: Dict[EventType, List[EventHandler]] = {}
+        self._handlers: dict[EventType, list[EventHandler]] = {}
         self._lock = Lock()
-        self._history: List[Event] = []
+        self._history: list[Event] = []
         self._max_history = 100
 
     def subscribe(
@@ -292,7 +293,7 @@ class EventBus:
     def emit_simple(
         self,
         event_type: EventType,
-        source: Optional[str] = None,
+        source: str | None = None,
         **data,
     ) -> None:
         """
@@ -307,9 +308,9 @@ class EventBus:
 
     def get_history(
         self,
-        event_type: Optional[EventType] = None,
+        event_type: EventType | None = None,
         limit: int = 50,
-    ) -> List[Event]:
+    ) -> list[Event]:
         """
         Get event history.
 
@@ -338,7 +339,7 @@ class EventBus:
 
 
 # Global event bus singleton
-_global_bus: Optional[EventBus] = None
+_global_bus: EventBus | None = None
 
 
 def get_event_bus() -> EventBus:

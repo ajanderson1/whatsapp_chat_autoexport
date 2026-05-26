@@ -9,10 +9,9 @@ Covers:
 - Concurrent polling with different chat_name filters
 """
 
-import time
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, call
-from typing import Optional, Dict, Any, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -20,18 +19,18 @@ from whatsapp_chat_autoexport.google_drive.drive_client import GoogleDriveClient
 from whatsapp_chat_autoexport.google_drive.drive_manager import GoogleDriveManager
 from whatsapp_chat_autoexport.pipeline import PipelineConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_file_metadata(
     name: str = "WhatsApp Chat with Alice.zip",
     created_minutes_ago: float = 1.0,
     size: int = 1024,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a fake Drive file metadata dict."""
-    created = datetime.now(timezone.utc) - timedelta(minutes=created_minutes_ago)
+    created = datetime.now(UTC) - timedelta(minutes=created_minutes_ago)
     return {
         "id": f"file_{name.replace(' ', '_')}",
         "name": name,
@@ -43,7 +42,7 @@ def _make_file_metadata(
     }
 
 
-def _build_client(service_mock: Optional[MagicMock] = None) -> GoogleDriveClient:
+def _build_client(service_mock: MagicMock | None = None) -> GoogleDriveClient:
     """Build a GoogleDriveClient with a mocked auth and optionally injected service."""
     auth = MagicMock()
     logger = MagicMock()
@@ -89,6 +88,7 @@ class _ListResultSequence:
 # Tests: Backoff schedule
 # ---------------------------------------------------------------------------
 
+
 class TestAdaptiveBackoff:
     """Verify progressive backoff intervals."""
 
@@ -101,9 +101,7 @@ class TestAdaptiveBackoff:
         client = _build_client()
         file_meta = _make_file_metadata()
 
-        client.service.files().list.return_value.execute.return_value = {
-            "files": [file_meta]
-        }
+        client.service.files().list.return_value.execute.return_value = {"files": [file_meta]}
 
         result = client.poll_for_new_export(
             initial_interval=2,
@@ -186,6 +184,7 @@ class TestAdaptiveBackoff:
 # ---------------------------------------------------------------------------
 # Tests: Timeout behavior
 # ---------------------------------------------------------------------------
+
 
 class TestTimeoutBehavior:
     """Verify timeout handling and include_media defaults."""
@@ -275,6 +274,7 @@ class TestTimeoutBehavior:
 # Tests: chat_name filter
 # ---------------------------------------------------------------------------
 
+
 class TestChatNameFilter:
     """Verify chat_name parameter scopes the Drive query."""
 
@@ -287,9 +287,7 @@ class TestChatNameFilter:
         client = _build_client()
         file_meta = _make_file_metadata(name="WhatsApp Chat with Alice.zip")
 
-        client.service.files().list.return_value.execute.return_value = {
-            "files": [file_meta]
-        }
+        client.service.files().list.return_value.execute.return_value = {"files": [file_meta]}
 
         result = client.poll_for_new_export(chat_name="Alice", timeout=60)
 
@@ -308,9 +306,7 @@ class TestChatNameFilter:
         client = _build_client()
         file_meta = _make_file_metadata(name="WhatsApp Chat with O'Brien.zip")
 
-        client.service.files().list.return_value.execute.return_value = {
-            "files": [file_meta]
-        }
+        client.service.files().list.return_value.execute.return_value = {"files": [file_meta]}
 
         result = client.poll_for_new_export(chat_name="O'Brien", timeout=60)
 
@@ -328,9 +324,7 @@ class TestChatNameFilter:
         client = _build_client()
         file_meta = _make_file_metadata()
 
-        client.service.files().list.return_value.execute.return_value = {
-            "files": [file_meta]
-        }
+        client.service.files().list.return_value.execute.return_value = {"files": [file_meta]}
 
         result = client.poll_for_new_export(timeout=60)
 
@@ -345,6 +339,7 @@ class TestChatNameFilter:
 # Tests: Error handling during polling
 # ---------------------------------------------------------------------------
 
+
 class TestErrorHandling:
     """Verify error handling preserves backoff schedule."""
 
@@ -352,21 +347,19 @@ class TestErrorHandling:
     @patch("whatsapp_chat_autoexport.google_drive.drive_client.time.time")
     def test_http_error_retries_with_current_interval(self, mock_time, mock_sleep):
         """HTTP error during poll retries using current backoff interval."""
+
         from googleapiclient.errors import HttpError
-        from unittest.mock import PropertyMock
 
         mock_time.return_value = 0.0
 
         client = _build_client()
         file_meta = _make_file_metadata()
 
-        http_error = HttpError(
-            resp=MagicMock(status=500),
-            content=b"Internal Server Error"
-        )
+        http_error = HttpError(resp=MagicMock(status=500), content=b"Internal Server Error")
 
         # Poll 1: HTTP error, Poll 2: success
         call_idx = [0]
+
         def list_side_effect(*args, **kwargs):
             call_idx[0] += 1
             m = MagicMock()
@@ -399,6 +392,7 @@ class TestErrorHandling:
         file_meta = _make_file_metadata()
 
         call_idx = [0]
+
         def list_side_effect(*args, **kwargs):
             call_idx[0] += 1
             m = MagicMock()
@@ -433,6 +427,7 @@ class TestErrorHandling:
 # ---------------------------------------------------------------------------
 # Tests: Concurrent polling with different chat_name filters
 # ---------------------------------------------------------------------------
+
 
 class TestConcurrentPolling:
     """Two concurrent polls with different chat_name filters find only their own export."""
@@ -487,6 +482,7 @@ class TestConcurrentPolling:
 # ---------------------------------------------------------------------------
 # Tests: DriveManager.wait_for_new_export passthrough
 # ---------------------------------------------------------------------------
+
 
 class TestDriveManagerPassthrough:
     """Verify DriveManager.wait_for_new_export passes new params to client."""
@@ -551,6 +547,7 @@ class TestDriveManagerPassthrough:
 # Tests: PipelineConfig
 # ---------------------------------------------------------------------------
 
+
 class TestPipelineConfig:
     """Verify PipelineConfig changes."""
 
@@ -587,6 +584,7 @@ class TestPipelineConfig:
 # ---------------------------------------------------------------------------
 # Tests: Edge case — file appears during backoff
 # ---------------------------------------------------------------------------
+
 
 class TestFileAppearsDuringBackoff:
     """File that appears while sleeping is detected at next poll."""

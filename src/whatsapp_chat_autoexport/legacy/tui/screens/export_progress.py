@@ -4,28 +4,18 @@ Export progress screen for TUI.
 Displays real-time export progress with detailed status.
 """
 
-from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from rich.console import Console, RenderableType
+from rich.align import Align
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.align import Align
-from rich.layout import Layout
-from rich.progress import (
-    Progress,
-    BarColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TaskProgressColumn,
-    SpinnerColumn,
-)
 
 from whatsapp_chat_autoexport.legacy.tui.components.progress_panel import ProgressPanel, StepProgressPanel
-from whatsapp_chat_autoexport.legacy.tui.components.queue_panel import QueuePanel, CompactQueuePanel
+from whatsapp_chat_autoexport.legacy.tui.components.queue_panel import CompactQueuePanel, QueuePanel
 from whatsapp_chat_autoexport.legacy.tui.components.status_bar import StatusBar
-from whatsapp_chat_autoexport.state.models import ExportProgress, ChatStatus, ChatState
+from whatsapp_chat_autoexport.state.models import ChatState, ChatStatus, ExportProgress
 
 
 class ExportProgressScreen:
@@ -54,16 +44,16 @@ class ExportProgressScreen:
 
         # State
         self._paused: bool = False
-        self._current_chat: Optional[str] = None
+        self._current_chat: str | None = None
         self._current_step: int = 0
-        self._start_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
 
     @property
     def paused(self) -> bool:
         """Check if export is paused."""
         return self._paused
 
-    def start(self, total_chats: int, chats: List[ChatState]) -> None:
+    def start(self, total_chats: int, chats: list[ChatState]) -> None:
         """
         Start tracking export progress.
 
@@ -179,7 +169,7 @@ class ExportProgressScreen:
         self._status_bar.set_device_status("Disconnected", connected=False)
         self._status_bar.set_status("Device disconnected", "red")
 
-    def update_from_chats(self, chats: List[ChatState]) -> None:
+    def update_from_chats(self, chats: list[ChatState]) -> None:
         """
         Update queue from list of ChatState objects.
 

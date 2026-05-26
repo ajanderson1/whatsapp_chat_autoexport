@@ -8,13 +8,13 @@ Provides UI automation abstractions including:
 - App and screen verification
 """
 
+from .elements.element_cache import (
+    CacheEntry,
+    ElementCache,
+)
 from .elements.element_finder import (
     ElementFinder,
     FindResult,
-)
-from .elements.element_cache import (
-    ElementCache,
-    CacheEntry,
 )
 from .elements.selector_registry import (
     RuntimeSelectorRegistry,

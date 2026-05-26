@@ -15,19 +15,17 @@ import os
 import sys
 from argparse import Namespace
 from pathlib import Path
-from typing import Optional
 
-from .pipeline import WhatsAppPipeline, PipelineConfig
+from .pipeline import PipelineConfig, WhatsAppPipeline
 from .preflight import format_report_for_stderr, run_preflight
 from .utils.logger import Logger
-
 
 # ---------------------------------------------------------------------------
 # Progress callback
 # ---------------------------------------------------------------------------
 
-def _log_progress(phase: str, message: str, current: int, total: int,
-                  item_name: str = "") -> None:
+
+def _log_progress(phase: str, message: str, current: int, total: int, item_name: str = "") -> None:
     """Simple stderr progress callback for non-interactive modes."""
     prefix = f"[{phase}]"
     if total > 0:
@@ -41,6 +39,7 @@ def _log_progress(phase: str, message: str, current: int, total: int,
 # ---------------------------------------------------------------------------
 # API-key validation (mirrors export/cli.py logic)
 # ---------------------------------------------------------------------------
+
 
 def _validate_api_key(provider: str, logger: Logger) -> bool:
     """
@@ -56,10 +55,7 @@ def _validate_api_key(provider: str, logger: Logger) -> bool:
     api_key = os.environ.get(required_env_var)
 
     if not api_key:
-        logger.error(
-            f"{required_env_var} is not set. "
-            f"Set it with: export {required_env_var}='your-key-here'"
-        )
+        logger.error(f"{required_env_var} is not set. Set it with: export {required_env_var}='your-key-here'")
         return False
 
     # Validate via factory
@@ -77,6 +73,7 @@ def _validate_api_key(provider: str, logger: Logger) -> bool:
 # ---------------------------------------------------------------------------
 # Headless mode: full export + pipeline
 # ---------------------------------------------------------------------------
+
 
 def run_headless(args: Namespace) -> int:
     """Run full export + pipeline in headless (non-interactive) mode.
@@ -111,8 +108,7 @@ def run_headless(args: Namespace) -> int:
         provider = getattr(args, "transcription_provider", "whisper")
         if not _validate_api_key(provider, logger):
             logger.error(
-                "Cannot proceed without a valid API key for transcription. "
-                "Set the key or use --no-transcribe to skip."
+                "Cannot proceed without a valid API key for transcription. Set the key or use --no-transcribe to skip."
             )
             logger.close()
             return 2
@@ -127,7 +123,7 @@ def run_headless(args: Namespace) -> int:
 
     # --- Chat selection strategy ------------------------------------------
     auto_select = getattr(args, "auto_select", False)
-    resume_path: Optional[str] = getattr(args, "resume", None)
+    resume_path: str | None = getattr(args, "resume", None)
 
     if not auto_select and not resume_path:
         logger.error(
@@ -139,7 +135,7 @@ def run_headless(args: Namespace) -> int:
         return 2
 
     # --- Resume validation ------------------------------------------------
-    resume_folder: Optional[Path] = None
+    resume_folder: Path | None = None
     if resume_path:
         resume_folder = validate_resume_directory(resume_path, logger)
         if resume_folder is None:
@@ -147,8 +143,8 @@ def run_headless(args: Namespace) -> int:
             logger.close()
             return 2
 
-    appium_manager: Optional[AppiumManager] = None
-    driver: Optional[WhatsAppDriver] = None
+    appium_manager: AppiumManager | None = None
+    driver: WhatsAppDriver | None = None
 
     try:
         # Step 1: Appium ---------------------------------------------------
@@ -168,10 +164,7 @@ def run_headless(args: Namespace) -> int:
         driver = WhatsAppDriver(logger, wireless_adb=wireless_adb)
 
         if not driver.check_device_connection():
-            logger.error(
-                "No Android device found. Connect via USB or "
-                "use --wireless-adb IP:PORT."
-            )
+            logger.error("No Android device found. Connect via USB or use --wireless-adb IP:PORT.")
             return 2
 
         # Step 3: WhatsApp -------------------------------------------------
@@ -222,7 +215,9 @@ def run_headless(args: Namespace) -> int:
         )
 
         pipeline = WhatsAppPipeline(
-            pipeline_config, logger=logger, on_progress=_log_progress,
+            pipeline_config,
+            logger=logger,
+            on_progress=_log_progress,
         )
         logger.success(f"Pipeline configured — output: {output_dir} (format: {pipeline_config.format_version})")
 
@@ -273,6 +268,7 @@ def run_headless(args: Namespace) -> int:
         logger.error(f"Fatal error: {e}")
         if getattr(args, "debug", False):
             import traceback
+
             traceback.print_exc()
         return 2
     finally:
@@ -292,6 +288,7 @@ def run_headless(args: Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Pipeline-only mode
 # ---------------------------------------------------------------------------
+
 
 def run_pipeline_only(args: Namespace) -> int:
     """
@@ -340,21 +337,17 @@ def run_pipeline_only(args: Namespace) -> int:
         download_dir=source_dir,
         delete_from_drive=getattr(args, "delete_from_drive", False),
         cleanup_drive_duplicates=not getattr(args, "keep_drive_duplicates", False),
-
         # Output
         output_dir=output_dir,
         include_media=not getattr(args, "no_output_media", False),
         include_transcriptions=True,
         output_format=getattr(args, "format", "legacy"),
-
         # Transcription
         transcribe_audio_video=not no_transcribe,
         transcription_provider=getattr(args, "transcription_provider", "whisper"),
         skip_existing_transcriptions=not getattr(args, "force_transcribe", False),
-
         # General
         limit=getattr(args, "limit", None),
-
         # Format
         format_version=getattr(args, "format_version", "v2"),
     )
@@ -378,5 +371,6 @@ def run_pipeline_only(args: Namespace) -> int:
     except Exception as e:
         logger.error(f"Fatal pipeline error: {e}")
         import traceback
+
         traceback.print_exc()
         return 2

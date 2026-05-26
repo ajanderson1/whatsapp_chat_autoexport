@@ -1,9 +1,7 @@
 """Tests for pipeline-only mode (headless.run_pipeline_only)."""
 
-import os
 from argparse import Namespace
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,6 +27,7 @@ def _make_args(source="/tmp/src", output="/tmp/out", **overrides):
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline")
@@ -58,6 +57,7 @@ def test_happy_path_returns_zero(mock_preflight, mock_validate, mock_pipeline_cl
 # ---------------------------------------------------------------------------
 # No-transcribe path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline")
@@ -91,6 +91,7 @@ def test_no_transcribe_skips_api_validation(mock_preflight, mock_pipeline_cls, t
 # Missing API key
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless._validate_api_key", return_value=False)
 def test_missing_api_key_returns_two(mock_validate, tmp_path):
@@ -111,6 +112,7 @@ def test_missing_api_key_returns_two(mock_validate, tmp_path):
 # Invalid source path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_invalid_source_returns_two(tmp_path):
     """Non-existent source directory returns exit code 2."""
@@ -128,6 +130,7 @@ def test_invalid_source_returns_two(tmp_path):
 # ---------------------------------------------------------------------------
 # Pipeline error
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline")
@@ -155,6 +158,7 @@ def test_pipeline_failure_returns_one(mock_preflight, mock_validate, mock_pipeli
 # Fatal exception
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline")
 @patch("whatsapp_chat_autoexport.headless._validate_api_key", return_value=True)
@@ -180,6 +184,7 @@ def test_fatal_exception_returns_two(mock_preflight, mock_validate, mock_pipelin
 # ---------------------------------------------------------------------------
 # Config wiring
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline")
@@ -224,13 +229,14 @@ def test_config_wiring(mock_preflight, mock_validate, mock_pipeline_cls, tmp_pat
 # Progress callback is wired
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline")
 @patch("whatsapp_chat_autoexport.headless._validate_api_key", return_value=True)
 @patch("whatsapp_chat_autoexport.headless.run_preflight")
 def test_progress_callback_wired(mock_preflight, mock_validate, mock_pipeline_cls, tmp_path):
     """Pipeline is constructed with a progress callback."""
-    from whatsapp_chat_autoexport.headless import run_pipeline_only, _log_progress
+    from whatsapp_chat_autoexport.headless import _log_progress, run_pipeline_only
 
     mock_preflight.return_value.has_hard_fail = False
     source = tmp_path / "source"
@@ -251,6 +257,7 @@ def test_progress_callback_wired(mock_preflight, mock_validate, mock_pipeline_cl
 # ---------------------------------------------------------------------------
 # CLI integration: cli_entry dispatches to headless.run_pipeline_only
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @patch("whatsapp_chat_autoexport.headless.run_pipeline_only", return_value=0)

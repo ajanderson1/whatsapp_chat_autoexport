@@ -10,14 +10,14 @@ Supports two output formats:
 
 import os
 import shutil
-from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Callable
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
-from ..processing.transcript_parser import TranscriptParser, Message, MediaReference
+from ..processing.transcript_parser import MediaReference, Message, TranscriptParser
 from ..utils.logger import Logger
-from .spec_formatter import SpecFormatter
 from .index_builder import IndexBuilder
+from .spec_formatter import SpecFormatter
 
 
 class OutputBuilder:
@@ -38,7 +38,7 @@ class OutputBuilder:
 
     def __init__(
         self,
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
         format_version: str = "v2",
     ):
         """
@@ -60,12 +60,12 @@ class OutputBuilder:
         transcript_path: Path,
         media_dir: Path,
         dest_dir: Path,
-        contact_name: Optional[str] = None,
+        contact_name: str | None = None,
         include_transcriptions: bool = True,
         copy_media: bool = True,
-        format_version: Optional[str] = None,
-        chat_jid: Optional[str] = None,
-    ) -> Dict:
+        format_version: str | None = None,
+        chat_jid: str | None = None,
+    ) -> dict:
         """
         Build complete output structure for a chat.
 
@@ -131,7 +131,7 @@ class OutputBuilder:
                 contact_name,
                 include_transcriptions,
                 transcriptions_out_dir if include_transcriptions else None,
-                media_dir  # Pass source media_dir to read transcriptions from
+                media_dir,  # Pass source media_dir to read transcriptions from
             )
 
         # Copy media files and/or transcriptions
@@ -142,16 +142,12 @@ class OutputBuilder:
         correlation_list = self.parser.correlate_media_files(
             media_refs,
             media_dir,
-            time_tolerance_seconds=86400  # 24 hours tolerance
+            time_tolerance_seconds=86400,  # 24 hours tolerance
         )
 
         if copy_media:
             # Copy media files
-            copied_media = self._copy_media_files(
-                correlation_list,
-                media_dir,
-                media_out_dir
-            )
+            copied_media = self._copy_media_files(correlation_list, media_dir, media_out_dir)
 
         # Copy transcriptions if requested (independent of media copying)
         if include_transcriptions:
@@ -161,26 +157,20 @@ class OutputBuilder:
             else:
                 # When not copying media, get the list from correlated files
                 # correlation_list is List[Tuple[MediaReference, Optional[Path]]]
-                media_file_list = [file_path
-                                   for ref, file_path in correlation_list
-                                   if file_path is not None]
+                media_file_list = [file_path for ref, file_path in correlation_list if file_path is not None]
 
-            copied_transcriptions = self._copy_transcriptions(
-                media_file_list,
-                media_dir,
-                transcriptions_out_dir
-            )
+            copied_transcriptions = self._copy_transcriptions(media_file_list, media_dir, transcriptions_out_dir)
 
         # Generate summary
         summary = {
-            'contact_name': contact_name,
-            'output_dir': contact_dir,
-            'transcript_path': transcript_out_path,
-            'total_messages': len(messages),
-            'media_messages': len(media_refs),
-            'media_copied': len(copied_media),
-            'transcriptions_copied': len(copied_transcriptions),
-            'format_version': effective_format,
+            "contact_name": contact_name,
+            "output_dir": contact_dir,
+            "transcript_path": transcript_out_path,
+            "total_messages": len(messages),
+            "media_messages": len(media_refs),
+            "media_copied": len(copied_media),
+            "transcriptions_copied": len(copied_transcriptions),
+            "format_version": effective_format,
         }
 
         self.logger.info("=" * 70)
@@ -215,13 +205,13 @@ class OutputBuilder:
 
     def _build_merged_transcript(
         self,
-        messages: List[Message],
-        media_refs: List[MediaReference],
+        messages: list[Message],
+        media_refs: list[MediaReference],
         output_path: Path,
         contact_name: str,
         include_transcriptions: bool,
-        transcriptions_dir: Optional[Path],
-        source_media_dir: Optional[Path] = None
+        transcriptions_dir: Path | None,
+        source_media_dir: Path | None = None,
     ):
         """
         Build merged transcript with transcription references.
@@ -240,7 +230,7 @@ class OutputBuilder:
         # Create media reference lookup by line number
         media_by_line = {ref.line_number: ref for ref in media_refs}
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             # Write header
             f.write(f"# WhatsApp Chat with {contact_name}\n")
             f.write(f"# Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -251,19 +241,16 @@ class OutputBuilder:
             # Write messages
             for msg in messages:
                 # Format timestamp
-                timestamp_str = msg.timestamp.strftime('%d/%m/%Y, %H:%M')
+                timestamp_str = msg.timestamp.strftime("%d/%m/%Y, %H:%M")
 
                 # Write message
                 f.write(f"{timestamp_str} - {msg.sender}: {msg.content}\n")
 
                 # If this is a media message with transcription, add reference
-                if include_transcriptions and msg.is_media and msg.media_type in ['audio', 'video']:
+                if include_transcriptions and msg.is_media and msg.media_type in ["audio", "video"]:
                     # Try to find corresponding transcription
                     # Extract filename from content if present
-                    transcription_ref = self._format_transcription_reference(
-                        msg.content,
-                        msg.media_type
-                    )
+                    transcription_ref = self._format_transcription_reference(msg.content, msg.media_type)
                     if transcription_ref:
                         # Look for transcription in source directory first (they haven't been copied yet)
                         transcription_text = None
@@ -293,7 +280,7 @@ class OutputBuilder:
 
     def _build_v2_transcript(
         self,
-        messages: List[Message],
+        messages: list[Message],
         contact_dir: Path,
         contact_name: str,
         chat_jid: str,
@@ -357,7 +344,7 @@ class OutputBuilder:
                 tmp_path.unlink()
             raise
 
-    def _format_transcription_reference(self, content: str, media_type: str) -> Optional[str]:
+    def _format_transcription_reference(self, content: str, media_type: str) -> str | None:
         """
         Format transcription reference from media message content.
 
@@ -378,7 +365,7 @@ class OutputBuilder:
         # For generic media references
         return None
 
-    def _read_transcription_text(self, transcription_file: Path) -> Optional[str]:
+    def _read_transcription_text(self, transcription_file: Path) -> str | None:
         """
         Read transcription text from file, skipping metadata headers.
 
@@ -391,36 +378,33 @@ class OutputBuilder:
         try:
             if not transcription_file.exists():
                 return None
-            
-            with open(transcription_file, 'r', encoding='utf-8') as f:
+
+            with open(transcription_file, encoding="utf-8") as f:
                 lines = f.readlines()
-            
+
             # Extract text, skipping metadata lines (starting with #)
             text_lines = []
             for line in lines:
                 stripped = line.strip()
                 # Skip metadata headers and empty lines
-                if stripped and not stripped.startswith('#'):
+                if stripped and not stripped.startswith("#"):
                     text_lines.append(stripped)
-            
+
             # Join all text lines with space
-            transcription_text = ' '.join(text_lines)
-            
+            transcription_text = " ".join(text_lines)
+
             return transcription_text if transcription_text else None
-            
+
         except Exception as e:
             self.logger.debug(f"Could not read transcription file {transcription_file.name}: {e}")
             return None
 
     def _copy_media_files(
-        self,
-        correlation_list: List[Tuple[MediaReference, Optional[Path]]],
-        source_dir: Path,
-        dest_dir: Path
-    ) -> List[Path]:
+        self, correlation_list: list[tuple[MediaReference, Path | None]], source_dir: Path, dest_dir: Path
+    ) -> list[Path]:
         """
         Copy media files to destination.
-        
+
         Uses skip-if-exists strategy: if a file with the same name already exists
         in the destination, it is skipped (not overwritten).
 
@@ -464,15 +448,10 @@ class OutputBuilder:
         self.logger.success(f"Copied {len(copied_files) - skipped_count} new media file(s)")
         return copied_files
 
-    def _copy_transcriptions(
-        self,
-        media_files: List[Path],
-        source_dir: Path,
-        dest_dir: Path
-    ) -> List[Path]:
+    def _copy_transcriptions(self, media_files: list[Path], source_dir: Path, dest_dir: Path) -> list[Path]:
         """
         Copy transcription files for media files.
-        
+
         Uses skip-if-exists strategy: if a transcription file with the same name
         already exists in the destination, it is skipped (not overwritten).
 
@@ -527,13 +506,13 @@ class OutputBuilder:
 
     def batch_build_outputs(
         self,
-        transcript_files: List[Tuple[Path, Path]],
+        transcript_files: list[tuple[Path, Path]],
         dest_dir: Path,
         include_transcriptions: bool = True,
         copy_media: bool = True,
-        on_progress: Optional[Callable] = None,
-        format_version: Optional[str] = None,
-    ) -> List[Dict]:
+        on_progress: Callable | None = None,
+        format_version: str | None = None,
+    ) -> list[dict]:
         """
         Build outputs for multiple chats.
 
@@ -571,18 +550,21 @@ class OutputBuilder:
             except Exception as e:
                 self.logger.error(f"Failed to build output for {transcript_path.name}: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             if on_progress:
                 try:
-                    on_progress("build_output", f"Built output for {transcript_path.stem}", i, total, transcript_path.stem)
+                    on_progress(
+                        "build_output", f"Built output for {transcript_path.stem}", i, total, transcript_path.stem
+                    )
                 except Exception:
                     pass  # Never let callback errors crash output building
 
         # Overall summary
-        total_messages = sum(r['total_messages'] for r in results)
-        total_media = sum(r['media_copied'] for r in results)
-        total_transcriptions = sum(r['transcriptions_copied'] for r in results)
+        total_messages = sum(r["total_messages"] for r in results)
+        total_media = sum(r["media_copied"] for r in results)
+        total_transcriptions = sum(r["transcriptions_copied"] for r in results)
 
         self.logger.info("\n" + "=" * 70)
         self.logger.info("Batch Build Summary")
@@ -596,7 +578,7 @@ class OutputBuilder:
 
         return results
 
-    def verify_output(self, contact_dir: Path) -> Dict:
+    def verify_output(self, contact_dir: Path) -> dict:
         """
         Verify output structure is correct.
 
@@ -607,13 +589,13 @@ class OutputBuilder:
             Dictionary with verification results
         """
         results = {
-            'contact_dir_exists': contact_dir.exists(),
-            'transcript_exists': False,
-            'media_dir_exists': False,
-            'transcriptions_dir_exists': False,
-            'media_count': 0,
-            'transcriptions_count': 0,
-            'valid': False
+            "contact_dir_exists": contact_dir.exists(),
+            "transcript_exists": False,
+            "media_dir_exists": False,
+            "transcriptions_dir_exists": False,
+            "media_count": 0,
+            "transcriptions_count": 0,
+            "valid": False,
         }
 
         if not contact_dir.exists():
@@ -621,21 +603,21 @@ class OutputBuilder:
 
         # Check transcript
         transcript_path = contact_dir / "transcript.txt"
-        results['transcript_exists'] = transcript_path.exists()
+        results["transcript_exists"] = transcript_path.exists()
 
         # Check media directory
         media_dir = contact_dir / "media"
-        results['media_dir_exists'] = media_dir.exists()
+        results["media_dir_exists"] = media_dir.exists()
         if media_dir.exists():
-            results['media_count'] = len(list(media_dir.iterdir()))
+            results["media_count"] = len(list(media_dir.iterdir()))
 
         # Check transcriptions directory
         transcriptions_dir = contact_dir / "transcriptions"
-        results['transcriptions_dir_exists'] = transcriptions_dir.exists()
+        results["transcriptions_dir_exists"] = transcriptions_dir.exists()
         if transcriptions_dir.exists():
-            results['transcriptions_count'] = len(list(transcriptions_dir.iterdir()))
+            results["transcriptions_count"] = len(list(transcriptions_dir.iterdir()))
 
         # Valid if at least transcript exists
-        results['valid'] = results['transcript_exists']
+        results["valid"] = results["transcript_exists"]
 
         return results

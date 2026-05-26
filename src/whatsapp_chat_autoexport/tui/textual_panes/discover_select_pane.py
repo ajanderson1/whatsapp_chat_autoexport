@@ -9,19 +9,17 @@ Flow:
 5. "Start Export" emits StartExport with the selected chat list
 """
 
-from typing import List
-
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Static, Button
-from textual.binding import Binding
+from textual.widgets import Button, Static
 from textual.worker import Worker, WorkerState
 
 from ..textual_widgets.activity_log import ActivityLog
 from ..textual_widgets.chat_list import ChatListWidget
-from ..textual_widgets.prerequisite_banner import PrerequisiteBanner, BannerStatus
-from ..textual_widgets.settings_panel import SettingsPanel, DEFAULT_OUTPUT_DIR
+from ..textual_widgets.prerequisite_banner import BannerStatus, PrerequisiteBanner
+from ..textual_widgets.settings_panel import DEFAULT_OUTPUT_DIR, SettingsPanel
 
 
 class DiscoverSelectPane(Container):
@@ -55,6 +53,7 @@ class DiscoverSelectPane(Container):
 
     class ConnectionLost(Message):
         """Emitted when driver connection is lost during discovery."""
+
         pass
 
     # ------------------------------------------------------------------
@@ -98,7 +97,9 @@ class DiscoverSelectPane(Container):
                     include_media=getattr(self.app, "include_media", True),
                     transcribe_audio=getattr(self.app, "transcribe_audio", True),
                     delete_from_drive=getattr(self.app, "delete_from_drive", False),
-                    output_folder=str(self.app.output_dir) if hasattr(self.app, "output_dir") and self.app.output_dir else DEFAULT_OUTPUT_DIR,
+                    output_folder=str(self.app.output_dir)
+                    if hasattr(self.app, "output_dir") and self.app.output_dir
+                    else DEFAULT_OUTPUT_DIR,
                     transcription_provider=getattr(self.app, "transcription_provider", "whisper"),
                     id="settings-panel",
                 )
@@ -168,16 +169,12 @@ class DiscoverSelectPane(Container):
             chat_list.clear_chats()
             self.query_one("#btn-refresh-chats", Button).disabled = True
             self.query_one("#btn-start-export", Button).disabled = True
-            self.query_one("#selection-count", Static).update(
-                "[dim]Discovering chats...[/dim]"
-            )
+            self.query_one("#selection-count", Static).update("[dim]Discovering chats...[/dim]")
         except Exception:
             pass
 
         self._log("Starting chat discovery...")
-        self._discovery_worker = self.run_worker(
-            self._collect_chats, exclusive=True, thread=True
-        )
+        self._discovery_worker = self.run_worker(self._collect_chats, exclusive=True, thread=True)
 
     def stop_discovery(self) -> None:
         """Cancel a running discovery worker, if any."""
@@ -187,7 +184,7 @@ class DiscoverSelectPane(Container):
         self._scanning_chats = False
         self._discovery_generation += 1
 
-    def _collect_chats(self) -> List[str]:
+    def _collect_chats(self) -> list[str]:
         """Worker: collect chats from the device (runs in thread)."""
         generation = self._discovery_generation
         driver = getattr(self.app, "driver", None)
@@ -265,18 +262,14 @@ class DiscoverSelectPane(Container):
     # Selection handling
     # ------------------------------------------------------------------
 
-    def on_chat_list_widget_selection_changed(
-        self, event: ChatListWidget.SelectionChanged
-    ) -> None:
+    def on_chat_list_widget_selection_changed(self, event: ChatListWidget.SelectionChanged) -> None:
         """Bubble up selection changes."""
         count = len(event.selected)
         self._update_selection_count()
         self._update_gate()
         self.post_message(self.SelectionChanged(count))
 
-    def on_chat_list_widget_refresh_requested(
-        self, event: ChatListWidget.RefreshRequested
-    ) -> None:
+    def on_chat_list_widget_refresh_requested(self, event: ChatListWidget.RefreshRequested) -> None:
         """Re-run chat discovery when the Refresh button is clicked."""
         # Cancel any stale/in-flight discovery first so a manual refresh is
         # never silently dropped by the `_scanning_chats` guard.
@@ -287,9 +280,7 @@ class DiscoverSelectPane(Container):
     # Settings handling
     # ------------------------------------------------------------------
 
-    def on_settings_panel_settings_changed(
-        self, event: SettingsPanel.SettingsChanged
-    ) -> None:
+    def on_settings_panel_settings_changed(self, event: SettingsPanel.SettingsChanged) -> None:
         """Persist settings changes to the app."""
         app = self.app
         app.include_media = event.include_media
@@ -297,6 +288,7 @@ class DiscoverSelectPane(Container):
         app.delete_from_drive = event.delete_from_drive
         if hasattr(app, "output_dir"):
             from pathlib import Path
+
             app.output_dir = Path(event.output_folder)
         app.transcription_provider = event.transcription_provider
         self._refresh_banners()
@@ -339,9 +331,7 @@ class DiscoverSelectPane(Container):
     # Prerequisite banners
     # ------------------------------------------------------------------
 
-    def on_settings_panel_drive_status_changed(
-        self, event: SettingsPanel.DriveStatusChanged
-    ) -> None:
+    def on_settings_panel_drive_status_changed(self, event: SettingsPanel.DriveStatusChanged) -> None:
         """Refresh banners when Drive auth state changes."""
         self._refresh_banners()
 
@@ -366,6 +356,7 @@ class DiscoverSelectPane(Container):
                 # Check if client_secrets at least exists
                 try:
                     from ...google_drive.auth import GoogleDriveAuth
+
                     auth = GoogleDriveAuth()
                     if auth.has_client_secrets():
                         banner.update_status(
@@ -424,6 +415,7 @@ class DiscoverSelectPane(Container):
                 return
 
             from ...constants import TESTED_WHATSAPP_VERSION
+
             if device_version == TESTED_WHATSAPP_VERSION:
                 banner.update_status(BannerStatus.OK)
             else:
@@ -472,9 +464,7 @@ class DiscoverSelectPane(Container):
         try:
             reason_widget = self.query_one("#blocker-reason", Static)
             if blockers:
-                reason_widget.update(
-                    f"[red]Cannot export \u2014 {', '.join(blockers)}[/red]"
-                )
+                reason_widget.update(f"[red]Cannot export \u2014 {', '.join(blockers)}[/red]")
             else:
                 reason_widget.update("")
         except Exception:
@@ -490,9 +480,7 @@ class DiscoverSelectPane(Container):
             chat_list = self.query_one("#chat-select-list", ChatListWidget)
             selected = len(chat_list.get_selected())
             total = len(chat_list._chats)
-            self.query_one("#selection-count", Static).update(
-                f"[dim]Selected {selected} of {total} chats[/dim]"
-            )
+            self.query_one("#selection-count", Static).update(f"[dim]Selected {selected} of {total} chats[/dim]")
         except Exception:
             pass
 

@@ -11,8 +11,8 @@ from pathlib import Path
 # Add the package to the path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from whatsapp_chat_autoexport.transcription.whisper_transcriber import WhisperTranscriber
 from whatsapp_chat_autoexport.transcription.elevenlabs_transcriber import ElevenLabsTranscriber
+from whatsapp_chat_autoexport.transcription.whisper_transcriber import WhisperTranscriber
 
 
 class SimpleLogger:
@@ -41,7 +41,7 @@ def test_whisper_missing_key():
     print("=" * 70)
 
     # Temporarily remove the API key if it exists
-    old_key = os.environ.pop('OPENAI_API_KEY', None)
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
 
     try:
         logger = SimpleLogger()
@@ -55,7 +55,7 @@ def test_whisper_missing_key():
     finally:
         # Restore the key if it was set
         if old_key:
-            os.environ['OPENAI_API_KEY'] = old_key
+            os.environ["OPENAI_API_KEY"] = old_key
 
     print()
 
@@ -67,7 +67,7 @@ def test_elevenlabs_missing_key():
     print("=" * 70)
 
     # Temporarily remove the API key if it exists
-    old_key = os.environ.pop('ELEVENLABS_API_KEY', None)
+    old_key = os.environ.pop("ELEVENLABS_API_KEY", None)
 
     try:
         logger = SimpleLogger()
@@ -81,7 +81,7 @@ def test_elevenlabs_missing_key():
     finally:
         # Restore the key if it was set
         if old_key:
-            os.environ['ELEVENLABS_API_KEY'] = old_key
+            os.environ["ELEVENLABS_API_KEY"] = old_key
 
     print()
 

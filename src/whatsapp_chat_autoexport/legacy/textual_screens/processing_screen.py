@@ -11,18 +11,16 @@ This is the fourth screen in the pipeline:
 
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 from textual.app import ComposeResult
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
-from textual.widgets import Static, Button, ProgressBar
-from textual.containers import Vertical, Horizontal, Container
-from textual.binding import Binding
+from textual.widgets import Button, ProgressBar, Static
 from textual.worker import Worker, WorkerState
 
-from whatsapp_chat_autoexport.tui.textual_widgets.pipeline_header import PipelineHeader
-from whatsapp_chat_autoexport.tui.textual_widgets.activity_log import ActivityLog
 from whatsapp_chat_autoexport.tui.textual_app import PipelineStage
+from whatsapp_chat_autoexport.tui.textual_widgets.activity_log import ActivityLog
+from whatsapp_chat_autoexport.tui.textual_widgets.pipeline_header import PipelineHeader
 
 
 class ProcessingScreen(Screen):
@@ -49,7 +47,7 @@ class ProcessingScreen(Screen):
         """Initialize the processing screen."""
         super().__init__(**kwargs)
         self._current_phase = 0
-        self._processing_worker: Optional[Worker] = None
+        self._processing_worker: Worker | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -158,7 +156,7 @@ class ProcessingScreen(Screen):
             self.app.call_from_thread(self._log_phase_start, "Downloading from Google Drive")
 
             # Use pipeline for actual processing
-            from whatsapp_chat_autoexport.pipeline import WhatsAppPipeline, PipelineConfig
+            from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
             config = PipelineConfig(
                 output_dir=Path(output_dir),

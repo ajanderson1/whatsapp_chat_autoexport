@@ -5,9 +5,9 @@ Provides type-safe configuration with validation and environment
 variable support.
 """
 
-import os
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,12 +17,12 @@ class DeviceConfig(BaseModel):
 
     # Connection settings
     connection_type: Literal["usb", "wireless"] = "usb"
-    wireless_ip: Optional[str] = None
+    wireless_ip: str | None = None
     wireless_port: int = 5555
-    pairing_port: Optional[int] = None
+    pairing_port: int | None = None
 
     # ADB settings
-    adb_path: Optional[str] = None
+    adb_path: str | None = None
     adb_timeout: int = 30
 
     # Appium settings
@@ -33,8 +33,8 @@ class DeviceConfig(BaseModel):
     # Device capabilities
     device_name: str = "Android"
     platform_name: str = "Android"
-    platform_version: Optional[str] = None
-    udid: Optional[str] = None
+    platform_version: str | None = None
+    udid: str | None = None
     no_reset: bool = True
     full_reset: bool = False
     auto_grant_permissions: bool = True
@@ -45,14 +45,14 @@ class ExportConfig(BaseModel):
 
     # Export settings
     include_media: bool = True
-    limit: Optional[int] = None
+    limit: int | None = None
     resume_enabled: bool = False
-    resume_directory: Optional[Path] = None
+    resume_directory: Path | None = None
 
     # Chat selection
     skip_community_chats: bool = True
     skip_broadcast_lists: bool = True
-    chat_filter_pattern: Optional[str] = None
+    chat_filter_pattern: str | None = None
 
     # Retry behavior
     max_retries_per_chat: int = 2
@@ -66,7 +66,7 @@ class ExportConfig(BaseModel):
 
     # Checkpointing
     checkpoint_enabled: bool = True
-    checkpoint_directory: Optional[Path] = None
+    checkpoint_directory: Path | None = None
     checkpoint_interval: int = 5  # Save every N chats
 
     # Google Drive
@@ -87,7 +87,7 @@ class TranscriptionConfig(BaseModel):
 
     # Provider settings
     provider: Literal["whisper", "elevenlabs"] = "whisper"
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
     # Whisper settings
     whisper_model: str = "whisper-1"
@@ -102,9 +102,7 @@ class TranscriptionConfig(BaseModel):
     timeout_seconds: int = 300
 
     # Supported formats
-    audio_formats: list[str] = Field(
-        default=[".opus", ".m4a", ".mp3", ".wav", ".ogg", ".aac"]
-    )
+    audio_formats: list[str] = Field(default=[".opus", ".m4a", ".mp3", ".wav", ".ogg", ".aac"])
     video_formats: list[str] = Field(default=[".mp4", ".mov", ".avi", ".webm"])
 
 
@@ -128,10 +126,8 @@ class PipelineConfig(BaseModel):
     drive_folder_name: str = "WhatsApp"
 
     # Paths
-    temp_directory: Optional[Path] = None
-    output_directory: Path = Field(
-        default=Path("/Users/ajanderson/Journal/People/Correspondence/Whatsapp")
-    )
+    temp_directory: Path | None = None
+    output_directory: Path = Field(default=Path("/Users/ajanderson/Journal/People/Correspondence/Whatsapp"))
 
     # Cleanup
     cleanup_temp_files: bool = True
@@ -175,7 +171,7 @@ class LoggingConfig(BaseModel):
     """Configuration for file logging."""
 
     # File logging settings
-    log_dir: Optional[Path] = None  # Default: project_root/.logs/
+    log_dir: Path | None = None  # Default: project_root/.logs/
     log_file_enabled: bool = True
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     max_size_mb: int = 10  # Maximum size per log file in MB
@@ -211,7 +207,7 @@ class AppConfig(BaseSettings):
     debug: bool = False
     dry_run: bool = False
     verbose: bool = False
-    selectors_path: Optional[Path] = None
+    selectors_path: Path | None = None
 
     @field_validator("selectors_path", mode="before")
     @classmethod
@@ -223,7 +219,7 @@ class AppConfig(BaseSettings):
 
 
 # Global config instance
-_config: Optional[AppConfig] = None
+_config: AppConfig | None = None
 
 
 def get_config() -> AppConfig:
@@ -235,7 +231,7 @@ def get_config() -> AppConfig:
 
 
 def load_config(
-    config_file: Optional[Path] = None,
+    config_file: Path | None = None,
     **overrides,
 ) -> AppConfig:
     """

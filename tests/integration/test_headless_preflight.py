@@ -1,6 +1,5 @@
 """End-to-end-ish tests for preflight integration in headless modes."""
 
-import sys
 from argparse import Namespace
 from unittest.mock import patch
 
@@ -91,9 +90,7 @@ def _ok_report() -> PreflightReport:
 
 
 class TestHeadlessPreflightGate:
-    def test_hard_fail_returns_exit_code_2(
-        self, mock_passing_api_key, capsys
-    ):
+    def test_hard_fail_returns_exit_code_2(self, mock_passing_api_key, capsys):
         from whatsapp_chat_autoexport.headless import run_headless
 
         with patch(
@@ -111,13 +108,11 @@ class TestHeadlessPreflightGate:
         from whatsapp_chat_autoexport.headless import run_headless
 
         # If the gate ran, run_preflight would be called; assert it isn't.
-        with patch(
-            "whatsapp_chat_autoexport.headless.run_preflight"
-        ) as preflight_mock, patch(
-            "whatsapp_chat_autoexport.export.appium_manager.AppiumManager"
-        ), patch(
-            "whatsapp_chat_autoexport.export.whatsapp_driver.WhatsAppDriver"
-        ) as driver_cls:
+        with (
+            patch("whatsapp_chat_autoexport.headless.run_preflight") as preflight_mock,
+            patch("whatsapp_chat_autoexport.export.appium_manager.AppiumManager"),
+            patch("whatsapp_chat_autoexport.export.whatsapp_driver.WhatsAppDriver") as driver_cls,
+        ):
             # Force device check to fail so we exit early after the gate
             driver_cls.return_value.check_device_connection.return_value = False
 
@@ -145,14 +140,14 @@ class TestHeadlessPreflightGate:
 
         from whatsapp_chat_autoexport.headless import run_headless
 
-        with patch(
-            "whatsapp_chat_autoexport.headless.run_preflight",
-            return_value=warn_report,
-        ), patch(
-            "whatsapp_chat_autoexport.export.appium_manager.AppiumManager"
-        ), patch(
-            "whatsapp_chat_autoexport.export.whatsapp_driver.WhatsAppDriver"
-        ) as driver_cls:
+        with (
+            patch(
+                "whatsapp_chat_autoexport.headless.run_preflight",
+                return_value=warn_report,
+            ),
+            patch("whatsapp_chat_autoexport.export.appium_manager.AppiumManager"),
+            patch("whatsapp_chat_autoexport.export.whatsapp_driver.WhatsAppDriver") as driver_cls,
+        ):
             driver_cls.return_value.check_device_connection.return_value = False
 
             exit_code = run_headless(_build_args())
@@ -185,9 +180,7 @@ class TestPipelineOnlyPreflightGate:
             debug=False,
         )
 
-    def test_hard_fail_returns_exit_2(
-        self, mock_passing_api_key, pipeline_args, capsys
-    ):
+    def test_hard_fail_returns_exit_2(self, mock_passing_api_key, pipeline_args, capsys):
         from whatsapp_chat_autoexport.headless import run_pipeline_only
 
         with patch(
@@ -199,19 +192,18 @@ class TestPipelineOnlyPreflightGate:
         assert exit_code == 2
         assert "[preflight]" in capsys.readouterr().err
 
-    def test_skip_drive_download_passes_skip_drive_true(
-        self, mock_passing_api_key, pipeline_args
-    ):
+    def test_skip_drive_download_passes_skip_drive_true(self, mock_passing_api_key, pipeline_args):
         from whatsapp_chat_autoexport.headless import run_pipeline_only
 
         pipeline_args.skip_drive_download = True
 
-        with patch(
-            "whatsapp_chat_autoexport.headless.run_preflight",
-            return_value=_ok_report(),
-        ) as preflight_mock, patch(
-            "whatsapp_chat_autoexport.headless.WhatsAppPipeline"
-        ) as pipeline_cls:
+        with (
+            patch(
+                "whatsapp_chat_autoexport.headless.run_preflight",
+                return_value=_ok_report(),
+            ) as preflight_mock,
+            patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline") as pipeline_cls,
+        ):
             pipeline_cls.return_value.run.return_value = {"success": True}
             run_pipeline_only(pipeline_args)
 
@@ -222,11 +214,10 @@ class TestPipelineOnlyPreflightGate:
 
         pipeline_args.skip_preflight = True
 
-        with patch(
-            "whatsapp_chat_autoexport.headless.run_preflight"
-        ) as preflight_mock, patch(
-            "whatsapp_chat_autoexport.headless.WhatsAppPipeline"
-        ) as pipeline_cls:
+        with (
+            patch("whatsapp_chat_autoexport.headless.run_preflight") as preflight_mock,
+            patch("whatsapp_chat_autoexport.headless.WhatsAppPipeline") as pipeline_cls,
+        ):
             pipeline_cls.return_value.run.return_value = {"success": True}
             run_pipeline_only(pipeline_args)
 

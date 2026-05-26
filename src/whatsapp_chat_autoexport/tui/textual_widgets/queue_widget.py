@@ -9,14 +9,12 @@ Shows a table of chats with their current status:
 - Skipped (dimmed, italic)
 """
 
-from typing import List, Optional, Dict
 from textual.app import ComposeResult
 from textual.widget import Widget
-from textual.widgets import Static, DataTable
+from textual.widgets import DataTable, Static
 from textual.widgets.data_table import RowKey
-from textual.containers import Vertical
 
-from ...state.models import ChatStatus, ChatState
+from ...state.models import ChatState, ChatStatus
 
 
 class QueueWidget(Widget):
@@ -55,9 +53,9 @@ class QueueWidget(Widget):
         """
         super().__init__(**kwargs)
         self._title = title
-        self._chats: List[ChatState] = []
+        self._chats: list[ChatState] = []
         # Map chat names to row keys for incremental updates
-        self._chat_row_keys: Dict[str, RowKey] = {}
+        self._chat_row_keys: dict[str, RowKey] = {}
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
@@ -140,7 +138,7 @@ class QueueWidget(Widget):
         else:
             return "[dim]Waiting[/dim]"
 
-    def update_queue(self, chats: List[ChatState]) -> None:
+    def update_queue(self, chats: list[ChatState]) -> None:
         """
         Update the queue with new chat states (full rebuild).
 
@@ -164,9 +162,9 @@ class QueueWidget(Widget):
     def update_chat(
         self,
         name: str,
-        status: Optional[ChatStatus] = None,
-        step: Optional[str] = None,
-        error: Optional[str] = None,
+        status: ChatStatus | None = None,
+        step: str | None = None,
+        error: str | None = None,
     ) -> None:
         """
         Update a specific chat in the queue efficiently.

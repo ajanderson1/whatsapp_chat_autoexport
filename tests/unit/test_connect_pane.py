@@ -8,12 +8,10 @@ Tests cover:
 """
 
 import pytest
+from textual.widgets import Button, Input, ListView, Static, TabbedContent
 
 from whatsapp_chat_autoexport.tui.textual_panes.connect_pane import ConnectPane
 from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
-
-from textual.widgets import Button, Input, ListView, Static, TabbedContent
-
 
 # =============================================================================
 # ConnectPane Initialisation

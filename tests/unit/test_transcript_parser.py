@@ -4,15 +4,14 @@ Test suite for transcript parser.
 Tests message parsing, media detection, and file correlation.
 """
 
-from pathlib import Path
 from datetime import datetime
 
 import pytest
 
 from whatsapp_chat_autoexport.processing.transcript_parser import (
-    TranscriptParser,
-    Message,
     MediaReference,
+    Message,
+    TranscriptParser,
 )
 from whatsapp_chat_autoexport.utils.logger import Logger
 
@@ -38,9 +37,7 @@ def test_parse_sample_transcript(sample_transcript_file):
 
     # The sample transcript has 3,151 lines and lots of media
     assert len(messages) > 100, f"Expected many messages, got {len(messages)}"
-    assert (
-        len(media_refs) > 10
-    ), f"Expected many media references, got {len(media_refs)}"
+    assert len(media_refs) > 10, f"Expected many media references, got {len(media_refs)}"
 
 
 @pytest.mark.unit
@@ -57,9 +54,7 @@ def test_message_structure(sample_transcript_file):
     first_msg = messages[0]
 
     # Verify structure
-    assert isinstance(
-        first_msg.timestamp, datetime
-    ), "Timestamp should be a datetime object"
+    assert isinstance(first_msg.timestamp, datetime), "Timestamp should be a datetime object"
     assert isinstance(first_msg.sender, str), "Sender should be a string"
     assert isinstance(first_msg.content, str), "Content should be a string"
     assert isinstance(first_msg.is_media, bool), "is_media should be a boolean"
@@ -190,7 +185,9 @@ def test_media_correlation(temp_working_dir):
 
     # Try to correlate
     correlation_list = parser.correlate_media_files(
-        mock_refs, media_dir, time_tolerance_seconds=3600  # 1 hour tolerance
+        mock_refs,
+        media_dir,
+        time_tolerance_seconds=3600,  # 1 hour tolerance
     )
 
     # Verify correlation function runs without error
@@ -218,12 +215,8 @@ def test_multiline_messages(temp_working_dir):
 
     # First message should contain all three lines
     first_content = messages[0].content
-    assert (
-        "that continues on the next line" in first_content
-    ), "Multi-line content not captured"
-    assert (
-        "and even another line" in first_content
-    ), "All multi-line content should be captured"
+    assert "that continues on the next line" in first_content, "Multi-line content not captured"
+    assert "and even another line" in first_content, "All multi-line content should be captured"
 
 
 @pytest.mark.unit

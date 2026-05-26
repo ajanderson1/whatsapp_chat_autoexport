@@ -2,12 +2,10 @@
 Step 1: Open the three-dot menu in chat view.
 """
 
-from typing import Any, Dict, Optional
-
-from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
-from ....core.result import Result, Ok, Err
-from ....core.errors import ExportError, ExportWorkflowError, ElementNotFoundError
 from ....config.selectors import create_default_selectors
+from ....core.errors import ExportError, ExportWorkflowError
+from ....core.result import Err, Ok, Result
+from .base_step import BaseExportStep, StepContext, StepResult
 
 
 class OpenMenuStep(BaseExportStep):
@@ -113,9 +111,7 @@ class OpenMenuStep(BaseExportStep):
                 return False
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate we're in a chat view.
 

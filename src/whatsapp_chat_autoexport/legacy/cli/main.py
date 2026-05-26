@@ -7,7 +7,6 @@ Provides a unified command interface with subcommands for:
 - wizard: Interactive step-by-step workflow
 """
 
-from typing import Optional
 from pathlib import Path
 
 import typer

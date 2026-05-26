@@ -6,9 +6,9 @@ allowing exports to resume from the exact chat index even after session loss or 
 """
 
 import json
-from pathlib import Path
-from typing import Optional, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 class CheckpointManager:
@@ -27,7 +27,7 @@ class CheckpointManager:
     - Manual script restarts
     """
 
-    def __init__(self, checkpoint_path: Optional[Path] = None):
+    def __init__(self, checkpoint_path: Path | None = None):
         """
         Initialize checkpoint manager.
 
@@ -38,9 +38,9 @@ class CheckpointManager:
             checkpoint_path = Path.home() / ".whatsapp_export_checkpoint.json"
 
         self.checkpoint_path = Path(checkpoint_path)
-        self._checkpoint_data: Optional[Dict[str, Any]] = None
+        self._checkpoint_data: dict[str, Any] | None = None
 
-    def load_checkpoint(self) -> Optional[Dict[str, Any]]:
+    def load_checkpoint(self) -> dict[str, Any] | None:
         """
         Load checkpoint from file if it exists.
 
@@ -58,10 +58,10 @@ class CheckpointManager:
             return None
 
         try:
-            with open(self.checkpoint_path, 'r') as f:
+            with open(self.checkpoint_path) as f:
                 self._checkpoint_data = json.load(f)
                 return self._checkpoint_data
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             print(f"Warning: Could not load checkpoint file: {e}")
             return None
 
@@ -81,23 +81,23 @@ class CheckpointManager:
 
         # Initialize checkpoint data if this is first save
         if self._checkpoint_data is None:
-            self._checkpoint_data = {
-                "session_start": datetime.now().isoformat()
-            }
+            self._checkpoint_data = {"session_start": datetime.now().isoformat()}
 
         # Update checkpoint data
-        self._checkpoint_data.update({
-            "last_completed_index": chat_index,
-            "last_chat_name": chat_name,
-            "total_chats": total_chats,
-            "timestamp": datetime.now().isoformat()
-        })
+        self._checkpoint_data.update(
+            {
+                "last_completed_index": chat_index,
+                "last_chat_name": chat_name,
+                "total_chats": total_chats,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         # Write to file
         try:
-            with open(self.checkpoint_path, 'w') as f:
+            with open(self.checkpoint_path, "w") as f:
                 json.dump(self._checkpoint_data, f, indent=2)
-        except IOError as e:
+        except OSError as e:
             print(f"Warning: Could not save checkpoint: {e}")
 
     def clear_checkpoint(self) -> None:
@@ -108,10 +108,10 @@ class CheckpointManager:
             try:
                 self.checkpoint_path.unlink()
                 self._checkpoint_data = None
-            except IOError as e:
+            except OSError as e:
                 print(f"Warning: Could not delete checkpoint file: {e}")
 
-    def get_resume_index(self) -> Optional[int]:
+    def get_resume_index(self) -> int | None:
         """
         Get the index to resume from (next chat after last completed).
 
@@ -149,7 +149,5 @@ class CheckpointManager:
             time_str = timestamp
 
         return (
-            f"Found checkpoint at chat {last_index + 1}/{total}\n"
-            f"Last completed: '{last_chat}'\n"
-            f"Timestamp: {time_str}"
+            f"Found checkpoint at chat {last_index + 1}/{total}\nLast completed: '{last_chat}'\nTimestamp: {time_str}"
         )

@@ -6,7 +6,6 @@ below 50_000 chars, hard-fails at zero.
 """
 
 from datetime import datetime
-from typing import Optional
 
 import httpx
 
@@ -16,13 +15,13 @@ _DISPLAY = "ElevenLabs"
 _ENDPOINT = "https://api.elevenlabs.io/v1/user/subscription"
 _TIMEOUT = 10.0
 _WARN_THRESHOLD = 50_000  # chars
-_HARD_THRESHOLD = 0       # chars
+_HARD_THRESHOLD = 0  # chars
 
 
 def check_elevenlabs(
-    api_key: Optional[str],
+    api_key: str | None,
     *,
-    _client: Optional[httpx.Client] = None,
+    _client: httpx.Client | None = None,
 ) -> CheckResult:
     """Probe the ElevenLabs key + quota."""
     if not api_key:
@@ -107,9 +106,7 @@ def check_elevenlabs(
                 provider="elevenlabs",
                 display_name=_DISPLAY,
                 status=Status.WARN,
-                summary=(
-                    f"{remaining:,} chars left ({tier}), resets {reset_date}"
-                ),
+                summary=(f"{remaining:,} chars left ({tier}), resets {reset_date}"),
                 details=details,
             )
         return CheckResult(

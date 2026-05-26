@@ -5,7 +5,7 @@ The TUI uses a single MainScreen with TabbedContent containing four panes:
 ConnectPane, DiscoverSelectPane, ExportPane, and SummaryPane.
 """
 
-from .main_screen import MainScreen
 from .help_screen import HelpScreen
+from .main_screen import MainScreen
 
 __all__ = ["MainScreen", "HelpScreen"]

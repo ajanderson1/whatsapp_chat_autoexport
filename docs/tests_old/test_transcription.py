@@ -6,9 +6,8 @@ Tests transcription interfaces, file handling, and batch processing.
 """
 
 import sys
-from pathlib import Path
 import tempfile
-import os
+from pathlib import Path
 
 # Add project to path
 project_root = Path(__file__).parent
@@ -16,9 +15,9 @@ sys.path.insert(0, str(project_root))
 
 from whatsapp_chat_autoexport.transcription import (
     BaseTranscriber,
+    TranscriptionManager,
     TranscriptionResult,
     WhisperTranscriber,
-    TranscriptionManager
 )
 from whatsapp_chat_autoexport.utils.logger import Logger
 
@@ -36,17 +35,14 @@ class MockTranscriber(BaseTranscriber):
         self.transcribe_count += 1
 
         if self.should_fail:
-            return TranscriptionResult(
-                success=False,
-                error="Mock transcription failed"
-            )
+            return TranscriptionResult(success=False, error="Mock transcription failed")
 
         return TranscriptionResult(
             success=True,
             text=f"Mock transcription of {audio_path.name}",
             duration_seconds=1.5,
             language="en",
-            metadata={'model': 'mock'}
+            metadata={"model": "mock"},
         )
 
     def is_available(self) -> bool:
@@ -55,7 +51,7 @@ class MockTranscriber(BaseTranscriber):
 
     def get_supported_formats(self) -> list[str]:
         """Return common audio formats."""
-        return ['.mp3', '.m4a', '.opus', '.wav']
+        return [".mp3", ".m4a", ".opus", ".wav"]
 
 
 def test_import_modules():
@@ -66,14 +62,9 @@ def test_import_modules():
 
 def test_transcription_result():
     """Test TranscriptionResult dataclass."""
-    result = TranscriptionResult(
-        success=True,
-        text="Test transcription",
-        duration_seconds=2.5,
-        language="en"
-    )
+    result = TranscriptionResult(success=True, text="Test transcription", duration_seconds=2.5, language="en")
 
-    print(f"\nTranscriptionResult:")
+    print("\nTranscriptionResult:")
     print(f"  Success: {result.success}")
     print(f"  Text: {result.text}")
     print(f"  Duration: {result.duration_seconds}s")
@@ -102,15 +93,15 @@ def test_base_transcriber_interface():
     transcriber = MockTranscriber(logger=logger)
 
     # Test abstract methods are implemented
-    if not hasattr(transcriber, 'transcribe'):
+    if not hasattr(transcriber, "transcribe"):
         print("✗ Missing transcribe method")
         return False
 
-    if not hasattr(transcriber, 'is_available'):
+    if not hasattr(transcriber, "is_available"):
         print("✗ Missing is_available method")
         return False
 
-    if not hasattr(transcriber, 'get_supported_formats'):
+    if not hasattr(transcriber, "get_supported_formats"):
         print("✗ Missing get_supported_formats method")
         return False
 
@@ -206,7 +197,7 @@ def test_whisper_availability():
     is_available = transcriber.is_available()
     supported_formats = transcriber.get_supported_formats()
 
-    print(f"\nWhisper Transcriber:")
+    print("\nWhisper Transcriber:")
     print(f"  Available: {is_available}")
     print(f"  Supported formats: {len(supported_formats)} formats")
 
@@ -261,7 +252,7 @@ def test_save_and_load_transcription():
             text="This is the transcription text.",
             duration_seconds=3.2,
             language="en",
-            metadata={'model': 'test'}
+            metadata={"model": "test"},
         )
 
         # Save transcription
@@ -360,32 +351,32 @@ def test_batch_transcription():
         results = manager.batch_transcribe(
             media_files,
             skip_existing=False,
-            show_progress=False  # Disable for tests
+            show_progress=False,  # Disable for tests
         )
 
-        if results['total'] != 5:
+        if results["total"] != 5:
             print(f"✗ Expected 5 total, got {results['total']}")
             return False
 
-        if results['successful'] != 5:
+        if results["successful"] != 5:
             print(f"✗ Expected 5 successful, got {results['successful']}")
             return False
 
-        if results['failed'] != 0:
+        if results["failed"] != 0:
             print(f"✗ Expected 0 failed, got {results['failed']}")
             return False
 
-        if len(results['transcriptions']) != 5:
+        if len(results["transcriptions"]) != 5:
             print(f"✗ Expected 5 transcriptions, got {len(results['transcriptions'])}")
             return False
 
         # Verify files exist
-        for trans_path in results['transcriptions']:
+        for trans_path in results["transcriptions"]:
             if not trans_path.exists():
                 print(f"✗ Transcription file not found: {trans_path}")
                 return False
 
-        print(f"\n  Batch results:")
+        print("\n  Batch results:")
         print(f"    Total: {results['total']}")
         print(f"    Successful: {results['successful']}")
         print(f"    Failed: {results['failed']}")
@@ -450,24 +441,24 @@ def test_progress_summary():
         # Get progress summary
         summary = manager.get_progress_summary(temp_path)
 
-        if summary['total'] != 3:
+        if summary["total"] != 3:
             print(f"✗ Expected 3 total, got {summary['total']}")
             return False
 
-        if summary['transcribed'] != 2:
+        if summary["transcribed"] != 2:
             print(f"✗ Expected 2 transcribed, got {summary['transcribed']}")
             return False
 
-        if summary['pending'] != 1:
+        if summary["pending"] != 1:
             print(f"✗ Expected 1 pending, got {summary['pending']}")
             return False
 
-        expected_percent = (2/3) * 100
-        if abs(summary['progress_percent'] - expected_percent) > 0.1:
+        expected_percent = (2 / 3) * 100
+        if abs(summary["progress_percent"] - expected_percent) > 0.1:
             print(f"✗ Expected {expected_percent:.1f}%, got {summary['progress_percent']:.1f}%")
             return False
 
-        print(f"\n  Progress:")
+        print("\n  Progress:")
         print(f"    Total: {summary['total']}")
         print(f"    Transcribed: {summary['transcribed']}")
         print(f"    Pending: {summary['pending']}")
@@ -502,7 +493,7 @@ def main():
     for test_name, test_func in tests:
         print(f"\n{'─' * 70}")
         print(f"Test: {test_name}")
-        print('─' * 70)
+        print("─" * 70)
 
         try:
             result = test_func()
@@ -510,6 +501,7 @@ def main():
         except Exception as e:
             print(f"✗ Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((test_name, False))
 

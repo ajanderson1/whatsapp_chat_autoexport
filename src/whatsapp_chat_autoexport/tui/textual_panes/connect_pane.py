@@ -11,19 +11,18 @@ so that MainScreen can advance the workflow.
 import asyncio
 import hashlib
 import re
-from typing import List, Optional
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Static, Button, ListView, ListItem, Label, Input, Rule
-from textual.binding import Binding
+from textual.widgets import Button, Input, Label, ListItem, ListView, Rule, Static
 from textual.worker import Worker, WorkerState
 
+from ...export.appium_manager import AppiumManager
+from ...preflight import run_preflight
 from ..textual_widgets.activity_log import ActivityLog
 from ..textual_widgets.preflight_panel import PreflightPanel
-from ...preflight import run_preflight
-from ...export.appium_manager import AppiumManager
 
 
 class ConnectPane(Container):
@@ -66,13 +65,13 @@ class ConnectPane(Container):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._devices: List[dict] = []
-        self._selected_device: Optional[str] = None
+        self._devices: list[dict] = []
+        self._selected_device: str | None = None
         self._connecting = False
         self._updating_device_list = False
-        self._last_scan_had_devices: Optional[bool] = None
+        self._last_scan_had_devices: bool | None = None
         self._wireless_connecting = False
-        self._wireless_pairing_ip: Optional[str] = None
+        self._wireless_pairing_ip: str | None = None
 
         # Appium server management
         self._appium_started = False
@@ -84,8 +83,7 @@ class ConnectPane(Container):
     def compose(self) -> ComposeResult:
         yield PreflightPanel(id="preflight-panel")
         yield Static(
-            "[bold]Device Discovery[/bold]\n\n"
-            "Scanning for connected Android devices...",
+            "[bold]Device Discovery[/bold]\n\nScanning for connected Android devices...",
             id="instructions",
             classes="instructions",
         )
@@ -130,8 +128,7 @@ class ConnectPane(Container):
             # Connect port section -- hidden until pairing succeeds
             with Vertical(id="wireless-connect-section", classes="hidden"):
                 yield Static(
-                    "Connect Port (from main Wireless Debugging screen "
-                    "-- NOT the pairing dialog):",
+                    "Connect Port (from main Wireless Debugging screen -- NOT the pairing dialog):",
                     classes="field-label",
                 )
                 yield Input(
@@ -172,7 +169,7 @@ class ConnectPane(Container):
     # Workers: device scanning
     # ------------------------------------------------------------------
 
-    async def _scan_devices(self) -> List[dict]:
+    async def _scan_devices(self) -> list[dict]:
         """Scan for connected Android devices via ``adb devices -l``."""
         import subprocess
 
@@ -276,9 +273,7 @@ class ConnectPane(Container):
             if is_finished:
                 if is_failed:
                     self._wireless_connecting = False
-                    self._handle_worker_error(
-                        "wireless_finish_connect", getattr(worker, "error", None)
-                    )
+                    self._handle_worker_error("wireless_finish_connect", getattr(worker, "error", None))
                     try:
                         self.query_one("#btn-wireless-finish-connect", Button).disabled = False
                     except Exception:
@@ -297,9 +292,7 @@ class ConnectPane(Container):
             if is_finished:
                 self._updating_device_list = False
                 if is_failed:
-                    self._handle_worker_error(
-                        "update_device_list", getattr(worker, "error", None)
-                    )
+                    self._handle_worker_error("update_device_list", getattr(worker, "error", None))
 
     # ------------------------------------------------------------------
     # Helpers: error handling
@@ -333,13 +326,11 @@ class ConnectPane(Container):
     # Device list update
     # ------------------------------------------------------------------
 
-    def _safe_update_device_list(self, devices: List[dict]) -> None:
+    def _safe_update_device_list(self, devices: list[dict]) -> None:
         if self._updating_device_list:
             return
         self._updating_device_list = True
-        self.run_worker(
-            self._update_device_list(devices), name="update_device_list", exclusive=True
-        )
+        self.run_worker(self._update_device_list(devices), name="update_device_list", exclusive=True)
 
     def _sanitize_device_id(self, device_id: str) -> str:
         sanitized = re.sub(r"[^a-zA-Z0-9]", "_", device_id)
@@ -348,7 +339,7 @@ class ConnectPane(Container):
             sanitized = f"{sanitized[:30]}_{id_hash}"
         return sanitized
 
-    async def _update_device_list(self, devices: List[dict]) -> None:
+    async def _update_device_list(self, devices: list[dict]) -> None:
         """Update the device list display safely (async)."""
         try:
             if devices is None:
@@ -362,10 +353,7 @@ class ConnectPane(Container):
             await listview.remove_children()
 
             if not devices:
-                status.update(
-                    "[yellow]No devices found. Connect your phone via USB "
-                    "and enable USB debugging.[/yellow]"
-                )
+                status.update("[yellow]No devices found. Connect your phone via USB and enable USB debugging.[/yellow]")
                 if self._last_scan_had_devices is not False:
                     activity.log_warning("No devices found")
                 self._last_scan_had_devices = False
@@ -383,14 +371,8 @@ class ConnectPane(Container):
                 if not device_id or not isinstance(device_id, str):
                     device_id = f"unknown-{idx}"
 
-                model = (
-                    device.get("model", "Unknown Device")
-                    if isinstance(device, dict)
-                    else "Unknown Device"
-                )
-                dev_status = (
-                    device.get("status", "unknown") if isinstance(device, dict) else "unknown"
-                )
+                model = device.get("model", "Unknown Device") if isinstance(device, dict) else "Unknown Device"
+                dev_status = device.get("status", "unknown") if isinstance(device, dict) else "unknown"
 
                 sanitized_id = self._sanitize_device_id(device_id)
                 base_widget_id = f"device-{sanitized_id}"
@@ -474,12 +456,8 @@ class ConnectPane(Container):
         refresh_btn.disabled = True
         connect_btn.disabled = True
 
-        device_info = next(
-            (d for d in self._devices if d["id"] == self._selected_device), None
-        )
-        device_name = (
-            device_info.get("model", self._selected_device) if device_info else self._selected_device
-        )
+        device_info = next((d for d in self._devices if d["id"] == self._selected_device), None)
+        device_name = device_info.get("model", self._selected_device) if device_info else self._selected_device
 
         if not self._appium_started:
             activity.log_info("Starting Appium server...")
@@ -522,6 +500,7 @@ class ConnectPane(Container):
 
     def _launch_preflight_worker(self, panel: PreflightPanel) -> None:
         """Resolve panel on the main thread, then start the background worker."""
+
         def _worker() -> None:
             report = run_preflight()
             self.call_from_thread(panel.set_report, report)
@@ -628,9 +607,7 @@ class ConnectPane(Container):
             wireless_status.update("[red]Enter the 6-digit pairing code[/red]")
             return
         if ":" not in ip_port:
-            wireless_status.update(
-                "[red]Invalid format. Use IP:PORT (e.g. 192.168.1.100:37453)[/red]"
-            )
+            wireless_status.update("[red]Invalid format. Use IP:PORT (e.g. 192.168.1.100:37453)[/red]")
             return
 
         self._wireless_connecting = True
@@ -667,11 +644,7 @@ class ConnectPane(Container):
             return {"success": False, "error": f"Pairing failed: {str(e)}"}
 
         pair_output = (pair_result.stdout + pair_result.stderr).strip()
-        if (
-            pair_result.returncode != 0
-            or "Failed" in pair_output
-            or "error" in pair_output.lower()
-        ):
+        if pair_result.returncode != 0 or "Failed" in pair_output or "error" in pair_output.lower():
             return {
                 "success": False,
                 "error": f"Pairing failed: {pair_output}",
@@ -720,9 +693,7 @@ class ConnectPane(Container):
                 "Wireless Debugging screen (not the pairing dialog)."
             )
             activity.log_success("Pairing successful")
-            activity.log_info(
-                "Enter the port shown on the main Wireless Debugging screen, then press Connect."
-            )
+            activity.log_info("Enter the port shown on the main Wireless Debugging screen, then press Connect.")
 
             connect_section = self.query_one("#wireless-connect-section")
             connect_section.remove_class("hidden")
@@ -752,9 +723,7 @@ class ConnectPane(Container):
 
         connect_port = connect_port_input.value.strip()
         if not connect_port:
-            wireless_status.update(
-                "[red]Enter the port from the main Wireless Debugging screen[/red]"
-            )
+            wireless_status.update("[red]Enter the port from the main Wireless Debugging screen[/red]")
             return
         if not connect_port.isdigit():
             wireless_status.update("[red]Port must be a number[/red]")
@@ -802,15 +771,11 @@ class ConnectPane(Container):
             if not self._appium_started:
                 activity.log_info("Starting Appium server...")
                 status.update(f"[yellow]Starting Appium server for {device_id}...[/yellow]")
-                self.run_worker(
-                    self._start_appium_and_connect(device_id), name="start_appium"
-                )
+                self.run_worker(self._start_appium_and_connect(device_id), name="start_appium")
             else:
                 activity.log_info(f"Connecting to {device_id}...")
                 status.update(f"[yellow]Connecting to {device_id}...[/yellow]")
-                self.run_worker(
-                    self._connect_to_device(device_id), name="connect_device"
-                )
+                self.run_worker(self._connect_to_device(device_id), name="connect_device")
         else:
             error = result.get("error", "Unknown error")
             wireless_status.update(f"[red]{error}[/red]")

@@ -10,7 +10,6 @@ has handed focus back from the Google Drive share activity.
 import time
 from typing import Any
 
-
 WHATSAPP_PACKAGE = "com.whatsapp"
 
 
@@ -49,9 +48,7 @@ def wait_for_whatsapp_foreground(
 
         if pkg == WHATSAPP_PACKAGE:
             if attempts > 1 and logger is not None:
-                logger.info(
-                    f"[settle] WhatsApp foreground after {attempts} probe(s)"
-                )
+                logger.info(f"[settle] WhatsApp foreground after {attempts} probe(s)")
             return True
 
         if pkg != last_seen:
@@ -61,9 +58,7 @@ def wait_for_whatsapp_foreground(
 
         if time.monotonic() >= deadline:
             if logger is not None:
-                logger.debug_msg(
-                    f"[settle] timeout after {attempts} probe(s); last_seen={last_seen!r}"
-                )
+                logger.debug_msg(f"[settle] timeout after {attempts} probe(s); last_seen={last_seen!r}")
             return False
 
         time.sleep(poll_interval)
