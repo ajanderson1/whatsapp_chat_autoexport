@@ -16,8 +16,8 @@ import pytest
 
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-TUI_PACKAGE = PROJECT_ROOT / "whatsapp_chat_autoexport" / "tui"
-LEGACY_PACKAGE = PROJECT_ROOT / "whatsapp_chat_autoexport" / "legacy"
+TUI_PACKAGE = PROJECT_ROOT / "src" / "whatsapp_chat_autoexport" / "tui"
+LEGACY_PACKAGE = PROJECT_ROOT / "src" / "whatsapp_chat_autoexport" / "legacy"
 
 
 class TestActiveImports:
