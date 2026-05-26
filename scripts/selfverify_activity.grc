@@ -1,5 +1,5 @@
 # grc colouriser config for the self-verification activity log.
-# Watch with:  tail -F test-evidence/activity.log | grcat test-evidence/activity.grc
+# Watch with:  tail -F test-evidence/activity.log | grcat scripts/selfverify_activity.grc
 
 # Timestamps [HH:MM:SS]
 regexp=^\[\d{2}:\d{2}:\d{2}\]

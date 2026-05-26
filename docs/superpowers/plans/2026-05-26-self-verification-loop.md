@@ -340,7 +340,9 @@ uv run whatsapp --headless \
   --output test-evidence/C2-output \
   2>&1 | tee "test-evidence/C2-$(date +%Y%m%d-%H%M%S).log"
 ```
-Expected: the orchestrator runs preflight, connects, and drives the WhatsApp UI to trigger **one** chat export to Drive. `--limit 1` bounds it to a single chat; `--skip-drive-download` and `--no-transcribe` stop the pipeline after the export is triggered (we are proving the *export* path, not re-proving the already-tested pipeline). Exit code 0 means success.
+Expected: the orchestrator runs preflight, connects, and drives the WhatsApp UI to trigger **one** chat export to Drive. `--limit 1` bounds it to a single chat. Exit code 0 means success.
+
+> **Corrected during execution (2026-05-26):** `--skip-drive-download` is a **no-op on the `--headless` path** — `run_headless` runs the full pipeline (download/process); the flag is only read for the preflight Drive check (`headless.py:330`) and honored in the legacy `process` / `--pipeline-only` paths. So the headless capstone always runs export→upload→poll→download→process and produces local `index.md`/`transcript.md`. `--limit 1` and `--no-transcribe` are the effective bounds. The flag was dropped from the TESTING.md command since it does nothing here. See `TESTING.md` § C2.
 
 > **Note for implementer:** Confirm `--limit` is honored on the headless path and that `--auto-select --limit 1` exports exactly one chat (read `run_headless` in `whatsapp_chat_autoexport/headless.py` and `export_chats` in the exporter). If `--limit` is not wired to headless, fall back to documenting the smallest available real export and note the limitation in TESTING.md. Do not invent a flag.
 
