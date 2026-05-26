@@ -508,7 +508,7 @@ uv run whatsapp --pipeline-only /downloads /output --force-transcribe
 ## File Organization
 
 ```
-whatsapp_chat_autoexport/
+src/whatsapp_chat_autoexport/
 ├── cli_entry.py                  # Unified CLI entry point (whatsapp command)
 ├── headless.py                   # Headless + pipeline-only orchestrators
 ├── deprecated_entry.py           # Deprecation wrappers for old commands

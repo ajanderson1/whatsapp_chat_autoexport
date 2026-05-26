@@ -21,7 +21,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy application code
-COPY whatsapp_chat_autoexport ./whatsapp_chat_autoexport
+COPY src ./src
 COPY README.md ./
 
 # Install the package itself

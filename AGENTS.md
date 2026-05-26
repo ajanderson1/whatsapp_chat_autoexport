@@ -21,7 +21,7 @@ WhatsApp chat export automation for Android. Uses Appium + UiAutomator2 to drive
 - Self-verification loop against a real device (raw-ADB oracle + headless CLI / TUI pilot): see `TESTING.md`.
 
 ## Where things live
-- `whatsapp_chat_autoexport/` — main package (moves to `src/whatsapp_chat_autoexport/` in a later PR).
+- `src/whatsapp_chat_autoexport/` — main package.
 - `tests/unit/`, `tests/integration/` — pytest suite.
 - `docs/internals/architecture.md` — developer architecture reference (commands, workflows, testing strategy).
 - `docs/superpowers/specs/` — design specs.
@@ -37,7 +37,7 @@ WhatsApp chat export automation for Android. Uses Appium + UiAutomator2 to drive
 - **Pipeline** — download → extract → transcribe → build-output stages run after export.
 
 ## In-flight
-- Convention alignment effort — see `docs/superpowers/specs/2026-05-21-convention-alignment-design.md` and `docs/superpowers/plans/2026-05-21-convention-alignment.md`. Some commands above change as the train lands (poetry → uv; layout flat → `src/`; typecheck `n/a` → `mypy src/`).
+- Convention alignment effort — see `docs/superpowers/specs/2026-05-21-convention-alignment-design.md` and `docs/superpowers/plans/2026-05-21-convention-alignment.md`. Some commands above change as the train lands (typecheck `n/a` → `mypy src/`).
 
 ## Autonomous allowlist
 <!-- Empty. -->
