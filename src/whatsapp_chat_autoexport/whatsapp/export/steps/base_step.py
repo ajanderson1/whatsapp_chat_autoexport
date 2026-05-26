@@ -4,16 +4,16 @@ Base class for export workflow steps.
 Provides the interface and common functionality for all export steps.
 """
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, Optional
-import time
+from typing import Any
 
-from ....core.result import Result, Ok, Err
-from ....core.errors import ExportError, ExportWorkflowError, ErrorCategory
 from ....automation.elements import ElementFinder
 from ....config.timeouts import TimeoutConfig, get_timeout_config
+from ....core.errors import ExportError, ExportWorkflowError
+from ....core.result import Ok, Result
 
 
 class StepStatus(Enum):
@@ -33,8 +33,8 @@ class StepResult:
 
     status: StepStatus
     message: str
-    data: Dict[str, Any] = field(default_factory=dict)
-    error: Optional[ExportError] = None
+    data: dict[str, Any] = field(default_factory=dict)
+    error: ExportError | None = None
     duration_seconds: float = 0.0
     attempts: int = 1
 
@@ -81,7 +81,7 @@ class StepContext:
     total_steps: int = 6
 
     # Additional data from previous steps
-    step_data: Dict[str, Any] = field(default_factory=dict)
+    step_data: dict[str, Any] = field(default_factory=dict)
 
     # Timeout configuration
     timeout_config: TimeoutConfig = field(default_factory=get_timeout_config)
@@ -133,7 +133,7 @@ class BaseExportStep(ABC):
     max_retries: int = 2
     retry_delay_seconds: float = 1.0
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize the step.
 
@@ -178,9 +178,7 @@ class BaseExportStep(ABC):
         """
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate that preconditions for this step are met.
 
@@ -230,9 +228,7 @@ class BaseExportStep(ABC):
                 if not self.can_retry() or attempts > self.max_retries:
                     break
 
-                context.log_debug(
-                    f"Step {self.name} failed, retrying in {self.retry_delay_seconds}s"
-                )
+                context.log_debug(f"Step {self.name} failed, retrying in {self.retry_delay_seconds}s")
                 time.sleep(self.retry_delay_seconds)
 
             except Exception as e:

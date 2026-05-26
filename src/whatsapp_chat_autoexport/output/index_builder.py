@@ -8,9 +8,7 @@ The index.md is the vault-native interface: queryable by Dataview,
 linked in the knowledge graph, and safe for LLM context.
 """
 
-import re
 from datetime import datetime
-from typing import Dict, List, Optional
 
 import yaml
 
@@ -40,16 +38,16 @@ class IndexBuilder:
 
     def build_index(
         self,
-        messages: List[Message],
+        messages: list[Message],
         chat_jid: str,
         contact_name: str,
         chat_type: str = "direct",
-        sources: Optional[List[Dict]] = None,
-        phone: Optional[str] = None,
-        participants: Optional[List[str]] = None,
+        sources: list[dict] | None = None,
+        phone: str | None = None,
+        participants: list[str] | None = None,
         timezone: str = "Europe/Stockholm",
-        languages: Optional[List[str]] = None,
-        summary: Optional[str] = None,
+        languages: list[str] | None = None,
+        summary: str | None = None,
     ) -> str:
         """
         Build a complete index.md file.
@@ -95,8 +93,8 @@ class IndexBuilder:
     def update_index(
         self,
         existing_content: str,
-        new_messages: List[Message],
-        source_entry: Optional[Dict] = None,
+        new_messages: list[Message],
+        source_entry: dict | None = None,
     ) -> str:
         """
         Update an existing index.md with new message stats and source info.
@@ -160,13 +158,13 @@ class IndexBuilder:
         chat_jid: str,
         contact_name: str,
         chat_type: str,
-        stats: Dict,
-        sources: List[Dict],
-        phone: Optional[str],
-        participants: Optional[List[str]],
+        stats: dict,
+        sources: list[dict],
+        phone: str | None,
+        participants: list[str] | None,
         timezone: str,
-        languages: List[str],
-        summary: Optional[str],
+        languages: list[str],
+        summary: str | None,
     ) -> str:
         """Build the YAML frontmatter string manually for field ordering."""
         lines = ["---"]
@@ -213,9 +211,9 @@ class IndexBuilder:
         lines.append(f"message_count: {stats['message_count']}")
         lines.append(f"media_count: {stats['media_count']}")
         lines.append(f"voice_count: {stats['voice_count']}")
-        if stats['date_first'] is not None:
+        if stats["date_first"] is not None:
             lines.append(f"date_first: {stats['date_first']}")
-        if stats['date_last'] is not None:
+        if stats["date_last"] is not None:
             lines.append(f"date_last: {stats['date_last']}")
         lines.append(f'last_synced: "{datetime.now().strftime("%Y-%m-%dT%H:%M:%S")}"')
 
@@ -238,7 +236,7 @@ class IndexBuilder:
         for lang in languages:
             lines.append(f"  - {lang}")
         if summary:
-            lines.append(f"summary: >-")
+            lines.append("summary: >-")
             # Wrap summary at ~72 chars with 2-space indent
             wrapped = self._wrap_text(summary, width=72, indent="  ")
             lines.append(wrapped)
@@ -248,7 +246,7 @@ class IndexBuilder:
         lines.append("---")
         return "\n".join(lines)
 
-    def _build_body(self, contact_name: str, chat_type: str, stats: Dict) -> str:
+    def _build_body(self, contact_name: str, chat_type: str, stats: dict) -> str:
         """Build the markdown body section."""
         date_first = stats["date_first"]
         date_last = stats["date_last"]
@@ -266,9 +264,7 @@ class IndexBuilder:
 
         # WikiLink to transcript — uses Obsidian relative path
         chat_folder = contact_name
-        transcript_link = (
-            f"[[People/Correspondence/Whatsapp/{chat_folder}/transcript|Full Transcript]]"
-        )
+        transcript_link = f"[[People/Correspondence/Whatsapp/{chat_folder}/transcript|Full Transcript]]"
 
         return f"{quote_line}\n{period_line}\n\n{transcript_link}"
 
@@ -276,7 +272,7 @@ class IndexBuilder:
     # Stats computation
     # ------------------------------------------------------------------
 
-    def _compute_stats(self, messages: List[Message]) -> Dict:
+    def _compute_stats(self, messages: list[Message]) -> dict:
         """Compute message statistics from a list of Messages."""
         if not messages:
             return {
@@ -293,7 +289,7 @@ class IndexBuilder:
         for msg in messages:
             if msg.is_media:
                 media_count += 1
-                if msg.media_type in ('audio',):
+                if msg.media_type in ("audio",):
                     voice_count += 1
 
         timestamps = [msg.timestamp for msg in messages]
@@ -329,11 +325,11 @@ class IndexBuilder:
 
         # Find the actual end (after the closing ---)
         frontmatter = content[3:end_idx].strip()
-        body = content[end_idx + 3:].strip()
+        body = content[end_idx + 3 :].strip()
         return frontmatter, body
 
     @staticmethod
-    def _dump_frontmatter(data: Dict) -> str:
+    def _dump_frontmatter(data: dict) -> str:
         """Dump a dict as YAML frontmatter with --- delimiters."""
         yaml_str = yaml.dump(
             data,

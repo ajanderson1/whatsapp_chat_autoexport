@@ -9,9 +9,9 @@ Provides a hierarchical error system with:
 """
 
 from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Optional, Dict, Any, List
 from datetime import datetime
+from enum import Enum, auto
+from typing import Any
 
 
 class ErrorCategory(Enum):
@@ -82,7 +82,7 @@ class RecoveryHint:
     max_retries: int = 0  # How many times to retry (0 = don't retry)
     retry_delay_seconds: float = 1.0  # Delay between retries
     requires_user_action: bool = False  # Does user need to do something?
-    user_instruction: Optional[str] = None  # Instructions for user
+    user_instruction: str | None = None  # Instructions for user
 
     @classmethod
     def retry(
@@ -148,9 +148,9 @@ class ExportError(Exception):
     category: ErrorCategory
     message: str
     severity: ErrorSeverity = ErrorSeverity.ERROR
-    context: Dict[str, Any] = field(default_factory=dict)
-    recovery_hints: List[RecoveryHint] = field(default_factory=list)
-    cause: Optional[Exception] = None
+    context: dict[str, Any] = field(default_factory=dict)
+    recovery_hints: list[RecoveryHint] = field(default_factory=list)
+    cause: Exception | None = None
     timestamp: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
@@ -182,7 +182,7 @@ class ExportError(Exception):
         """Check if any recovery hint allows automatic recovery."""
         return any(h.auto_recoverable for h in self.recovery_hints)
 
-    def get_auto_recovery_hint(self) -> Optional[RecoveryHint]:
+    def get_auto_recovery_hint(self) -> RecoveryHint | None:
         """Get the first auto-recoverable hint, if any."""
         for hint in self.recovery_hints:
             if hint.auto_recoverable:
@@ -200,8 +200,8 @@ class DeviceConnectionError(ExportError):
     def __init__(
         self,
         message: str,
-        device_id: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        device_id: str | None = None,
+        cause: Exception | None = None,
     ):
         super().__init__(
             category=ErrorCategory.CONNECTION,
@@ -223,9 +223,9 @@ class AppStateError(ExportError):
     def __init__(
         self,
         message: str,
-        expected_state: Optional[str] = None,
-        actual_state: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        expected_state: str | None = None,
+        actual_state: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if expected_state:
@@ -253,9 +253,9 @@ class ElementNotFoundError(ExportError):
         self,
         message: str,
         element_name: str,
-        strategies_tried: Optional[List[str]] = None,
-        screen_context: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        strategies_tried: list[str] | None = None,
+        screen_context: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {"element": element_name}
         if strategies_tried:
@@ -284,8 +284,8 @@ class ExportWorkflowError(ExportError):
         self,
         message: str,
         step_name: str,
-        chat_name: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        chat_name: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {"step": step_name}
         if chat_name:
@@ -311,9 +311,9 @@ class TranscriptionError(ExportError):
     def __init__(
         self,
         message: str,
-        file_path: Optional[str] = None,
-        provider: Optional[str] = None,
-        cause: Optional[Exception] = None,
+        file_path: str | None = None,
+        provider: str | None = None,
+        cause: Exception | None = None,
     ):
         context = {}
         if file_path:
@@ -342,7 +342,7 @@ class PipelineError(ExportError):
         self,
         message: str,
         phase: str,
-        cause: Optional[Exception] = None,
+        cause: Exception | None = None,
     ):
         super().__init__(
             category=ErrorCategory.DOWNLOAD_FAILED,

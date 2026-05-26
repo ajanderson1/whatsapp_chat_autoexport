@@ -11,16 +11,11 @@ Verifies that:
 """
 
 import time
-import threading
-from unittest.mock import MagicMock, patch, PropertyMock
-from pathlib import Path
-
-import pytest
+from unittest.mock import MagicMock
 
 from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
 from whatsapp_chat_autoexport.export.timing import ChatStatus
 from whatsapp_chat_autoexport.pipeline import PipelineConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -98,9 +93,7 @@ class TestParallelExportIntegration:
         chats = ["Chat A", "Chat B", "Chat C"]
 
         start = time.monotonic()
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
         elapsed = time.monotonic() - start
 
         # All 3 pipeline tasks should have been called
@@ -112,9 +105,7 @@ class TestParallelExportIntegration:
         # The total should be noticeably less than 0.9s + UI time.
         # We just verify it's less than the fully-sequential time.
         sequential_pipeline_time = 0.3 * 3
-        assert elapsed < sequential_pipeline_time + 1.0, (
-            f"Expected parallel to be faster; got {elapsed:.2f}s"
-        )
+        assert elapsed < sequential_pipeline_time + 1.0, f"Expected parallel to be faster; got {elapsed:.2f}s"
 
     def test_failed_pipeline_updates_results(self):
         """Pipeline failure for one chat updates results dict to False."""
@@ -140,9 +131,7 @@ class TestParallelExportIntegration:
         exporter = ChatExporter(driver, logger, pipeline=None)
         exporter.export_chat_to_google_drive = MagicMock(return_value=True)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=["Chat A"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=["Chat A"], include_media=True)
 
         assert results["Chat A"] is True
 
@@ -155,9 +144,7 @@ class TestParallelExportIntegration:
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
         exporter.export_chat_to_google_drive = MagicMock(return_value=True)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=["Timed Chat"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=["Timed Chat"], include_media=True)
 
         assert len(exporter.chat_timings) == 1
         ct = exporter.chat_timings[0]
@@ -174,9 +161,7 @@ class TestParallelExportIntegration:
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
         exporter.export_chat_to_google_drive = MagicMock(return_value=False)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=["Failed Export"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=["Failed Export"], include_media=True)
 
         assert results["Failed Export"] is False
         pipeline.process_single_export.assert_not_called()
@@ -270,16 +255,12 @@ class TestEndToEndParallelExport:
         pipeline = _make_pipeline_mock_with_delay(pipeline_delay=1.0)
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=_make_slow_ui_export(ui_delay=0.2)
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=_make_slow_ui_export(ui_delay=0.2))
 
         chats = ["Chat A", "Chat B", "Chat C", "Chat D", "Chat E"]
 
         start = time.monotonic()
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
         elapsed = time.monotonic() - start
 
         # All 5 chats should succeed
@@ -294,8 +275,7 @@ class TestEndToEndParallelExport:
         # Parallel should be significantly faster — use generous bound
         sequential_sum = 5 * (0.2 + 1.0)
         assert elapsed < sequential_sum - 0.5, (
-            f"Parallel ({elapsed:.2f}s) should be noticeably faster "
-            f"than sequential ({sequential_sum:.1f}s)"
+            f"Parallel ({elapsed:.2f}s) should be noticeably faster than sequential ({sequential_sum:.1f}s)"
         )
 
         # Additional sanity: should complete in < 5s with generous CI margin
@@ -308,20 +288,14 @@ class TestEndToEndParallelExport:
         pipeline = _make_pipeline_mock_with_delay(pipeline_delay=0.3)
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=_make_slow_ui_export(ui_delay=0.1)
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=_make_slow_ui_export(ui_delay=0.1))
 
         chats = ["Chat A", "Chat B", "Chat C", "Chat D", "Chat E"]
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
 
         # Timing list should have one entry per chat
-        assert len(exporter.chat_timings) == 5, (
-            f"Expected 5 timing entries, got {len(exporter.chat_timings)}"
-        )
+        assert len(exporter.chat_timings) == 5, f"Expected 5 timing entries, got {len(exporter.chat_timings)}"
 
         timing_names = {ct.chat_name for ct in exporter.chat_timings}
         assert timing_names == set(chats)
@@ -332,9 +306,7 @@ class TestEndToEndParallelExport:
             # Pipeline process time should be > 0 (set from pipeline result)
             assert ct.process_time_s > 0, f"{ct.chat_name}: process_time_s should be > 0"
             # Status should be SUCCESS
-            assert ct.status == ChatStatus.SUCCESS, (
-                f"{ct.chat_name}: expected SUCCESS, got {ct.status}"
-            )
+            assert ct.status == ChatStatus.SUCCESS, f"{ct.chat_name}: expected SUCCESS, got {ct.status}"
             # total_time_s should be computed (>= ui + process)
             assert ct.total_time_s > 0, f"{ct.chat_name}: total_time_s should be > 0"
 
@@ -342,20 +314,14 @@ class TestEndToEndParallelExport:
         """One chat fails in pipeline — other 4 succeed, error in timing report."""
         driver = _make_driver_mock()
         logger = _make_logger()
-        pipeline = _make_pipeline_mock_with_delay(
-            pipeline_delay=0.2, fail_chats={"Chat C"}
-        )
+        pipeline = _make_pipeline_mock_with_delay(pipeline_delay=0.2, fail_chats={"Chat C"})
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=_make_slow_ui_export(ui_delay=0.1)
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=_make_slow_ui_export(ui_delay=0.1))
 
         chats = ["Chat A", "Chat B", "Chat C", "Chat D", "Chat E"]
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
 
         # All 5 UI exports succeeded, so pipeline was called 5 times
         assert pipeline.process_single_export.call_count == 5
@@ -373,33 +339,23 @@ class TestEndToEndParallelExport:
         # Failed chat should have FAILED status in timing
         for ct in exporter.chat_timings:
             if ct.chat_name == "Chat C":
-                assert ct.status == ChatStatus.FAILED, (
-                    f"Chat C should be FAILED, got {ct.status}"
-                )
+                assert ct.status == ChatStatus.FAILED, f"Chat C should be FAILED, got {ct.status}"
             else:
-                assert ct.status == ChatStatus.SUCCESS, (
-                    f"{ct.chat_name} should be SUCCESS, got {ct.status}"
-                )
+                assert ct.status == ChatStatus.SUCCESS, f"{ct.chat_name} should be SUCCESS, got {ct.status}"
 
     def test_all_chats_fail_pipeline_ui_still_completes(self):
         """All chats fail pipeline — UI automation completes all 5, all marked failed."""
         driver = _make_driver_mock()
         logger = _make_logger()
         all_chats = {"Chat A", "Chat B", "Chat C", "Chat D", "Chat E"}
-        pipeline = _make_pipeline_mock_with_delay(
-            pipeline_delay=0.1, fail_chats=all_chats
-        )
+        pipeline = _make_pipeline_mock_with_delay(pipeline_delay=0.1, fail_chats=all_chats)
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=_make_slow_ui_export(ui_delay=0.05)
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=_make_slow_ui_export(ui_delay=0.05))
 
         chats = list(all_chats)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
 
         # All 5 were submitted to pipeline (UI export succeeded)
         assert pipeline.process_single_export.call_count == 5
@@ -411,13 +367,9 @@ class TestEndToEndParallelExport:
         # Timing report should have 5 entries, all FAILED
         assert len(exporter.chat_timings) == 5
         for ct in exporter.chat_timings:
-            assert ct.status == ChatStatus.FAILED, (
-                f"{ct.chat_name} should be FAILED, got {ct.status}"
-            )
+            assert ct.status == ChatStatus.FAILED, f"{ct.chat_name} should be FAILED, got {ct.status}"
             # Even failed chats should have process_time_s > 0
-            assert ct.process_time_s > 0, (
-                f"{ct.chat_name}: process_time_s should be > 0 even for failures"
-            )
+            assert ct.process_time_s > 0, f"{ct.chat_name}: process_time_s should be > 0 even for failures"
 
     def test_mixed_ui_and_pipeline_failures(self):
         """Mix of UI failures (not submitted) and pipeline failures (submitted but fail).
@@ -430,9 +382,7 @@ class TestEndToEndParallelExport:
         """
         driver = _make_driver_mock()
         logger = _make_logger()
-        pipeline = _make_pipeline_mock_with_delay(
-            pipeline_delay=0.1, fail_chats={"Chat C"}
-        )
+        pipeline = _make_pipeline_mock_with_delay(pipeline_delay=0.1, fail_chats={"Chat C"})
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
         exporter.export_chat_to_google_drive = MagicMock(
@@ -441,9 +391,7 @@ class TestEndToEndParallelExport:
 
         chats = ["Chat A", "Chat B", "Chat C", "Chat D", "Chat E"]
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
 
         # Pipeline called for 4 chats (Chat B failed UI export)
         assert pipeline.process_single_export.call_count == 4
@@ -461,9 +409,7 @@ class TestEndToEndParallelExport:
         for ct in exporter.chat_timings:
             if ct.chat_name == "Chat B":
                 assert ct.status == ChatStatus.FAILED
-                assert ct.process_time_s == 0.0, (
-                    "Chat B was not submitted to pipeline, process_time should be 0"
-                )
+                assert ct.process_time_s == 0.0, "Chat B was not submitted to pipeline, process_time should be 0"
 
     def test_wall_clock_speedup_with_heavier_pipeline(self):
         """Heavier pipeline delays show more dramatic speedup.
@@ -478,16 +424,12 @@ class TestEndToEndParallelExport:
         pipeline = _make_pipeline_mock_with_delay(pipeline_delay=2.0)
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=_make_slow_ui_export(ui_delay=0.1)
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=_make_slow_ui_export(ui_delay=0.1))
 
         chats = ["Chat A", "Chat B", "Chat C", "Chat D", "Chat E"]
 
         start = time.monotonic()
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
         elapsed = time.monotonic() - start
 
         # All succeed
@@ -497,8 +439,7 @@ class TestEndToEndParallelExport:
         # Sequential would be ~10.5s; parallel should be well under
         sequential_sum = 5 * (0.1 + 2.0)
         assert elapsed < sequential_sum - 2.0, (
-            f"Parallel ({elapsed:.2f}s) should show significant speedup "
-            f"over sequential ({sequential_sum:.1f}s)"
+            f"Parallel ({elapsed:.2f}s) should show significant speedup over sequential ({sequential_sum:.1f}s)"
         )
         # Generous upper bound for CI
         assert elapsed < 8.0, f"Expected < 8s, got {elapsed:.2f}s"
@@ -510,19 +451,13 @@ class TestEndToEndParallelExport:
         pipeline = _make_pipeline_mock_with_delay(pipeline_delay=0.05)
 
         exporter = ChatExporter(driver, logger, pipeline=pipeline)
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=_make_slow_ui_export(ui_delay=0.02)
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=_make_slow_ui_export(ui_delay=0.02))
 
         chats = ["Chat A", "Chat B"]
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            chat_names=chats, include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(chat_names=chats, include_media=True)
 
         # print_timing_summary calls logger.info with the header
         info_calls = [str(c) for c in logger.info.call_args_list]
         header_found = any("Per-Chat Timing Breakdown" in c for c in info_calls)
-        assert header_found, (
-            "Expected timing summary header in logger.info calls"
-        )
+        assert header_found, "Expected timing summary header in logger.info calls"

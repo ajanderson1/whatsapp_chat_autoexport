@@ -4,10 +4,9 @@ Appium Manager module for WhatsApp Chat Auto-Export.
 Manages the Appium server lifecycle.
 """
 
-import subprocess
 import os
+import subprocess
 import time
-from typing import Optional
 
 from ..utils.logger import Logger
 
@@ -17,12 +16,9 @@ class AppiumManager:
 
     def __init__(self, logger: Logger):
         self.logger = logger
-        self.appium_proc: Optional[subprocess.Popen] = None
+        self.appium_proc: subprocess.Popen | None = None
         # Use ANDROID_HOME from environment (Docker sets this), fall back to macOS default
-        self.android_home = os.environ.get(
-            "ANDROID_HOME",
-            os.path.expanduser("~/Library/Android/sdk")
-        )
+        self.android_home = os.environ.get("ANDROID_HOME", os.path.expanduser("~/Library/Android/sdk"))
 
     def start_appium(self) -> bool:
         """Start Appium server."""
@@ -43,7 +39,7 @@ class AppiumManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=appium_env,
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
             time.sleep(5)  # Wait for Appium to start
 
@@ -52,7 +48,7 @@ class AppiumManager:
                 ["curl", "-s", "http://127.0.0.1:4723/wd/hub/status"],
                 capture_output=True,
                 text=True,
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
             if result.returncode == 0:
                 self.logger.success("Appium server started successfully")

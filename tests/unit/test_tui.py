@@ -9,36 +9,31 @@ Tests cover:
 NOTE: These test the Rich-based TUI code that has been moved to legacy/.
 """
 
-import pytest
-from datetime import datetime, timedelta
-
 from whatsapp_chat_autoexport.legacy.tui.app import WhatsAppExportTUI
-from whatsapp_chat_autoexport.legacy.tui.wizard import (
-    ExportWizard,
-    WizardStep,
-    WizardState,
-    WizardController,
-)
 from whatsapp_chat_autoexport.legacy.tui.components import (
     ProgressPanel,
     QueuePanel,
     StatusBar,
 )
 from whatsapp_chat_autoexport.legacy.tui.components.progress_panel import StepProgressPanel
-from whatsapp_chat_autoexport.legacy.tui.components.queue_panel import QueueItemDisplay, CompactQueuePanel
-from whatsapp_chat_autoexport.legacy.tui.components.status_bar import KeyBinding, MinimalStatusBar
+from whatsapp_chat_autoexport.legacy.tui.components.queue_panel import CompactQueuePanel, QueueItemDisplay
+from whatsapp_chat_autoexport.legacy.tui.components.status_bar import MinimalStatusBar
 from whatsapp_chat_autoexport.legacy.tui.screens import (
-    WelcomeScreen,
-    DeviceConnectScreen,
     ChatSelectionScreen,
+    DeviceConnectScreen,
     ExportProgressScreen,
     SummaryScreen,
+    WelcomeScreen,
 )
-from whatsapp_chat_autoexport.legacy.tui.screens.device_connect import DeviceInfo, ConnectionState
 from whatsapp_chat_autoexport.legacy.tui.screens.chat_selection import ChatInfo
+from whatsapp_chat_autoexport.legacy.tui.screens.device_connect import ConnectionState, DeviceInfo
 from whatsapp_chat_autoexport.legacy.tui.screens.summary import ExportResult
-from whatsapp_chat_autoexport.state.models import ChatStatus, ChatState
-
+from whatsapp_chat_autoexport.legacy.tui.wizard import (
+    ExportWizard,
+    WizardController,
+    WizardStep,
+)
+from whatsapp_chat_autoexport.state.models import ChatState, ChatStatus
 
 # =============================================================================
 # ProgressPanel Tests
@@ -215,10 +210,7 @@ class TestQueuePanel:
         """Test scrolling functionality."""
         panel = QueuePanel(max_visible=2)
 
-        items = [
-            QueueItemDisplay(name=f"Chat {i}", status=ChatStatus.PENDING)
-            for i in range(5)
-        ]
+        items = [QueueItemDisplay(name=f"Chat {i}", status=ChatStatus.PENDING) for i in range(5)]
         panel.set_items(items)
 
         assert panel._scroll_offset == 0
@@ -234,9 +226,11 @@ class TestQueuePanel:
         from rich.panel import Panel
 
         queue_panel = QueuePanel()
-        queue_panel.set_items([
-            QueueItemDisplay(name="Chat 1", status=ChatStatus.PENDING),
-        ])
+        queue_panel.set_items(
+            [
+                QueueItemDisplay(name="Chat 1", status=ChatStatus.PENDING),
+            ]
+        )
 
         result = queue_panel.render()
         assert isinstance(result, Panel)
@@ -250,10 +244,12 @@ class TestCompactQueuePanel:
         from rich.panel import Panel
 
         panel = CompactQueuePanel()
-        panel.set_items([
-            QueueItemDisplay(name="Chat 1", status=ChatStatus.COMPLETED),
-            QueueItemDisplay(name="Chat 2", status=ChatStatus.FAILED),
-        ])
+        panel.set_items(
+            [
+                QueueItemDisplay(name="Chat 1", status=ChatStatus.COMPLETED),
+                QueueItemDisplay(name="Chat 2", status=ChatStatus.FAILED),
+            ]
+        )
 
         result = panel.render()
         assert isinstance(result, Panel)
@@ -741,9 +737,11 @@ class TestSummaryScreen:
         from rich.panel import Panel
 
         screen = SummaryScreen()
-        screen.set_results([
-            ExportResult(name="Chat 1", status=ChatStatus.COMPLETED),
-        ])
+        screen.set_results(
+            [
+                ExportResult(name="Chat 1", status=ChatStatus.COMPLETED),
+            ]
+        )
 
         result = screen.render()
         assert isinstance(result, Panel)

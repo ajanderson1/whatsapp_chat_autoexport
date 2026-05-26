@@ -8,7 +8,6 @@ cascade disable logic, and connection-triggered discovery.
 import inspect
 
 import pytest
-
 from textual.widgets import TabbedContent
 
 from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from whatsapp_chat_autoexport.pipeline import WhatsAppPipeline, PipelineConfig
+from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
 
 def _make_chat_zip(source_dir: Path, dest_dir: Path) -> Path:
@@ -75,17 +75,11 @@ def test_pipeline_spec_format_produces_companion_notes(sample_export_dir, temp_o
     # Verify transcript.md uses spec format (frontmatter + day headers)
     transcript_content = transcript_md.read_text(encoding="utf-8")
     assert "cssclasses:" in transcript_content, "transcript.md must have cssclasses frontmatter"
-    assert "whatsapp-transcript" in transcript_content, (
-        "transcript.md must declare whatsapp-transcript cssclass"
-    )
-    assert "## 20" in transcript_content, (
-        "transcript.md must contain day headers like '## 2017-07-26'"
-    )
+    assert "whatsapp-transcript" in transcript_content, "transcript.md must declare whatsapp-transcript cssclass"
+    assert "## 20" in transcript_content, "transcript.md must contain day headers like '## 2017-07-26'"
 
     # Verify legacy .txt transcript is NOT present
-    assert not (contact_dir / "transcript.txt").exists(), (
-        "spec format must not produce transcript.txt"
-    )
+    assert not (contact_dir / "transcript.txt").exists(), "spec format must not produce transcript.txt"
 
 
 @pytest.mark.integration
@@ -122,14 +116,8 @@ def test_pipeline_legacy_format_unchanged(sample_export_dir, temp_output_dir):
     contact_dir = output_dirs[0]
 
     # Legacy format must produce transcript.txt
-    assert (contact_dir / "transcript.txt").exists(), (
-        f"Legacy format must produce transcript.txt in {contact_dir}"
-    )
+    assert (contact_dir / "transcript.txt").exists(), f"Legacy format must produce transcript.txt in {contact_dir}"
 
     # Legacy format must NOT produce spec companion files
-    assert not (contact_dir / "transcript.md").exists(), (
-        "Legacy format must not produce transcript.md"
-    )
-    assert not (contact_dir / "index.md").exists(), (
-        "Legacy format must not produce index.md"
-    )
+    assert not (contact_dir / "transcript.md").exists(), "Legacy format must not produce transcript.md"
+    assert not (contact_dir / "index.md").exists(), "Legacy format must not produce index.md"

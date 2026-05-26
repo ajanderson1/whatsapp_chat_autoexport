@@ -4,19 +4,19 @@ Google Drive Manager module.
 High-level operations for WhatsApp chat export management.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Any, Callable
+from typing import Any
+
+from ..utils.logger import Logger
 from .auth import GoogleDriveAuth
 from .drive_client import GoogleDriveClient
-from ..utils.logger import Logger
 
 
 class GoogleDriveManager:
     """High-level Google Drive operations manager for WhatsApp exports."""
 
-    def __init__(self,
-                 credentials_dir: Optional[Path] = None,
-                 logger: Optional[Logger] = None):
+    def __init__(self, credentials_dir: Path | None = None, logger: Logger | None = None):
         """
         Initialize Google Drive manager.
 
@@ -43,7 +43,7 @@ class GoogleDriveManager:
         self.logger.success("Google Drive connection established")
         return True
 
-    def list_whatsapp_exports(self, folder_id: Optional[str] = None) -> List[Dict]:
+    def list_whatsapp_exports(self, folder_id: str | None = None) -> list[dict]:
         """
         List all WhatsApp export files in Google Drive.
 
@@ -56,15 +56,17 @@ class GoogleDriveManager:
         self.logger.info("Searching for WhatsApp exports...")
         return self.client.list_whatsapp_exports(folder_id=folder_id)
 
-    def wait_for_new_export(self,
-                           initial_interval: int = 2,
-                           max_interval: int = 8,
-                           timeout: int = 300,
-                           created_within_seconds: int = 300,
-                           chat_name: Optional[str] = None,
-                           include_media: bool = False,
-                           # Legacy parameter — ignored, use initial_interval instead
-                           poll_interval: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    def wait_for_new_export(
+        self,
+        initial_interval: int = 2,
+        max_interval: int = 8,
+        timeout: int = 300,
+        created_within_seconds: int = 300,
+        chat_name: str | None = None,
+        include_media: bool = False,
+        # Legacy parameter — ignored, use initial_interval instead
+        poll_interval: int | None = None,
+    ) -> dict[str, Any] | None:
         """
         Wait for a new WhatsApp export to appear in Google Drive root.
 
@@ -98,21 +100,19 @@ class GoogleDriveManager:
             chat_name=chat_name,
             include_media=include_media,
         )
-        
+
         if not file:
             raise RuntimeError(
                 f"Timeout waiting for new export after {timeout}s. "
                 "The export may still be uploading from your phone. "
                 "Try increasing the timeout or check your phone's Google Drive upload status."
             )
-            
+
         return file
 
-    def download_export(self,
-                        file_id: str,
-                        file_name: str,
-                        dest_dir: Path,
-                        delete_after: bool = False) -> Tuple[bool, Optional[Path]]:
+    def download_export(
+        self, file_id: str, file_name: str, dest_dir: Path, delete_after: bool = False
+    ) -> tuple[bool, Path | None]:
         """
         Download a single WhatsApp export file.
 
@@ -137,7 +137,7 @@ class GoogleDriveManager:
         if delete_after:
             self.logger.info(f"Deleting from Google Drive: {file_name}")
             delete_success = self.client.delete_file(file_id)
-            
+
             if delete_success:
                 self.logger.success(f"✓ Successfully deleted from Google Drive: {file_name}")
             else:
@@ -146,83 +146,80 @@ class GoogleDriveManager:
 
         return True, dest_path
 
-    def find_and_move_recent_export(self, chat_name: str, destination_folder_name: str, max_wait_seconds: int = 15) -> bool:
+    def find_and_move_recent_export(
+        self, chat_name: str, destination_folder_name: str, max_wait_seconds: int = 15
+    ) -> bool:
         """
         Find a recently uploaded WhatsApp export and move it to a specific folder.
-        
+
         This is used after exporting a chat to Google Drive to organize it into a folder.
         Waits for the file to appear (polls every 2 seconds up to max_wait_seconds).
-        
+
         Args:
             chat_name: Name of the chat (used to match filename)
             destination_folder_name: Name of the folder to move to
             max_wait_seconds: Maximum time to wait for file to appear
-            
+
         Returns:
             True if file was found and moved, False otherwise
         """
         import time
-        
+
         # Expected filename pattern: "WhatsApp Chat with {chat_name}.zip"
         expected_filename_part = chat_name
-        
+
         self.logger.info(f"Waiting for export to appear on Google Drive (up to {max_wait_seconds}s)...")
-        
+
         # Poll for the file
         attempts = 0
         max_attempts = max_wait_seconds // 2
         file_id = None
         file_name = None
-        
+
         while attempts < max_attempts:
             # List recent WhatsApp exports
             files = self.list_whatsapp_exports(folder_id=None)  # Search in root
-            
+
             # Find file matching chat name, sorted by creation time (newest first)
-            matching_files = [
-                f for f in files 
-                if expected_filename_part in f['name']
-            ]
-            
+            matching_files = [f for f in files if expected_filename_part in f["name"]]
+
             if matching_files:
                 # Sort by modified time (most recent first)
-                matching_files.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
-                file_id = matching_files[0]['id']
-                file_name = matching_files[0]['name']
+                matching_files.sort(key=lambda x: x.get("modifiedTime", ""), reverse=True)
+                file_id = matching_files[0]["id"]
+                file_name = matching_files[0]["name"]
                 self.logger.success(f"✓ Found export on Google Drive: {file_name}")
                 break
-            
+
             attempts += 1
             if attempts < max_attempts:
                 time.sleep(2)
-        
+
         if not file_id:
             self.logger.warning(f"Could not find export for '{chat_name}' on Google Drive after {max_wait_seconds}s")
             return False
-        
+
         # Find or create destination folder
         folder_id = self.client.find_folder_by_name(destination_folder_name)
-        
+
         if not folder_id:
             self.logger.info(f"Folder '{destination_folder_name}' not found, file will remain in My Drive")
             return False
-        
+
         # Move file to folder
         self.logger.info(f"Moving '{file_name}' to folder '{destination_folder_name}'...")
         success = self.client.move_file(file_id, folder_id)
-        
+
         if success:
             self.logger.success(f"✓ Moved to folder: {destination_folder_name}")
             return True
         else:
-            self.logger.error(f"Failed to move file to folder")
+            self.logger.error("Failed to move file to folder")
             return False
 
-    def batch_download_exports(self,
-                                files: List[Dict],
-                                dest_dir: Path,
-                                delete_after: bool = False,
-                                on_progress: Optional[Callable] = None) -> List[Path]:
+    def batch_download_exports(
+        self, files: list[dict], dest_dir: Path, delete_after: bool = False, on_progress: Callable | None = None
+    ) -> list[Path]:
         """
         Download multiple WhatsApp export files.
 
@@ -251,17 +248,12 @@ class GoogleDriveManager:
         # tqdm creates multiprocessing locks that can fail in threaded contexts (TUI workers)
         # Use simple logger-based progress instead
         for i, file in enumerate(files, 1):
-            file_id = file['id']
-            file_name = file['name']
+            file_id = file["id"]
+            file_name = file["name"]
 
             self.logger.info(f"[{i}/{len(files)}] Downloading {file_name}...")
 
-            success, dest_path = self.download_export(
-                file_id,
-                file_name,
-                dest_dir,
-                delete_after=delete_after
-            )
+            success, dest_path = self.download_export(file_id, file_name, dest_dir, delete_after=delete_after)
 
             if success and dest_path:
                 downloaded_files.append(dest_path)
@@ -275,7 +267,7 @@ class GoogleDriveManager:
         self.logger.success(f"Downloaded {len(downloaded_files)}/{len(files)} file(s)")
         return downloaded_files
 
-    def cleanup_exports(self, file_ids: List[str]) -> int:
+    def cleanup_exports(self, file_ids: list[str]) -> int:
         """
         Delete multiple files from Google Drive.
 
@@ -299,7 +291,7 @@ class GoogleDriveManager:
         self.logger.success(f"Deleted {deleted_count}/{len(file_ids)} file(s)")
         return deleted_count
 
-    def find_exports_in_folder(self, folder_name: str) -> Tuple[Optional[str], List[Dict]]:
+    def find_exports_in_folder(self, folder_name: str) -> tuple[str | None, list[dict]]:
         """
         Find WhatsApp exports in a specific folder by name.
 
@@ -320,7 +312,7 @@ class GoogleDriveManager:
 
         return folder_id, files
 
-    def get_export_summary(self, folder_id: Optional[str] = None) -> Dict:
+    def get_export_summary(self, folder_id: str | None = None) -> dict:
         """
         Get summary of WhatsApp exports.
 
@@ -332,19 +324,19 @@ class GoogleDriveManager:
         """
         files = self.list_whatsapp_exports(folder_id=folder_id)
 
-        total_size = sum(int(f.get('size', 0)) for f in files)
+        total_size = sum(int(f.get("size", 0)) for f in files)
         total_size_mb = total_size / (1024 * 1024)
 
         summary = {
-            'file_count': len(files),
-            'total_size_bytes': total_size,
-            'total_size_mb': total_size_mb,
-            'files': files
+            "file_count": len(files),
+            "total_size_bytes": total_size,
+            "total_size_mb": total_size_mb,
+            "files": files,
         }
 
         return summary
 
-    def delete_sibling_exports(self, chat_name: str, folder_id: Optional[str] = None) -> int:
+    def delete_sibling_exports(self, chat_name: str, folder_id: str | None = None) -> int:
         """
         Delete Drive root files in the chat name-group for ``chat_name``.
 

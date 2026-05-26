@@ -8,17 +8,17 @@ Provides:
 """
 
 # Textual-based TUI
-from .textual_app import WhatsAppExporterApp, PipelineStage
-from .textual_widgets import (
-    ChatListWidget,
-    SettingsPanel,
-    ActivityLog,
-    QueueWidget,
-    ProgressDisplay,
-)
+from .textual_app import PipelineStage, WhatsAppExporterApp
 from .textual_screens import (
-    MainScreen,
     HelpScreen,
+    MainScreen,
+)
+from .textual_widgets import (
+    ActivityLog,
+    ChatListWidget,
+    ProgressDisplay,
+    QueueWidget,
+    SettingsPanel,
 )
 
 __all__ = [

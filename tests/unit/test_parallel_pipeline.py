@@ -13,17 +13,13 @@ Covers:
 - Error path: early abort with cancel_pending
 """
 
-import time
 import threading
-from unittest.mock import MagicMock, patch
-
-import pytest
+import time
+from unittest.mock import MagicMock
 
 from whatsapp_chat_autoexport.export.parallel_pipeline import (
     ParallelPipeline,
-    PipelineTaskResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -109,9 +105,7 @@ class TestParallelPipelineHappyPath:
 
         assert len(results) == num_tasks
         # With 3 workers, all tasks run in parallel => ~0.3s, not ~0.9s
-        assert elapsed < sequential_min, (
-            f"Expected < {sequential_min:.2f}s, got {elapsed:.2f}s"
-        )
+        assert elapsed < sequential_min, f"Expected < {sequential_min:.2f}s, got {elapsed:.2f}s"
 
     def test_max_workers_enforced(self):
         """With max_workers=2, only 2 tasks run simultaneously out of 3 submitted."""
@@ -148,9 +142,7 @@ class TestParallelPipelineHappyPath:
 
         assert len(results) == 3
         # At no point should more than 2 tasks have been active
-        assert max(concurrency_log) <= 2, (
-            f"Max concurrency was {max(concurrency_log)}, expected <= 2"
-        )
+        assert max(concurrency_log) <= 2, f"Max concurrency was {max(concurrency_log)}, expected <= 2"
 
     def test_total_submitted_and_pending_count(self):
         """Properties reflect submission and completion state."""

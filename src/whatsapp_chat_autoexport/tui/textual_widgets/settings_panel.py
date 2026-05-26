@@ -10,17 +10,15 @@ Displays export settings with:
 
 import shutil
 from pathlib import Path
-from typing import Optional, List
 
 from textual.app import ComposeResult
+from textual.containers import Horizontal, Vertical
 from textual.events import Key
-from textual.widget import Widget
-from textual.widgets import Static, Checkbox, Input, Label, RadioButton, RadioSet, Button
-from textual.containers import Vertical, Horizontal
 from textual.message import Message
 from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import Button, Checkbox, Input, RadioButton, RadioSet, Static
 from textual.worker import Worker, WorkerState
-
 
 # Default output directory
 DEFAULT_OUTPUT_DIR = str(Path.home() / "whatsapp_exports")
@@ -76,7 +74,7 @@ class SettingsPanel(Widget):
     class DriveStatusChanged(Message):
         """Posted when Drive auth state changes (sign in, sign out, file pick)."""
 
-        def __init__(self, signed_in: bool, user_email: Optional[str] = None) -> None:
+        def __init__(self, signed_in: bool, user_email: str | None = None) -> None:
             self.signed_in = signed_in
             self.user_email = user_email
             super().__init__()
@@ -120,6 +118,7 @@ class SettingsPanel(Widget):
         """Lazy load Google Drive auth manager."""
         if self._drive_auth is None:
             from ...google_drive.auth import GoogleDriveAuth
+
             self._drive_auth = GoogleDriveAuth()
         return self._drive_auth
 
@@ -127,6 +126,7 @@ class SettingsPanel(Widget):
         """Lazy load API key manager."""
         if self._api_key_manager is None:
             from ...config.api_key_manager import get_api_key_manager
+
             self._api_key_manager = get_api_key_manager()
         return self._api_key_manager
 
@@ -219,7 +219,7 @@ class SettingsPanel(Widget):
                         label = f"{display_name} (invalid key)"
                     else:
                         label = f"{display_name} (no key)"
-                    is_selected = (provider == self.transcription_provider)
+                    is_selected = provider == self.transcription_provider
                     is_disabled = not info["is_valid"] or self._locked
                     yield RadioButton(
                         label,
@@ -270,8 +270,6 @@ class SettingsPanel(Widget):
                     classes=f"api-status {status_class}",
                 )
 
-
-
     def on_mount(self) -> None:
         """Auto-select valid provider, disable transcription if no providers, refresh Drive."""
         self._refresh_drive_section()
@@ -304,10 +302,7 @@ class SettingsPanel(Widget):
         between providers. Tab / Shift+Tab exits the RadioSet.
         """
         focused = self.screen.focused
-        is_provider_radio = (
-            isinstance(focused, RadioSet)
-            and getattr(focused, "id", None) == "setting-provider"
-        )
+        is_provider_radio = isinstance(focused, RadioSet) and getattr(focused, "id", None) == "setting-provider"
 
         # Let the RadioSet handle its own navigation keys
         if is_provider_radio and event.key in ("up", "down", "enter", "space"):
@@ -385,7 +380,7 @@ class SettingsPanel(Widget):
         if event.radio_set.id == "setting-provider":
             button_id = event.pressed.id
             if button_id and button_id.startswith("provider-"):
-                provider = button_id[len("provider-"):]
+                provider = button_id[len("provider-") :]
                 self.transcription_provider = provider
                 self._notify_settings_changed()
 
@@ -443,7 +438,7 @@ class SettingsPanel(Widget):
         if is_valid:
             self.notify(f"{provider.title()} API key saved and validated", severity="information")
         else:
-            self.notify(f"API key saved but validation failed", severity="warning")
+            self.notify("API key saved but validation failed", severity="warning")
 
     def _refresh_provider_options(self) -> None:
         """Refresh provider radio buttons with updated labels and disabled state."""
@@ -506,29 +501,20 @@ class SettingsPanel(Widget):
             app_email = getattr(self.app, "_drive_user_email", None)
 
             if not status["client_secrets_present"]:
-                status_widget.update(
-                    "[yellow]Not configured[/yellow] — "
-                    "provide client_secrets.json below"
-                )
+                status_widget.update("[yellow]Not configured[/yellow] — provide client_secrets.json below")
                 sign_in_btn.disabled = True
                 sign_out_btn.disabled = True
             elif status["token_valid"] or (status["token_present"] and app_email):
                 email = app_email or status.get("user_email") or "unknown"
-                status_widget.update(
-                    f"[green]Signed in[/green] as {email}"
-                )
+                status_widget.update(f"[green]Signed in[/green] as {email}")
                 sign_in_btn.disabled = True
                 sign_out_btn.disabled = self._locked
             elif status["token_present"]:
-                status_widget.update(
-                    "[yellow]Token expired[/yellow] — click Sign in to refresh"
-                )
+                status_widget.update("[yellow]Token expired[/yellow] — click Sign in to refresh")
                 sign_in_btn.disabled = self._locked or self._drive_signing_in
                 sign_out_btn.disabled = self._locked
             else:
-                status_widget.update(
-                    "[dim]Ready to authenticate[/dim] — click Sign in"
-                )
+                status_widget.update("[dim]Ready to authenticate[/dim] — click Sign in")
                 sign_in_btn.disabled = self._locked or self._drive_signing_in
                 sign_out_btn.disabled = True
 
@@ -588,9 +574,7 @@ class SettingsPanel(Widget):
         self._drive_signing_in = True
         try:
             self.query_one("#btn-drive-sign-in", Button).disabled = True
-            self.query_one("#drive-status", Static).update(
-                "[dim]Opening browser for authentication...[/dim]"
-            )
+            self.query_one("#drive-status", Static).update("[dim]Opening browser for authentication...[/dim]")
         except Exception:
             pass
 
@@ -610,6 +594,7 @@ class SettingsPanel(Widget):
         email = None
         try:
             from googleapiclient.discovery import build
+
             service = build("drive", "v3", credentials=creds)
             about = service.about().get(fields="user(emailAddress)").execute()
             email = about.get("user", {}).get("emailAddress")
@@ -662,6 +647,7 @@ class SettingsPanel(Widget):
         """Write to the screen-level ActivityLog."""
         try:
             from .activity_log import ActivityLog
+
             log_widget = self.screen.query_one(ActivityLog)
             log_widget.log(message)
         except Exception:
@@ -740,7 +726,7 @@ class SettingsPanel(Widget):
 
         self._refresh_provider_options()
 
-    def get_valid_providers(self) -> List[str]:
+    def get_valid_providers(self) -> list[str]:
         """Get list of providers with valid API keys."""
         manager = self._get_api_key_manager()
         return manager.get_available_providers()

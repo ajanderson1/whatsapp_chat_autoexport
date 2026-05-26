@@ -5,8 +5,9 @@ Provides a Result[T, E] type inspired by Rust's Result, enabling
 explicit error handling without exceptions for expected error cases.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar, Generic, Optional, Callable, Union
+from typing import Generic, TypeVar, Union
 
 T = TypeVar("T")  # Success value type
 E = TypeVar("E")  # Error value type
@@ -187,7 +188,7 @@ def try_except(
 
 
 def from_optional(
-    value: Optional[T],
+    value: T | None,
     error: E,
 ) -> Result[T, E]:
     """

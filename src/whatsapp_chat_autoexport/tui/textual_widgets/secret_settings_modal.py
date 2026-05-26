@@ -5,10 +5,10 @@ Provides access to hidden settings like color scheme selection.
 """
 
 from textual.app import ComposeResult
-from textual.screen import ModalScreen
-from textual.widgets import Static, ListItem, ListView, Label
-from textual.containers import Vertical
 from textual.binding import Binding
+from textual.containers import Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Label, ListItem, ListView, Static
 
 
 class SecretSettingsModal(ModalScreen[str | None]):

@@ -5,14 +5,13 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import pytest
 
 from whatsapp_chat_autoexport.preflight.report import Status
-
 
 # ---------------------------------------------------------------------------
 # Helpers — build a mocked httpx.Client transport that the probes can use
 # ---------------------------------------------------------------------------
+
 
 def _mock_transport(response_factory):
     """Return an httpx.MockTransport that serves the given factory."""
@@ -22,6 +21,7 @@ def _mock_transport(response_factory):
 # ---------------------------------------------------------------------------
 # Whisper
 # ---------------------------------------------------------------------------
+
 
 class TestWhisperProbe:
     def test_no_key_skipped(self):
@@ -274,6 +274,7 @@ class TestElevenLabsProbe:
 # ---------------------------------------------------------------------------
 # Drive
 # ---------------------------------------------------------------------------
+
 
 class _FakeAbout:
     """Minimal stand-in for googleapiclient about() resource."""

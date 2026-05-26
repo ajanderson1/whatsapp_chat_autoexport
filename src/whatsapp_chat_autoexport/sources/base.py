@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
 from ..processing.transcript_parser import Message
 
@@ -17,9 +16,10 @@ from ..processing.transcript_parser import Message
 @dataclass
 class ChatInfo:
     """Metadata about a single chat available from a source."""
+
     jid: str
     name: str
-    last_message_time: Optional[datetime] = None
+    last_message_time: datetime | None = None
     message_count: int = 0
 
 
@@ -41,7 +41,7 @@ class MessageSource(ABC):
         self.logger = logger
 
     @abstractmethod
-    def get_chats(self) -> List[ChatInfo]:
+    def get_chats(self) -> list[ChatInfo]:
         """
         List all chats available from this source.
 
@@ -54,9 +54,9 @@ class MessageSource(ABC):
     def get_messages(
         self,
         chat_id: str,
-        after: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> List[Message]:
+        after: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[Message]:
         """
         Retrieve messages for a given chat.
 
@@ -71,7 +71,7 @@ class MessageSource(ABC):
         pass
 
     @abstractmethod
-    def get_media(self, message_id: str) -> Optional[Path]:
+    def get_media(self, message_id: str) -> Path | None:
         """
         Retrieve the media file associated with a message.
 

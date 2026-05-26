@@ -4,14 +4,12 @@ Test suite for archive extractor module.
 Tests directory validation, file finding, and ZIP file detection.
 """
 
-from pathlib import Path
-
 import pytest
 
 from whatsapp_chat_autoexport.processing.archive_extractor import (
-    validate_directory,
     find_whatsapp_chat_files,
     is_zip_file,
+    validate_directory,
 )
 from whatsapp_chat_autoexport.utils.logger import Logger
 

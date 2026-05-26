@@ -2,10 +2,9 @@
 Shared pytest fixtures and configuration for WhatsApp Chat Auto-Export tests.
 """
 
-import os
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 
@@ -49,7 +48,7 @@ def sample_transcript_file(sample_export_dir: Path) -> Path:
 
 
 @pytest.fixture
-def temp_output_dir() -> Generator[Path, None, None]:
+def temp_output_dir() -> Generator[Path]:
     """
     Creates a temporary output directory for test outputs.
     Automatically cleaned up after the test.
@@ -59,7 +58,7 @@ def temp_output_dir() -> Generator[Path, None, None]:
 
 
 @pytest.fixture
-def temp_working_dir() -> Generator[Path, None, None]:
+def temp_working_dir() -> Generator[Path]:
     """
     Creates a temporary working directory for test operations.
     Automatically cleaned up after the test.
@@ -136,7 +135,7 @@ def sample_messages():
 
 
 @pytest.fixture
-def sample_media_files(temp_working_dir: Path) -> Generator[dict, None, None]:
+def sample_media_files(temp_working_dir: Path) -> Generator[dict]:
     """
     Creates sample media files for testing.
     Returns a dict mapping media types to file paths.
@@ -190,8 +189,8 @@ def tui_app():
     The app is configured in dry-run mode with a temporary output directory,
     so no real Appium, ADB, or device connection is needed.
     """
-    from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp
     from whatsapp_chat_autoexport.state.state_manager import StateManager
+    from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp
 
     app = WhatsAppExporterApp(
         state_manager=StateManager(),

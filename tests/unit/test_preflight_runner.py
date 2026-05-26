@@ -3,8 +3,6 @@
 from datetime import datetime
 from unittest.mock import patch
 
-import pytest
-
 from whatsapp_chat_autoexport.preflight.report import CheckResult, Status
 from whatsapp_chat_autoexport.preflight.runner import (
     DRIVE_HARD_FAIL_BYTES,
@@ -20,15 +18,11 @@ def _ok(provider, name):
 
 
 def _fail(provider, name):
-    return CheckResult(
-        provider=provider, display_name=name, status=Status.HARD_FAIL, summary="bad"
-    )
+    return CheckResult(provider=provider, display_name=name, status=Status.HARD_FAIL, summary="bad")
 
 
 def _warn(provider, name):
-    return CheckResult(
-        provider=provider, display_name=name, status=Status.WARN, summary="meh"
-    )
+    return CheckResult(provider=provider, display_name=name, status=Status.WARN, summary="meh")
 
 
 class TestRunner:
@@ -39,21 +33,25 @@ class TestRunner:
         assert DRIVE_HARD_FAIL_BYTES == 500 * 1024**2
 
     def test_aggregates_three_results(self):
-        with patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_whisper",
-            return_value=_ok("whisper", "OpenAI (Whisper)"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_elevenlabs",
-            return_value=_warn("elevenlabs", "ElevenLabs"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_drive",
-            return_value=_ok("drive", "Google Drive"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner._build_drive_auth",
-            return_value=object(),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.get_api_key_manager"
-        ) as km_mock:
+        with (
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_whisper",
+                return_value=_ok("whisper", "OpenAI (Whisper)"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_elevenlabs",
+                return_value=_warn("elevenlabs", "ElevenLabs"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_drive",
+                return_value=_ok("drive", "Google Drive"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner._build_drive_auth",
+                return_value=object(),
+            ),
+            patch("whatsapp_chat_autoexport.preflight.runner.get_api_key_manager") as km_mock,
+        ):
             km_mock.return_value.get_api_key.side_effect = lambda p: f"key-{p}"
 
             report = run_preflight()
@@ -67,19 +65,19 @@ class TestRunner:
         assert report.duration_ms >= 0
 
     def test_skip_drive_omits_probe(self):
-        with patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_whisper",
-            return_value=_ok("whisper", "OpenAI (Whisper)"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_elevenlabs",
-            return_value=_ok("elevenlabs", "ElevenLabs"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_drive"
-        ) as drive_mock, patch(
-            "whatsapp_chat_autoexport.preflight.runner._build_drive_auth"
-        ) as build_mock, patch(
-            "whatsapp_chat_autoexport.preflight.runner.get_api_key_manager"
-        ) as km_mock:
+        with (
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_whisper",
+                return_value=_ok("whisper", "OpenAI (Whisper)"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_elevenlabs",
+                return_value=_ok("elevenlabs", "ElevenLabs"),
+            ),
+            patch("whatsapp_chat_autoexport.preflight.runner.check_drive") as drive_mock,
+            patch("whatsapp_chat_autoexport.preflight.runner._build_drive_auth") as build_mock,
+            patch("whatsapp_chat_autoexport.preflight.runner.get_api_key_manager") as km_mock,
+        ):
             km_mock.return_value.get_api_key.return_value = "k"
 
             report = run_preflight(skip_drive=True)
@@ -91,21 +89,25 @@ class TestRunner:
         assert len(report.results) == 2
 
     def test_hard_fail_propagates(self):
-        with patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_whisper",
-            return_value=_fail("whisper", "OpenAI (Whisper)"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_elevenlabs",
-            return_value=_ok("elevenlabs", "ElevenLabs"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.check_drive",
-            return_value=_ok("drive", "Google Drive"),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner._build_drive_auth",
-            return_value=object(),
-        ), patch(
-            "whatsapp_chat_autoexport.preflight.runner.get_api_key_manager"
-        ) as km_mock:
+        with (
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_whisper",
+                return_value=_fail("whisper", "OpenAI (Whisper)"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_elevenlabs",
+                return_value=_ok("elevenlabs", "ElevenLabs"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner.check_drive",
+                return_value=_ok("drive", "Google Drive"),
+            ),
+            patch(
+                "whatsapp_chat_autoexport.preflight.runner._build_drive_auth",
+                return_value=object(),
+            ),
+            patch("whatsapp_chat_autoexport.preflight.runner.get_api_key_manager") as km_mock,
+        ):
             km_mock.return_value.get_api_key.return_value = "k"
 
             report = run_preflight()
@@ -115,7 +117,7 @@ class TestRunner:
 
 from datetime import datetime as _dt
 
-from whatsapp_chat_autoexport.preflight.report import CheckResult, PreflightReport, Status
+from whatsapp_chat_autoexport.preflight.report import PreflightReport
 from whatsapp_chat_autoexport.preflight.runner import format_report_for_stderr
 
 

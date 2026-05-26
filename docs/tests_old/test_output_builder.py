@@ -6,9 +6,8 @@ Tests output structure creation, transcript merging, and file organization.
 """
 
 import sys
-from pathlib import Path
 import tempfile
-import shutil
+from pathlib import Path
 
 # Add project to path
 project_root = Path(__file__).parent
@@ -72,11 +71,7 @@ def test_build_simple_output():
 
         # Build output (without copying media)
         summary = builder.build_output(
-            sample_transcript,
-            media_dir,
-            dest_dir,
-            contact_name="Test Contact",
-            copy_media=False
+            sample_transcript, media_dir, dest_dir, contact_name="Test Contact", copy_media=False
         )
 
         # Verify structure
@@ -92,11 +87,11 @@ def test_build_simple_output():
             return False
 
         # Check summary
-        if summary['contact_name'] != "Test Contact":
+        if summary["contact_name"] != "Test Contact":
             print(f"✗ Wrong contact name: {summary['contact_name']}")
             return False
 
-        if summary['total_messages'] != 15:
+        if summary["total_messages"] != 15:
             print(f"✗ Expected 15 messages, got {summary['total_messages']}")
             return False
 
@@ -136,12 +131,7 @@ def test_build_output_with_media():
 
         # Build output with media
         summary = builder.build_output(
-            transcript_path,
-            media_dir,
-            dest_dir,
-            contact_name="Alice",
-            copy_media=True,
-            include_transcriptions=False
+            transcript_path, media_dir, dest_dir, contact_name="Alice", copy_media=True, include_transcriptions=False
         )
 
         # Verify structure
@@ -188,19 +178,19 @@ def test_verify_output():
         # Verify
         results = builder.verify_output(contact_dir)
 
-        if not results['valid']:
+        if not results["valid"]:
             print("✗ Valid output marked as invalid")
             return False
 
-        if not results['transcript_exists']:
+        if not results["transcript_exists"]:
             print("✗ Transcript not detected")
             return False
 
-        if not results['media_dir_exists']:
+        if not results["media_dir_exists"]:
             print("✗ Media directory not detected")
             return False
 
-        if results['media_count'] != 1:
+        if results["media_count"] != 1:
             print(f"✗ Expected 1 media file, found {results['media_count']}")
             return False
 
@@ -223,7 +213,7 @@ def test_batch_build():
         transcripts = []
         for i, name in enumerate(["Alice", "Bob", "Charlie"], 1):
             transcript = temp_path / f"chat_{name}.txt"
-            transcript.write_text(f"1/15/24, 10:{30+i:02d} AM - {name}: Hello!\n")
+            transcript.write_text(f"1/15/24, 10:{30 + i:02d} AM - {name}: Hello!\n")
 
             media_dir = temp_path / f"media_{name}"
             media_dir.mkdir()
@@ -233,11 +223,7 @@ def test_batch_build():
         # Batch build
         dest_dir = temp_path / "output"
 
-        results = builder.batch_build_outputs(
-            transcripts,
-            dest_dir,
-            copy_media=False
-        )
+        results = builder.batch_build_outputs(transcripts, dest_dir, copy_media=False)
 
         if len(results) != 3:
             print(f"✗ Expected 3 results, got {len(results)}")
@@ -277,14 +263,10 @@ def test_with_real_whatsapp_export():
         # Build output
         try:
             summary = builder.build_output(
-                transcript,
-                example_dir,
-                dest_dir,
-                copy_media=True,
-                include_transcriptions=True
+                transcript, example_dir, dest_dir, copy_media=True, include_transcriptions=True
             )
 
-            print(f"\n  Real WhatsApp Export:")
+            print("\n  Real WhatsApp Export:")
             print(f"    Contact: {summary['contact_name']}")
             print(f"    Messages: {summary['total_messages']}")
             print(f"    Media refs: {summary['media_messages']}")
@@ -292,8 +274,8 @@ def test_with_real_whatsapp_export():
             print(f"    Transcriptions: {summary['transcriptions_copied']}")
 
             # Verify output
-            verification = builder.verify_output(summary['output_dir'])
-            if not verification['valid']:
+            verification = builder.verify_output(summary["output_dir"])
+            if not verification["valid"]:
                 print("  ✗ Output verification failed")
                 return False
 
@@ -303,6 +285,7 @@ def test_with_real_whatsapp_export():
         except Exception as e:
             print(f"✗ Error processing real export: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -328,16 +311,10 @@ def test_merged_transcript_format():
         dest_dir = temp_path / "output"
 
         # Build output
-        summary = builder.build_output(
-            transcript_path,
-            media_dir,
-            dest_dir,
-            contact_name="Alice",
-            copy_media=False
-        )
+        summary = builder.build_output(transcript_path, media_dir, dest_dir, contact_name="Alice", copy_media=False)
 
         # Read merged transcript
-        transcript_content = summary['transcript_path'].read_text()
+        transcript_content = summary["transcript_path"].read_text()
 
         # Check header
         if "# WhatsApp Chat with Alice" not in transcript_content:
@@ -381,7 +358,7 @@ def main():
     for test_name, test_func in tests:
         print(f"\n{'─' * 70}")
         print(f"Test: {test_name}")
-        print('─' * 70)
+        print("─" * 70)
 
         try:
             result = test_func()
@@ -389,6 +366,7 @@ def main():
         except Exception as e:
             print(f"✗ Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((test_name, False))
 

@@ -1,6 +1,5 @@
 """Tests for the foreground-settle helper used before verify_whatsapp_is_open()."""
 
-import pytest
 from unittest.mock import MagicMock
 
 from whatsapp_chat_autoexport.export.foreground_wait import (
@@ -36,9 +35,7 @@ def test_returns_true_when_already_foreground():
 
 
 def test_returns_true_after_transient_non_whatsapp_package():
-    wrapper = FakeDriverWrapper(
-        ["com.android.intentresolver", "com.android.intentresolver", "com.whatsapp"]
-    )
+    wrapper = FakeDriverWrapper(["com.android.intentresolver", "com.android.intentresolver", "com.whatsapp"])
     assert wait_for_whatsapp_foreground(wrapper, timeout=1.0, poll_interval=0.01) is True
 
 

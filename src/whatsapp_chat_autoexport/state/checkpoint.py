@@ -7,10 +7,9 @@ after interruptions.
 
 import json
 import shutil
+import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
-import threading
 
 from .models import SessionState
 
@@ -25,7 +24,7 @@ class CheckpointManager:
 
     def __init__(
         self,
-        checkpoint_dir: Optional[Path] = None,
+        checkpoint_dir: Path | None = None,
         max_checkpoints: int = 5,
         checkpoint_interval: int = 5,
     ):
@@ -58,7 +57,7 @@ class CheckpointManager:
         self,
         session: SessionState,
         force: bool = False,
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """
         Save a checkpoint of the session state.
 
@@ -102,7 +101,7 @@ class CheckpointManager:
                     temp_file.unlink()
                 raise RuntimeError(f"Failed to save checkpoint: {e}") from e
 
-    def load_latest(self) -> Optional[SessionState]:
+    def load_latest(self) -> SessionState | None:
         """
         Load the most recent checkpoint.
 
@@ -117,7 +116,7 @@ class CheckpointManager:
             latest = checkpoints[-1]
             return self.load(latest)
 
-    def load(self, checkpoint_path: Path) -> Optional[SessionState]:
+    def load(self, checkpoint_path: Path) -> SessionState | None:
         """
         Load a specific checkpoint.
 
@@ -132,7 +131,7 @@ class CheckpointManager:
                 return None
 
             try:
-                with open(checkpoint_path, "r") as f:
+                with open(checkpoint_path) as f:
                     data = json.load(f)
 
                 return SessionState.model_validate(data)
@@ -140,7 +139,7 @@ class CheckpointManager:
             except Exception:
                 return None
 
-    def list_checkpoints(self) -> List[Path]:
+    def list_checkpoints(self) -> list[Path]:
         """
         List all available checkpoints.
 
@@ -150,7 +149,7 @@ class CheckpointManager:
         with self._lock:
             return self._list_checkpoints()
 
-    def _list_checkpoints(self) -> List[Path]:
+    def _list_checkpoints(self) -> list[Path]:
         """Internal checkpoint listing."""
         checkpoints = list(self._checkpoint_dir.glob("checkpoint_*.json"))
         checkpoints.sort(key=lambda p: p.stat().st_mtime)
@@ -200,7 +199,5 @@ class CheckpointManager:
             "count": len(checkpoints),
             "latest": checkpoints[-1].name if checkpoints else None,
             "oldest": checkpoints[0].name if checkpoints else None,
-            "latest_time": datetime.fromtimestamp(
-                checkpoints[-1].stat().st_mtime
-            ).isoformat() if checkpoints else None,
+            "latest_time": datetime.fromtimestamp(checkpoints[-1].stat().st_mtime).isoformat() if checkpoints else None,
         }

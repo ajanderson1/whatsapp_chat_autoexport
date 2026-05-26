@@ -9,14 +9,13 @@ from datetime import datetime
 
 import pytest
 
-from whatsapp_chat_autoexport.processing.transcript_parser import Message
 from whatsapp_chat_autoexport.processing.dedup import (
+    _compound_key,
+    _dedup_key,
     deduplicate,
     find_new_messages,
-    _dedup_key,
-    _compound_key,
 )
-
+from whatsapp_chat_autoexport.processing.transcript_parser import Message
 
 # =========================================================================
 # Helpers

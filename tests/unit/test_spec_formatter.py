@@ -3,17 +3,17 @@ Test suite for SpecFormatter — transcript.md generation conforming to
 the WhatsApp Transcript Format Spec.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
 from whatsapp_chat_autoexport.output.spec_formatter import SpecFormatter
 from whatsapp_chat_autoexport.processing.transcript_parser import Message
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_msg(
     date_str: str,
@@ -37,6 +37,7 @@ def make_msg(
 # ---------------------------------------------------------------------------
 # Basic formatting
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_single_text_message():
@@ -89,6 +90,7 @@ def test_messages_across_days():
 # Frontmatter
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_transcript_frontmatter():
     """Output starts with YAML frontmatter containing required cssclasses."""
@@ -111,6 +113,7 @@ def test_transcript_frontmatter():
 # ---------------------------------------------------------------------------
 # Metadata comment block
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_transcript_metadata_header():
@@ -142,11 +145,14 @@ def test_transcript_metadata_header():
 # Media type mapping
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_media_image_tag():
     """Image media messages render as <photo>."""
     formatter = SpecFormatter(contact_name="Alice")
-    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "IMG-001.jpg (file attached)", is_media=True, media_type="image")]
+    msgs = [
+        make_msg("2024-01-15", "10:00:00", "Alice", "IMG-001.jpg (file attached)", is_media=True, media_type="image")
+    ]
 
     result = formatter.format_transcript(msgs)
 
@@ -157,7 +163,9 @@ def test_media_image_tag():
 def test_media_audio_tag():
     """Audio media messages render as <voice>."""
     formatter = SpecFormatter(contact_name="Alice")
-    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "PTT-001.opus (file attached)", is_media=True, media_type="audio")]
+    msgs = [
+        make_msg("2024-01-15", "10:00:00", "Alice", "PTT-001.opus (file attached)", is_media=True, media_type="audio")
+    ]
 
     result = formatter.format_transcript(msgs)
 
@@ -168,7 +176,9 @@ def test_media_audio_tag():
 def test_media_video_tag():
     """Video media messages render as <video>."""
     formatter = SpecFormatter(contact_name="Alice")
-    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "VID-001.mp4 (file attached)", is_media=True, media_type="video")]
+    msgs = [
+        make_msg("2024-01-15", "10:00:00", "Alice", "VID-001.mp4 (file attached)", is_media=True, media_type="video")
+    ]
 
     result = formatter.format_transcript(msgs)
 
@@ -179,7 +189,9 @@ def test_media_video_tag():
 def test_media_document_tag_with_filename():
     """Document media messages render as <document filename>."""
     formatter = SpecFormatter(contact_name="Alice")
-    msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "report.pdf (file attached)", is_media=True, media_type="document")]
+    msgs = [
+        make_msg("2024-01-15", "10:00:00", "Alice", "report.pdf (file attached)", is_media=True, media_type="document")
+    ]
 
     result = formatter.format_transcript(msgs)
 
@@ -212,6 +224,7 @@ def test_media_unknown_tag():
 # media_count in metadata
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_media_count_in_metadata():
     """media_count reflects the number of media messages."""
@@ -231,6 +244,7 @@ def test_media_count_in_metadata():
 # Empty message list
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_empty_messages():
     """Empty message list produces valid frontmatter and metadata, no day headers."""
@@ -246,6 +260,7 @@ def test_empty_messages():
 # ---------------------------------------------------------------------------
 # chat_jid defaults to None gracefully
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_no_chat_jid():
@@ -263,6 +278,7 @@ def test_no_chat_jid():
 # ---------------------------------------------------------------------------
 # format_index — direct chat
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_direct_chat_index():
@@ -318,6 +334,7 @@ def test_direct_chat_index_frontmatter_structure():
 # format_index — group chat
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_group_chat_index():
     """Group chat index.md uses chat_name and participants list instead of contact."""
@@ -351,6 +368,7 @@ def test_group_chat_index():
 # format_index — body
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_index_body():
     """index.md body contains a summary blockquote and a transcript WikiLink."""
@@ -382,6 +400,7 @@ def test_index_body():
 # format_index — source provenance
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_index_source_provenance():
     """index.md frontmatter includes sources: block with appium_export type."""
@@ -401,6 +420,7 @@ def test_index_source_provenance():
 # ---------------------------------------------------------------------------
 # format_index — media and voice counts
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_index_media_and_voice_counts():
@@ -423,6 +443,7 @@ def test_index_media_and_voice_counts():
 # format_index — empty messages
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_index_empty_messages():
     """format_index with no messages produces valid output with zero counts."""
@@ -438,6 +459,7 @@ def test_index_empty_messages():
 # ---------------------------------------------------------------------------
 # format_index — timezone field
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_index_timezone():
@@ -458,6 +480,7 @@ def test_index_timezone():
 # Transcription injection
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_voice_with_transcription_file(tmp_path):
     """Voice message gets an indented [Transcription]: line when a file exists."""
@@ -475,9 +498,12 @@ def test_voice_with_transcription_file(tmp_path):
     formatter = SpecFormatter(contact_name="Tim Cocking")
     msgs = [
         make_msg(
-            "2024-01-15", "10:15:00", "Tim Cocking",
+            "2024-01-15",
+            "10:15:00",
+            "Tim Cocking",
             "PTT-20240115-WA0001.opus (file attached)",
-            is_media=True, media_type="audio",
+            is_media=True,
+            media_type="audio",
         )
     ]
 
@@ -493,9 +519,12 @@ def test_voice_without_transcription_file(tmp_path):
     formatter = SpecFormatter(contact_name="Alice")
     msgs = [
         make_msg(
-            "2024-01-15", "10:15:00", "Alice",
+            "2024-01-15",
+            "10:15:00",
+            "Alice",
             "PTT-20240115-WA0001.opus (file attached)",
-            is_media=True, media_type="audio",
+            is_media=True,
+            media_type="audio",
         )
     ]
 
@@ -508,20 +537,17 @@ def test_voice_without_transcription_file(tmp_path):
 @pytest.mark.unit
 def test_transcription_text_strips_metadata(tmp_path):
     """_read_transcription skips # metadata header lines and returns only text."""
-    transcription_content = (
-        "# Transcription of: PTT-001.opus\n"
-        "# Model: whisper-1\n"
-        "\n"
-        "Hello there.\n"
-        "How are you?\n"
-    )
+    transcription_content = "# Transcription of: PTT-001.opus\n# Model: whisper-1\n\nHello there.\nHow are you?\n"
     (tmp_path / "PTT-001_transcription.txt").write_text(transcription_content)
 
     formatter = SpecFormatter(contact_name="Alice")
     msg = make_msg(
-        "2024-01-15", "09:00:00", "Alice",
+        "2024-01-15",
+        "09:00:00",
+        "Alice",
         "PTT-001.opus (file attached)",
-        is_media=True, media_type="audio",
+        is_media=True,
+        media_type="audio",
     )
 
     text = formatter._read_transcription(msg, tmp_path)
@@ -533,6 +559,7 @@ def test_transcription_text_strips_metadata(tmp_path):
 # ---------------------------------------------------------------------------
 # build_output
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_build_creates_index_and_transcript(tmp_path):
@@ -616,9 +643,7 @@ def test_build_no_media_flag(tmp_path):
     formatter = SpecFormatter(contact_name="Alice")
     msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
 
-    result = formatter.build_output(
-        msgs, dest_dir=tmp_path, media_dir=media_dir, copy_media=False
-    )
+    result = formatter.build_output(msgs, dest_dir=tmp_path, media_dir=media_dir, copy_media=False)
 
     assert not (tmp_path / "Alice" / "media").exists()
     assert result["media_copied"] == 0
@@ -634,9 +659,7 @@ def test_build_no_transcriptions_flag(tmp_path):
     formatter = SpecFormatter(contact_name="Alice")
     msgs = [make_msg("2024-01-15", "10:00:00", "Alice", "Hi")]
 
-    result = formatter.build_output(
-        msgs, dest_dir=tmp_path, media_dir=media_dir, include_transcriptions=False
-    )
+    result = formatter.build_output(msgs, dest_dir=tmp_path, media_dir=media_dir, include_transcriptions=False)
 
     assert not (tmp_path / "Alice" / "transcriptions").exists()
     assert result["transcriptions_copied"] == 0

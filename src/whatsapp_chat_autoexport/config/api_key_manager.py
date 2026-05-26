@@ -7,9 +7,8 @@ variables and .env files. Provides safe key display with masking.
 
 import os
 from pathlib import Path
-from typing import Optional, Tuple, Dict, List
 
-from dotenv import load_dotenv, set_key, dotenv_values
+from dotenv import dotenv_values, load_dotenv, set_key
 
 
 class ApiKeyManager:
@@ -21,18 +20,18 @@ class ApiKeyManager:
     """
 
     # Mapping of provider names to their environment variable names
-    ENV_VAR_MAP: Dict[str, str] = {
+    ENV_VAR_MAP: dict[str, str] = {
         "whisper": "OPENAI_API_KEY",
         "elevenlabs": "ELEVENLABS_API_KEY",
     }
 
     # Provider display names
-    PROVIDER_NAMES: Dict[str, str] = {
+    PROVIDER_NAMES: dict[str, str] = {
         "whisper": "OpenAI (Whisper)",
         "elevenlabs": "ElevenLabs",
     }
 
-    def __init__(self, env_file: Optional[Path] = None):
+    def __init__(self, env_file: Path | None = None):
         """
         Initialize the API Key Manager.
 
@@ -73,7 +72,7 @@ class ApiKeyManager:
         """Get the path to the .env file being used."""
         return self._env_file
 
-    def get_api_key(self, provider: str) -> Optional[str]:
+    def get_api_key(self, provider: str) -> str | None:
         """
         Get the API key for a provider.
 
@@ -167,7 +166,7 @@ class ApiKeyManager:
         except Exception:
             return False
 
-    def validate_api_key(self, provider: str, api_key: Optional[str] = None) -> Tuple[bool, str]:
+    def validate_api_key(self, provider: str, api_key: str | None = None) -> tuple[bool, str]:
         """
         Validate an API key for a provider.
 
@@ -211,7 +210,7 @@ class ApiKeyManager:
         is_valid, _ = self.validate_api_key(provider, key)
         return "Valid" if is_valid else "Invalid"
 
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         """
         Get list of providers with valid API keys configured.
 
@@ -225,7 +224,7 @@ class ApiKeyManager:
                 available.append(provider)
         return available
 
-    def get_all_providers(self) -> List[str]:
+    def get_all_providers(self) -> list[str]:
         """
         Get list of all supported providers.
 
@@ -235,7 +234,7 @@ class ApiKeyManager:
         return list(self.ENV_VAR_MAP.keys())
 
     @staticmethod
-    def mask_api_key(api_key: Optional[str], visible_chars: int = 4) -> str:
+    def mask_api_key(api_key: str | None, visible_chars: int = 4) -> str:
         """
         Mask an API key for safe display.
 
@@ -286,7 +285,7 @@ class ApiKeyManager:
         """
         return self.ENV_VAR_MAP.get(provider.lower(), "")
 
-    def get_provider_info(self, provider: str) -> Dict:
+    def get_provider_info(self, provider: str) -> dict:
         """
         Get complete information about a provider's configuration.
 
@@ -317,7 +316,7 @@ class ApiKeyManager:
 
 
 # Singleton instance for convenience
-_api_key_manager: Optional[ApiKeyManager] = None
+_api_key_manager: ApiKeyManager | None = None
 
 
 def get_api_key_manager() -> ApiKeyManager:

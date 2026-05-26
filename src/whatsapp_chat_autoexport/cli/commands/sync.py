@@ -15,29 +15,29 @@ import os
 import re
 import sys
 import traceback
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
-from ...mcp.bridge_reader import BridgeReader, BridgeReaderError, DatabaseNotFoundError
 from ...mcp.state import MCPState
 from ...output.index_builder import IndexBuilder
 from ...output.spec_formatter import SpecFormatter
 from ...processing.dedup import find_new_messages
 from ...processing.transcript_parser import Message
-from ...sources.mcp_source import MCPSource
 from ...sources.base import ChatInfo
+from ...sources.mcp_source import MCPSource
 from ...sources.transcript_source import TranscriptSource
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _jid_to_folder_name(
     jid: str,
-    chat_name: Optional[str] = None,
-    state: Optional[MCPState] = None,
+    chat_name: str | None = None,
+    state: MCPState | None = None,
 ) -> str:
     """
     Resolve a JID to a filesystem-safe folder name.
@@ -62,9 +62,9 @@ def _jid_to_folder_name(
 def _sanitise_folder_name(name: str) -> str:
     """Make a string safe for use as a directory name."""
     # Remove characters that are problematic on common filesystems
-    sanitised = re.sub(r'[<>:"/\\|?*]', '', name)
+    sanitised = re.sub(r'[<>:"/\\|?*]', "", name)
     # Collapse multiple spaces / trim
-    sanitised = re.sub(r'\s+', ' ', sanitised).strip()
+    sanitised = re.sub(r"\s+", " ", sanitised).strip()
     return sanitised or "unknown"
 
 
@@ -73,7 +73,7 @@ def _progress(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
-def _json_summary(data: Dict[str, Any]) -> None:
+def _json_summary(data: dict[str, Any]) -> None:
     """Print a JSON summary to stdout."""
     print(json.dumps(data, indent=2, default=str))
 
@@ -94,11 +94,12 @@ def _atomic_write(target: Path, content: str) -> None:
 # Voice transcription helper
 # ---------------------------------------------------------------------------
 
+
 def _try_transcribe_voice(
     msg: Message,
     mcp_source: MCPSource,
     state: MCPState,
-) -> Optional[str]:
+) -> str | None:
     """
     Attempt to transcribe a voice message via ElevenLabs.
 
@@ -138,7 +139,7 @@ def _try_transcribe_voice(
 def _retry_voice_queue(
     state: MCPState,
     mcp_source: MCPSource,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Retry queued voice messages that previously failed transcription.
 
@@ -198,6 +199,7 @@ def _retry_voice_queue(
 # Per-chat sync
 # ---------------------------------------------------------------------------
 
+
 def _sync_chat(
     chat: ChatInfo,
     mcp_source: MCPSource,
@@ -206,7 +208,7 @@ def _sync_chat(
     index_builder: IndexBuilder,
     overlap_minutes: int,
     dry_run: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Sync a single chat from the MCP bridge.
 
@@ -216,7 +218,7 @@ def _sync_chat(
     folder_name = _jid_to_folder_name(jid, chat.name, state)
     chat_dir = output_dir / folder_name
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "jid": jid,
         "name": chat.name,
         "folder": folder_name,
@@ -228,7 +230,7 @@ def _sync_chat(
 
     # Determine watermark and overlap window
     watermark = state.get_watermark(jid)
-    fetch_after: Optional[datetime] = None
+    fetch_after: datetime | None = None
     if watermark:
         fetch_after = watermark - timedelta(minutes=overlap_minutes)
 
@@ -239,7 +241,7 @@ def _sync_chat(
         return result
 
     # Read existing transcript for dedup
-    existing_messages: List[Message] = []
+    existing_messages: list[Message] = []
     transcript_path = chat_dir / "transcript.md"
     if transcript_path.exists():
         ts = TranscriptSource(output_dir)
@@ -331,15 +333,16 @@ def _sync_chat(
 # Main sync orchestration
 # ---------------------------------------------------------------------------
 
+
 def run_sync(
     output_dir: Path,
-    db_path: Optional[Path] = None,
-    state_file: Optional[Path] = None,
+    db_path: Path | None = None,
+    state_file: Path | None = None,
     dry_run: bool = False,
-    chat_filter: Optional[str] = None,
+    chat_filter: str | None = None,
     overlap_minutes: int = 10,
     user_display_name: str = "AJ Anderson",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run the incremental sync from MCP bridge.
 
@@ -358,7 +361,7 @@ def run_sync(
     Returns:
         JSON-serialisable summary dict.
     """
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "success": False,
         "timestamp": datetime.now().isoformat(),
         "dry_run": dry_run,
@@ -378,7 +381,7 @@ def run_sync(
 
     # ---- 2. Create MCP source ----
     try:
-        source_kwargs: Dict[str, Any] = {"user_display_name": user_display_name}
+        source_kwargs: dict[str, Any] = {"user_display_name": user_display_name}
         if db_path:
             source_kwargs["db_path"] = db_path
         mcp_source = MCPSource(**source_kwargs)
@@ -404,8 +407,8 @@ def run_sync(
     _progress(f"Found {len(all_chats)} chat(s) in MCP bridge")
 
     # ---- 4. Compare watermarks → build changed-chats list ----
-    changed_chats: List[ChatInfo] = []
-    skipped_chats: List[str] = []
+    changed_chats: list[ChatInfo] = []
+    skipped_chats: list[str] = []
 
     for chat in all_chats:
         # Apply chat filter if specified
@@ -422,10 +425,7 @@ def run_sync(
         changed_chats.append(chat)
 
     summary["chats_skipped"] = len(skipped_chats)
-    _progress(
-        f"Changed: {len(changed_chats)} | "
-        f"Unchanged: {len(skipped_chats)}"
-    )
+    _progress(f"Changed: {len(changed_chats)} | Unchanged: {len(skipped_chats)}")
 
     # ---- 5. Retry voice queue ----
     if not dry_run:
@@ -463,12 +463,14 @@ def run_sync(
             _progress(f"  ERROR syncing {chat.name or chat.jid}: {exc}")
             traceback.print_exc(file=sys.stderr)
             summary["chats_errored"] += 1
-            summary["chat_results"].append({
-                "jid": chat.jid,
-                "name": chat.name,
-                "status": "error",
-                "error": str(exc),
-            })
+            summary["chat_results"].append(
+                {
+                    "jid": chat.jid,
+                    "name": chat.name,
+                    "status": "error",
+                    "error": str(exc),
+                }
+            )
 
     # ---- 8. Save state ----
     if not dry_run:
@@ -487,6 +489,7 @@ def run_sync(
 # ---------------------------------------------------------------------------
 # CLI argument parser
 # ---------------------------------------------------------------------------
+
 
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the sync command."""
@@ -554,7 +557,7 @@ Examples:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point for the sync command."""
     parser = create_parser()
     args = parser.parse_args(argv)

@@ -5,26 +5,26 @@ Handles chat export operations including menu navigation, media selection,
 and Google Drive upload.
 """
 
-import subprocess
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from time import sleep
-from typing import Optional, Tuple, List, Dict, Set, Any, Callable
 from pathlib import Path
+from time import sleep
+from typing import Any, Optional
 
-from .whatsapp_driver import WhatsAppDriver, SESSION_ERROR_KEYWORDS
-from .timing import ChatTiming, ChatStatus, PhaseTimer, print_timing_summary
-from .parallel_pipeline import ParallelPipeline, PipelineTaskResult
+from ..automation.elements.element_cache import ElementCache
+from ..core.events import EventBus, get_event_bus
+from ..state.models import SessionStatus
+from ..state.state_manager import StateManager
 from ..utils.logger import Logger
 
 # New workflow imports (for integration with refactored architecture)
-from ..whatsapp.export.export_workflow import ExportWorkflow, WorkflowResult, WorkflowStatus
-from ..automation.elements.element_cache import ElementCache
-from ..core.events import EventBus, get_event_bus
-from ..state.state_manager import StateManager
-from ..state.models import SessionStatus
+from ..whatsapp.export.export_workflow import ExportWorkflow, WorkflowResult
+from .parallel_pipeline import ParallelPipeline
+from .timing import ChatStatus, ChatTiming, PhaseTimer, print_timing_summary
+from .whatsapp_driver import SESSION_ERROR_KEYWORDS, WhatsAppDriver
 
 
 class ExportOutcomeKind(str, Enum):
@@ -41,6 +41,7 @@ class ExportOutcome:
     Coerces to bool: True only for SUCCESS. This preserves existing call sites
     that check `if exporter.export_chat_to_google_drive(...)`.
     """
+
     kind: ExportOutcomeKind = ExportOutcomeKind.SUCCESS
     reason: str = ""
 
@@ -50,14 +51,15 @@ class ExportOutcome:
 
 # Helper functions for resume functionality
 
-def validate_resume_directory(directory_path: str, logger: Logger) -> Optional[Path]:
+
+def validate_resume_directory(directory_path: str, logger: Logger) -> Path | None:
     """
     Validate resume directory path with robust validation.
-    
+
     Args:
         directory_path: Directory path string to validate
         logger: Logger instance for output
-        
+
     Returns:
         Path to validated directory, or None if validation fails
     """
@@ -65,50 +67,50 @@ def validate_resume_directory(directory_path: str, logger: Logger) -> Optional[P
     if not directory_path:
         logger.error("Resume directory path is required")
         return None
-    
+
     directory_path = directory_path.strip()
-    
+
     # Expand user home directory (~)
-    if directory_path.startswith('~'):
+    if directory_path.startswith("~"):
         directory_path = os.path.expanduser(directory_path)
-    
+
     # Remove quotes if present
     directory_path = directory_path.strip('"').strip("'")
-    
+
     # Convert to Path
     try:
         path_obj = Path(directory_path).resolve()
     except Exception as e:
         logger.error(f"Invalid resume directory path format: {e}")
         return None
-    
+
     # Validate directory exists
     if not path_obj.exists():
         logger.error(f"Resume directory does not exist: {path_obj}")
         return None
-    
+
     # Validate it's actually a directory
     if not path_obj.is_dir():
         logger.error(f"Resume path is not a directory: {path_obj}")
         return None
-    
+
     # Validate readable
     if not os.access(path_obj, os.R_OK):
         logger.error(f"Resume directory is not readable: {path_obj}")
         return None
-    
+
     logger.success(f"Resume directory validated: {path_obj}")
     return path_obj
 
 
-def check_chat_exists(drive_folder: Path, chat_name: str) -> Tuple[bool, List[str]]:
+def check_chat_exists(drive_folder: Path, chat_name: str) -> tuple[bool, list[str]]:
     """
     Check if a chat export already exists in the Google Drive folder.
-    
+
     Args:
         drive_folder: Path to Google Drive root folder
         chat_name: Name of the chat to check
-        
+
     Returns:
         Tuple of (exists: bool, matching_files: List[str])
         - exists: True if chat export found, False otherwise
@@ -116,26 +118,27 @@ def check_chat_exists(drive_folder: Path, chat_name: str) -> Tuple[bool, List[st
     """
     matching_files = []
     pattern = f"WhatsApp Chat with {chat_name}"
-    
+
     try:
         # Check for files matching the pattern (with or without .zip extension)
         all_files = [f for f in drive_folder.iterdir() if f.is_file()]
-        
+
         for file_path in all_files:
             file_name = file_path.name
-            
+
             # Check if file matches pattern (exact match)
             if file_name == pattern or file_name == f"{pattern}.zip":
                 matching_files.append(file_name)
-        
+
         return len(matching_files) > 0, matching_files
-        
-    except Exception as e:
+
+    except Exception:
         # If we can't check, assume it doesn't exist (safer to re-export)
         return False, []
 
 
 # Main ChatExporter class
+
 
 class ChatExporter:
     """Handles chat export operations."""
@@ -149,18 +152,18 @@ class ChatExporter:
     # this many chats. Counter is independent of MAX_CONSECUTIVE_RECOVERIES.
     MAX_CONSECUTIVE_VERIFY_FAILURES = 3
 
-    def __init__(self, driver: WhatsAppDriver, logger: Logger, pipeline: Optional['WhatsAppPipeline'] = None):
+    def __init__(self, driver: WhatsAppDriver, logger: Logger, pipeline: Optional["WhatsAppPipeline"] = None):
         self.driver = driver
         self.logger = logger
         self.pipeline = pipeline
         # Cache for element finding strategies: {screen_type: (locator_type, locator_value)}
-        self._element_strategy_cache: Dict[str, Tuple[str, str]] = {}
+        self._element_strategy_cache: dict[str, tuple[str, str]] = {}
 
         # New workflow components (lazy initialized)
-        self._element_cache: Optional[ElementCache] = None
-        self._event_bus: Optional[EventBus] = None
-        self._workflow: Optional[ExportWorkflow] = None
-        self._state_manager: Optional[StateManager] = None
+        self._element_cache: ElementCache | None = None
+        self._event_bus: EventBus | None = None
+        self._workflow: ExportWorkflow | None = None
+        self._state_manager: StateManager | None = None
 
         # Session recovery tracking
         self._consecutive_recovery_count: int = 0
@@ -169,7 +172,7 @@ class ChatExporter:
         self._consecutive_verify_failure_count: int = 0
 
         # Per-chat structured timing (populated by export_chats)
-        self.chat_timings: List[ChatTiming] = []
+        self.chat_timings: list[ChatTiming] = []
 
     def _get_state_manager(self) -> StateManager:
         """
@@ -219,7 +222,9 @@ class ChatExporter:
             return False
 
         self._consecutive_recovery_count += 1
-        self.logger.success(f"Session recovered successfully (consecutive recoveries: {self._consecutive_recovery_count})")
+        self.logger.success(
+            f"Session recovered successfully (consecutive recoveries: {self._consecutive_recovery_count})"
+        )
         return True
 
     def _check_consecutive_recovery_limit(self) -> bool:
@@ -254,9 +259,9 @@ class ChatExporter:
 
     def create_export_session(
         self,
-        chat_names: List[str],
+        chat_names: list[str],
         include_media: bool = True,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> None:
         """
         Create a new export session with the given chats.
@@ -273,7 +278,7 @@ class ChatExporter:
         state_manager = self._get_state_manager()
 
         # Create session
-        device_id = self.driver.device_id if hasattr(self.driver, 'device_id') else None
+        device_id = self.driver.device_id if hasattr(self.driver, "device_id") else None
         state_manager.create_session(
             include_media=include_media,
             limit=limit,
@@ -288,7 +293,7 @@ class ChatExporter:
 
         self.logger.info(f"Created export session with {len(chat_names)} chats")
 
-    def get_export_progress(self) -> Dict[str, Any]:
+    def get_export_progress(self) -> dict[str, Any]:
         """
         Get current export progress from StateManager.
 
@@ -353,7 +358,7 @@ class ChatExporter:
         include_media: bool = True,
         timeout_seconds: float = 5.0,
         use_state_tracking: bool = True,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Export a chat using the new modular workflow system.
 
@@ -381,9 +386,9 @@ class ChatExporter:
             ...     print(f"Export failed: {message}")
         """
         media_status = "with media" if include_media else "without media"
-        self.logger.info(f"\n{'='*70}")
+        self.logger.info(f"\n{'=' * 70}")
         self.logger.info(f"📤 EXPORTING (NEW WORKFLOW): '{chat_name}' ({media_status})")
-        self.logger.info(f"{'='*70}")
+        self.logger.info(f"{'=' * 70}")
 
         # Track state if enabled
         state_manager = self._get_state_manager() if use_state_tracking else None
@@ -462,10 +467,10 @@ class ChatExporter:
 
     def export_chats_with_new_workflow(
         self,
-        chat_names: List[str],
+        chat_names: list[str],
         include_media: bool = True,
-        resume_folder: Optional[Path] = None,
-    ) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
+        resume_folder: Path | None = None,
+    ) -> tuple[dict[str, bool], dict[str, float], float, dict[str, bool]]:
         """
         Export multiple chats using the new modular workflow system.
 
@@ -516,9 +521,7 @@ class ChatExporter:
             # still reach the existing recovery path.
             settled = self.driver.wait_for_whatsapp_foreground(timeout=8.0)
             if not settled:
-                self.logger.debug_msg(
-                    "Foreground settle timed out; falling through to verify"
-                )
+                self.logger.debug_msg("Foreground settle timed out; falling through to verify")
 
             # CRITICAL: Verify WhatsApp is still accessible before each export.
             # If verification fails, attempt session recovery before aborting.
@@ -675,7 +678,7 @@ class ChatExporter:
         """
         Check if the share dialog is currently visible.
         This helps detect when WhatsApp skips media selection for text-only chats.
-        
+
         Returns True if share dialog is detected, False otherwise.
         """
         try:
@@ -684,7 +687,7 @@ class ChatExporter:
             if current_package == "com.android.intentresolver":
                 self.logger.debug_msg("Share dialog detected by package name")
                 return True
-            
+
             # Check for share dialog indicators in UI
             all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
             for elem in all_text_elements:
@@ -701,58 +704,63 @@ class ChatExporter:
                             return True
                 except:
                     continue
-            
+
             # Check for share dialog container elements
             try:
                 # Share dialog has specific resource IDs
-                share_containers = self.driver.driver.find_elements("xpath", "//*[@resource-id='com.android.intentresolver:id/chooser_scrollable_container'] | //*[@resource-id='android:id/resolver_list']")
+                share_containers = self.driver.driver.find_elements(
+                    "xpath",
+                    "//*[@resource-id='com.android.intentresolver:id/chooser_scrollable_container'] | //*[@resource-id='android:id/resolver_list']",
+                )
                 if share_containers and any(elem.is_displayed() for elem in share_containers):
                     self.logger.debug_msg("Share dialog detected by container elements")
                     return True
             except:
                 pass
-                
+
         except Exception as e:
             self.logger.debug_msg(f"Error checking for share dialog: {e}")
-        
+
         return False
-    
+
     def _handle_advanced_chat_privacy_error(self, chat_name: str) -> bool:
         """
         Check for and handle the advanced chat privacy error dialog.
         This dialog appears when a chat has advanced privacy settings enabled that prevent export.
-        
+
         Returns True if error dialog was detected and handled (chat should be skipped), False otherwise.
         """
         try:
             # Look for error dialog indicators
             all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
             error_dialog_detected = False
-            
+
             for elem in all_text_elements:
                 try:
                     if elem.is_displayed():
                         text = elem.text.strip().lower()
                         # Look for error message about advanced chat privacy
-                        if ("advanced chat privacy" in text or 
-                            "can't export chats" in text or
-                            "prevents the exporting" in text or
-                            "cannot export" in text):
+                        if (
+                            "advanced chat privacy" in text
+                            or "can't export chats" in text
+                            or "prevents the exporting" in text
+                            or "cannot export" in text
+                        ):
                             error_dialog_detected = True
                             self.logger.warning(f"Advanced chat privacy error detected: '{elem.text.strip()}'")
                             break
                 except:
                     continue
-            
+
             if not error_dialog_detected:
                 return False
-            
+
             # Error dialog detected - find and click OK button
             self.logger.warning(f"Advanced chat privacy prevents export of '{chat_name}'")
             self.logger.info("Looking for OK button in error dialog...")
-            
+
             ok_button = None
-            
+
             # Strategy 1: Look for button with "OK" text
             try:
                 all_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
@@ -768,11 +776,14 @@ class ChatExporter:
                         continue
             except Exception as e:
                 self.logger.debug_msg(f"Strategy 1 failed: {e}")
-            
+
             # Strategy 2: Look for clickable containers with "OK" text
             if not ok_button:
                 try:
-                    clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.FrameLayout[@clickable='true']")
+                    clickable_elements = self.driver.driver.find_elements(
+                        "xpath",
+                        "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.FrameLayout[@clickable='true']",
+                    )
                     for elem in clickable_elements:
                         try:
                             if elem.is_displayed() and elem.is_enabled():
@@ -792,7 +803,7 @@ class ChatExporter:
                             continue
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 2 failed: {e}")
-            
+
             # Strategy 3: Look for TextView with "OK" text and find its clickable parent
             if not ok_button:
                 try:
@@ -817,7 +828,7 @@ class ChatExporter:
                             continue
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 3 failed: {e}")
-            
+
             if ok_button:
                 try:
                     ok_button.click()
@@ -833,7 +844,7 @@ class ChatExporter:
                 self.logger.warning("Could not find OK button, using back button as fallback")
                 self.driver.driver.press_keycode(4)
                 sleep(0.5)
-            
+
             # Close any remaining menus/dialogs and return to main screen
             self.logger.info("Closing menus and returning to main screen...")
             for _ in range(3):  # Press back up to 3 times to ensure we're back
@@ -845,35 +856,38 @@ class ChatExporter:
                     sleep(0.3)
                 except:
                     break
-            
+
             self.logger.info("Returned to main screen (skipped due to advanced chat privacy)")
             return True  # Error dialog was handled, chat should be skipped
-            
+
         except Exception as e:
             self.logger.debug_msg(f"Error checking for advanced chat privacy dialog: {e}")
             return False  # If we can't check properly, assume no error dialog
-    
+
     def _wait_for_share_dialog(self, max_retries: int = 7) -> bool:
         """
         Wait for share dialog to appear after selecting media option.
         Uses exponential backoff with retries.
-        
+
         Returns True if share dialog appears, False if it doesn't appear after retries.
         """
         for attempt in range(max_retries):
             # Exponential backoff: 2s, 4s, 8s, 16s, 32s, 64s, 90s (capped at 90)
             wait_time = min(2 ** (attempt + 1), 90)
-            self.logger.debug_msg(f"Waiting for share dialog (attempt {attempt + 1}/{max_retries}, waiting {wait_time}s)...")
+            self.logger.debug_msg(
+                f"Waiting for share dialog (attempt {attempt + 1}/{max_retries}, waiting {wait_time}s)..."
+            )
             sleep(wait_time)
-            
+
             if self._is_share_dialog_visible():
                 return True
-                    
+
         self.logger.warning(f"Share dialog did not appear after {max_retries} attempts")
         return False
-    
-    def export_chat_to_google_drive(self, chat_name: str, include_media: bool = True,
-                                      on_progress: Optional[Callable] = None) -> "ExportOutcome":
+
+    def export_chat_to_google_drive(
+        self, chat_name: str, include_media: bool = True, on_progress: Callable | None = None
+    ) -> "ExportOutcome":
         """
         Export a chat to Google Drive with or without media.
 
@@ -899,9 +913,7 @@ class ChatExporter:
         # Upfront community-chat probe - avoid opening the overflow menu at all.
         try:
             if self.driver.is_community_chat():
-                self.logger.warning(
-                    f"Skipped '{chat_name}' - community chat (detected up front)"
-                )
+                self.logger.warning(f"Skipped '{chat_name}' - community chat (detected up front)")
                 return ExportOutcome(
                     kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
                     reason="Community chat - export unsupported",
@@ -910,19 +922,19 @@ class ChatExporter:
             self.logger.debug_msg(f"Community probe failed: {e}")
 
         media_status = "with media" if include_media else "without media"
-        self.logger.info(f"\n{'='*70}")
+        self.logger.info(f"\n{'=' * 70}")
         self.logger.info(f"📤 EXPORTING CHAT: '{chat_name}' ({media_status})")
-        self.logger.info(f"{'='*70}")
+        self.logger.info(f"{'=' * 70}")
         _fire(0, 6, f"Starting export for '{chat_name}'")
-        
+
         # STEP 1: Open three-dot menu
         self.logger.step(1, "Opening menu...")
         try:
             sleep(0.5)  # Brief UI settle delay after entering chat
-            
+
             menu_button = None
             screen_type = "menu_button"
-            
+
             # Check cache first
             if screen_type in self._element_strategy_cache:
                 cached_locator_type, cached_locator_value = self._element_strategy_cache[screen_type]
@@ -935,7 +947,7 @@ class ChatExporter:
                         self.logger.debug_msg(f"Found menu button using cached strategy: {cached_locator_type}")
                 except Exception as e:
                     self.logger.debug_msg(f"Cached strategy failed: {e}")
-            
+
             # Strategy 1: Try by resource ID (wait for element)
             if not menu_button:
                 try:
@@ -948,7 +960,7 @@ class ChatExporter:
                         self._element_strategy_cache[screen_type] = ("id", "com.whatsapp:id/menuitem_overflow")
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 1 failed: {e}")
-            
+
             # Strategy 2: Try by content description
             if not menu_button:
                 try:
@@ -962,7 +974,7 @@ class ChatExporter:
                             break
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 2 failed: {e}")
-            
+
             # Strategy 3: Try by accessibility ID
             if not menu_button:
                 try:
@@ -975,38 +987,42 @@ class ChatExporter:
                         self._element_strategy_cache[screen_type] = ("accessibility_id", "More options")
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 3 failed: {e}")
-            
+
             # Strategy 4: Try to find ImageView/ImageButton in top right area
             if not menu_button:
                 try:
                     size = self.driver.driver.get_window_size()
-                    screen_width = size['width']
+                    screen_width = size["width"]
                     right_area_x = screen_width - 200
-                    
-                    all_elements = self.driver.driver.find_elements("xpath", "//android.widget.ImageView | //android.widget.ImageButton")
+
+                    all_elements = self.driver.driver.find_elements(
+                        "xpath", "//android.widget.ImageView | //android.widget.ImageButton"
+                    )
                     for elem in all_elements:
                         try:
                             if elem.is_displayed() and elem.is_enabled():
                                 location = elem.location
-                                if location['x'] > right_area_x and location['y'] < 400:
+                                if location["x"] > right_area_x and location["y"] < 400:
                                     menu_button = elem
-                                    self.logger.debug_msg(f"Found potential menu button at ({location['x']}, {location['y']})")
+                                    self.logger.debug_msg(
+                                        f"Found potential menu button at ({location['x']}, {location['y']})"
+                                    )
                                     # Note: This strategy is position-based, don't cache it
                                     break
                         except:
                             continue
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 4 failed: {e}")
-            
+
             if not menu_button:
                 # Clear cache on failure to allow retry with different strategies
                 if screen_type in self._element_strategy_cache:
                     del self._element_strategy_cache[screen_type]
                 raise Exception("Could not locate three-dot menu button")
-            
+
             if not menu_button.is_enabled():
                 raise Exception("Menu button found but not enabled!")
-            
+
             menu_button.click()
             sleep(0.5)  # Brief delay for menu animation
             self.logger.success("Menu opened")
@@ -1019,14 +1035,14 @@ class ChatExporter:
                 del self._element_strategy_cache["menu_button"]
             self.driver.get_page_source(f"menu_error_{chat_name}.xml")
             raise
-        
+
         # STEP 2: Click "More"
         self.logger.step(2, "Looking for 'More' option...")
         try:
             sleep(0.3)  # Brief delay for menu to fully render
-            
+
             more_option = None
-            
+
             # Find by text content
             try:
                 all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
@@ -1042,11 +1058,14 @@ class ChatExporter:
                         continue
             except Exception as e:
                 self.logger.debug_msg(f"Strategy failed: {e}")
-            
+
             # Try finding clickable items in menu
             if not more_option:
                 try:
-                    menu_items = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[contains(@resource-id, 'menu')] | //android.widget.RelativeLayout[contains(@resource-id, 'menu')]")
+                    menu_items = self.driver.driver.find_elements(
+                        "xpath",
+                        "//android.widget.LinearLayout[contains(@resource-id, 'menu')] | //android.widget.RelativeLayout[contains(@resource-id, 'menu')]",
+                    )
                     for item in menu_items:
                         try:
                             if item.is_displayed():
@@ -1066,7 +1085,7 @@ class ChatExporter:
                             continue
                 except Exception as e:
                     self.logger.debug_msg(f"Strategy 2 failed: {e}")
-            
+
             if not more_option:
                 # This is likely a community chat
                 self.logger.warning("Could not find 'More' option - likely a community chat")
@@ -1079,7 +1098,7 @@ class ChatExporter:
                     kind=ExportOutcomeKind.SKIPPED_COMMUNITY,
                     reason="Community chat - 'More' option absent",
                 )
-            
+
             more_option.click()
             sleep(0.5)  # Brief delay for submenu to appear
             self.logger.success("'More' clicked")
@@ -1089,14 +1108,14 @@ class ChatExporter:
             self.logger.error(f"ERROR clicking 'More': {e}")
             self.driver.get_page_source(f"more_error_{chat_name}.xml")
             raise
-        
+
         # STEP 3: Click "Export chat"
         self.logger.step(3, "Looking for 'Export chat' option...")
         try:
             sleep(0.3)  # Brief delay for submenu to render
-            
+
             export_option = None
-            
+
             all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
             for elem in all_text_elements:
                 try:
@@ -1108,7 +1127,7 @@ class ChatExporter:
                             break
                 except:
                     continue
-            
+
             if not export_option:
                 # Export option not available
                 self.logger.warning("Could not find 'Export chat' option - this chat may not support export")
@@ -1124,7 +1143,7 @@ class ChatExporter:
                     kind=ExportOutcomeKind.FAILED,
                     reason="Export option not found",
                 )
-            
+
             export_option.click()
             sleep(0.5)  # Brief delay for export dialog
             self.logger.success("'Export chat' clicked")
@@ -1134,7 +1153,7 @@ class ChatExporter:
             self.logger.error(f"ERROR clicking 'Export chat': {e}")
             self.driver.get_page_source(f"export_error_{chat_name}.xml")
             raise
-        
+
         # Check for advanced chat privacy error dialog
         if self._handle_advanced_chat_privacy_error(chat_name):
             # Error dialog was detected and handled - skip this chat
@@ -1142,13 +1161,13 @@ class ChatExporter:
                 kind=ExportOutcomeKind.FAILED,
                 reason="Advanced chat privacy restriction",
             )
-        
+
         # STEP 4: Select media option (Include or Without) OR detect text-only chat
         media_option_name = "Include media" if include_media else "Without media"
         self.logger.step(4, f"Selecting '{media_option_name}' or detecting text-only chat...")
         try:
             sleep(1.0)  # Increased delay for export dialog to fully appear
-            
+
             # First, check if share dialog appeared immediately (text-only chat)
             if self._is_share_dialog_visible():
                 self.logger.info("Share dialog detected immediately - this appears to be a text-only chat")
@@ -1158,14 +1177,17 @@ class ChatExporter:
             else:
                 # Media selection dialog should appear - proceed with normal flow
                 self.logger.debug_msg("Media selection dialog expected - searching for options...")
-                
+
                 media_option = None
-                
+
                 # Comprehensive scan
                 all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
                 clickable_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
-                clickable_containers = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.FrameLayout[@clickable='true']")
-                
+                clickable_containers = self.driver.driver.find_elements(
+                    "xpath",
+                    "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.FrameLayout[@clickable='true']",
+                )
+
                 # Strategy 1: Check buttons
                 for btn in clickable_buttons:
                     try:
@@ -1185,7 +1207,7 @@ class ChatExporter:
                                     break
                     except:
                         continue
-                
+
                 # Strategy 2: Check containers
                 if not media_option:
                     for container in clickable_containers:
@@ -1213,7 +1235,7 @@ class ChatExporter:
                                     break
                         except:
                             continue
-                
+
                 # Strategy 3: Look for options by position (if first is "Without media", second is "Include media")
                 if not media_option:
                     all_options = []
@@ -1231,9 +1253,9 @@ class ChatExporter:
                                         continue
                         except:
                             continue
-                    
+
                     if len(all_options) >= 2:
-                        all_options.sort(key=lambda x: x[0].location['y'])
+                        all_options.sort(key=lambda x: x[0].location["y"])
                         # First option is typically "Without media", second is "Include media"
                         if include_media and len(all_options) >= 2:
                             # Want second option (Include media)
@@ -1243,7 +1265,7 @@ class ChatExporter:
                             # Want first option (Without media)
                             media_option, _, option_text = all_options[0]
                             self.logger.debug_msg(f"Selected first option by position: '{option_text}'")
-                
+
                 # If we still haven't found media option, check again if share dialog appeared
                 if not media_option:
                     sleep(0.5)  # Brief wait
@@ -1256,7 +1278,7 @@ class ChatExporter:
                 else:
                     # Verify what we're about to click
                     try:
-                        verification_text = media_option.text.strip() if hasattr(media_option, 'text') else "Unknown"
+                        verification_text = media_option.text.strip() if hasattr(media_option, "text") else "Unknown"
                         self.logger.info(f"About to click: '{verification_text}'")
                     except:
                         self.logger.debug_msg("Could not get verification text before click")
@@ -1273,7 +1295,7 @@ class ChatExporter:
                         self.logger.warning("Share dialog may not have appeared, but continuing...")
                     else:
                         self.logger.success("✓ Share dialog ready")
-            
+
             _fire(4, 6, f"Media option selected ({media_option_name})")
 
         except Exception as e:
@@ -1285,14 +1307,17 @@ class ChatExporter:
         self.logger.step(5, "Selecting 'Drive' (Google Drive)...")
         try:
             sleep(0.5)  # Brief delay for share dialog to fully render
-            
+
             google_drive_option = None
-            
+
             # Helper function to find "Drive" option
             def find_drive_option():
                 all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
-                clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.Button")
-                
+                clickable_elements = self.driver.driver.find_elements(
+                    "xpath",
+                    "//android.widget.LinearLayout[@clickable='true'] | //android.widget.RelativeLayout[@clickable='true'] | //android.widget.Button",
+                )
+
                 # Strategy 1: Look for "Drive" in text elements
                 for elem in all_text_elements:
                     try:
@@ -1304,7 +1329,7 @@ class ChatExporter:
                                     return elem
                     except:
                         continue
-                
+
                 # Strategy 2: Look for "Drive" in clickable containers
                 for elem in clickable_elements:
                     try:
@@ -1320,7 +1345,7 @@ class ChatExporter:
                                     continue
                     except:
                         continue
-                
+
                 # Strategy 3: Fallback to "My Drive"
                 for elem in all_text_elements:
                     try:
@@ -1332,7 +1357,7 @@ class ChatExporter:
                                     return elem
                     except:
                         continue
-                
+
                 # Strategy 4: Look for "My Drive" in clickable containers
                 for elem in clickable_elements:
                     try:
@@ -1348,31 +1373,31 @@ class ChatExporter:
                                     continue
                     except:
                         continue
-                
+
                 return None
-            
+
             # First attempt: try to find "Drive" without swiping
             google_drive_option = find_drive_option()
-            
+
             # If not found, swipe up from bottom to make it visible
             if not google_drive_option:
                 self.logger.debug_msg("'Drive' not immediately visible, swiping up from bottom...")
                 window_size = self.driver.driver.get_window_size()
-                screen_height = window_size['height']
-                screen_width = window_size['width']
-                
+                screen_height = window_size["height"]
+                screen_width = window_size["width"]
+
                 # Swipe up from near bottom (swipe from Y=high to Y=low to scroll content up)
                 # Try up to 3 times
                 max_swipes = 3
                 for swipe_attempt in range(max_swipes):
                     # Swipe from bottom (high Y) to top (low Y) to scroll content up
                     start_y = int(screen_height * 0.85)  # Near bottom
-                    end_y = int(screen_height * 0.35)    # Upper portion
+                    end_y = int(screen_height * 0.35)  # Upper portion
                     center_x = screen_width // 2
-                    
+
                     self.driver.driver.swipe(center_x, start_y, center_x, end_y, duration=300)
                     sleep(0.5)  # Brief delay for UI to update
-                    
+
                     # Try to find "Drive" again
                     google_drive_option = find_drive_option()
                     if google_drive_option:
@@ -1380,10 +1405,10 @@ class ChatExporter:
                         break
                     else:
                         self.logger.debug_msg(f"Swipe {swipe_attempt + 1}/{max_swipes} - 'Drive' still not found")
-            
+
             if not google_drive_option:
                 raise Exception("Could not locate 'Drive' option after swiping")
-            
+
             # Verification
             verification_text = None
             try:
@@ -1402,15 +1427,21 @@ class ChatExporter:
                             continue
             except:
                 pass
-            
+
             if verification_text:
                 verification_text_lower = verification_text.lower()
                 if "drive" not in verification_text_lower:
                     raise Exception(f"VERIFICATION FAILED: Not Google Drive! Got '{verification_text}'")
-                if "external" in verification_text_lower or "usb" in verification_text_lower or "sd card" in verification_text_lower:
-                    raise Exception(f"VERIFICATION FAILED: This is a physical drive, not Google Drive! Got '{verification_text}'")
+                if (
+                    "external" in verification_text_lower
+                    or "usb" in verification_text_lower
+                    or "sd card" in verification_text_lower
+                ):
+                    raise Exception(
+                        f"VERIFICATION FAILED: This is a physical drive, not Google Drive! Got '{verification_text}'"
+                    )
                 self.logger.debug_msg(f"Verified: '{verification_text}' is Google Drive")
-            
+
             google_drive_option.click()
             sleep(0.5)  # Brief delay for Google Drive to open
             self.logger.success("'Drive' selected - Google Drive window should now be opening")
@@ -1420,17 +1451,17 @@ class ChatExporter:
             self.logger.error(f"ERROR selecting 'Drive': {e}")
             self.driver.get_page_source(f"google_drive_error_{chat_name}.xml")
             raise
-        
+
         # Wait for Google Drive window to appear
         self.logger.debug_msg("Waiting for Google Drive window to appear...")
         sleep(1.0)  # Initial wait for window transition
-        
+
         # Check if we're now in Google Drive (package change or activity change)
         try:
             current_package = self.driver.driver.current_package
             current_activity = self.driver.driver.current_activity
             self.logger.debug_msg(f"After clicking Drive - Package: {current_package}, Activity: {current_activity}")
-            
+
             # Google Drive package is typically com.google.android.apps.drive
             if "drive" in current_package.lower() or "drive" in current_activity.lower():
                 self.logger.debug_msg("Google Drive window detected")
@@ -1439,24 +1470,26 @@ class ChatExporter:
                 sleep(1.0)
                 current_package = self.driver.driver.current_package
                 current_activity = self.driver.driver.current_activity
-                self.logger.debug_msg(f"After additional wait - Package: {current_package}, Activity: {current_activity}")
+                self.logger.debug_msg(
+                    f"After additional wait - Package: {current_package}, Activity: {current_activity}"
+                )
         except Exception as e:
             self.logger.debug_msg(f"Could not check package/activity: {e}")
-        
+
         # STEP 6: Click "Upload" button in top right
         self.logger.step(6, "Clicking 'Upload' button in Google Drive window...")
         try:
             sleep(0.5)  # Brief delay for Google Drive window to fully render
-            
+
             upload_button = None
             window_size = self.driver.driver.get_window_size()
-            screen_width = window_size['width']
-            screen_height = window_size['height']
-            
+            screen_width = window_size["width"]
+            screen_height = window_size["height"]
+
             # Define top right area (rightmost 30% of screen width, top 15% of screen height)
             top_right_x_min = int(screen_width * 0.7)
             top_right_y_max = int(screen_height * 0.15)
-            
+
             # Strategy 1: Try by resource ID (most reliable - com.google.android.apps.docs:id/save_button)
             try:
                 upload_button = self.driver._wait_for_element(
@@ -1474,7 +1507,7 @@ class ChatExporter:
                         pass
             except Exception as e:
                 self.logger.debug_msg(f"Strategy 1 (resource ID) failed: {e}")
-            
+
             # Strategy 2: Look for Button elements with "Upload" text in top right area
             if not upload_button:
                 all_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
@@ -1486,18 +1519,22 @@ class ChatExporter:
                             if button_text == "upload":
                                 location = elem.location
                                 # Check if in top right area (or just accept if text matches)
-                                if location['x'] >= top_right_x_min and location['y'] <= top_right_y_max:
+                                if location["x"] >= top_right_x_min and location["y"] <= top_right_y_max:
                                     upload_button = elem
-                                    self.logger.debug_msg(f"Found 'Upload' button by Button.text at ({location['x']}, {location['y']})")
+                                    self.logger.debug_msg(
+                                        f"Found 'Upload' button by Button.text at ({location['x']}, {location['y']})"
+                                    )
                                     break
                                 else:
                                     # Still accept if text matches (may be slightly outside area)
                                     upload_button = elem
-                                    self.logger.debug_msg(f"Found 'Upload' button by Button.text at ({location['x']}, {location['y']}) - position check relaxed")
+                                    self.logger.debug_msg(
+                                        f"Found 'Upload' button by Button.text at ({location['x']}, {location['y']}) - position check relaxed"
+                                    )
                                     break
                     except:
                         continue
-            
+
             # Strategy 3: Look for "Upload" text in TextView elements in top right area
             if not upload_button:
                 all_text_elements = self.driver.driver.find_elements("xpath", "//android.widget.TextView")
@@ -1507,28 +1544,33 @@ class ChatExporter:
                             text = elem.text.strip().lower()
                             if text == "upload":
                                 location = elem.location
-                                if location['x'] >= top_right_x_min and location['y'] <= top_right_y_max:
+                                if location["x"] >= top_right_x_min and location["y"] <= top_right_y_max:
                                     # Try to find parent button or clickable container
                                     try:
                                         parent = elem.find_element("xpath", "..")
                                         if parent.tag_name == "android.widget.Button" and parent.is_enabled():
                                             upload_button = parent
-                                            self.logger.debug_msg(f"Found 'Upload' button via TextView parent at ({location['x']}, {location['y']})")
+                                            self.logger.debug_msg(
+                                                f"Found 'Upload' button via TextView parent at ({location['x']}, {location['y']})"
+                                            )
                                             break
                                     except:
                                         pass
                     except:
                         continue
-            
+
             # Strategy 4: Look for "Upload" in clickable containers (buttons, ImageButtons)
             if not upload_button:
-                clickable_elements = self.driver.driver.find_elements("xpath", "//android.widget.Button | //android.widget.ImageButton | //android.widget.ImageView[@clickable='true']")
+                clickable_elements = self.driver.driver.find_elements(
+                    "xpath",
+                    "//android.widget.Button | //android.widget.ImageButton | //android.widget.ImageView[@clickable='true']",
+                )
                 for elem in clickable_elements:
                     try:
                         if elem.is_displayed() and elem.is_enabled():
                             location = elem.location
                             # Check if in top right area
-                            if location['x'] >= top_right_x_min and location['y'] <= top_right_y_max:
+                            if location["x"] >= top_right_x_min and location["y"] <= top_right_y_max:
                                 # Check if it contains "Upload" text in child TextViews
                                 text_views = elem.find_elements("xpath", ".//android.widget.TextView")
                                 for tv in text_views:
@@ -1536,7 +1578,9 @@ class ChatExporter:
                                         text = tv.text.strip().lower()
                                         if text == "upload":
                                             upload_button = elem
-                                            self.logger.debug_msg(f"Found 'Upload' button in container at ({location['x']}, {location['y']})")
+                                            self.logger.debug_msg(
+                                                f"Found 'Upload' button in container at ({location['x']}, {location['y']})"
+                                            )
                                             break
                                     except:
                                         continue
@@ -1544,7 +1588,7 @@ class ChatExporter:
                                     break
                     except:
                         continue
-            
+
             # Strategy 5: Fallback - find any button with "Upload" text regardless of position
             if not upload_button:
                 all_buttons = self.driver.driver.find_elements("xpath", "//android.widget.Button")
@@ -1555,14 +1599,16 @@ class ChatExporter:
                             if button_text == "upload":
                                 upload_button = elem
                                 location = elem.location
-                                self.logger.debug_msg(f"Found 'Upload' button by Button.text (position-independent) at ({location['x']}, {location['y']})")
+                                self.logger.debug_msg(
+                                    f"Found 'Upload' button by Button.text (position-independent) at ({location['x']}, {location['y']})"
+                                )
                                 break
                     except:
                         continue
-            
+
             if not upload_button:
                 raise Exception("Could not locate 'Upload' button in Google Drive window")
-            
+
             # Verify it's actually "Upload"
             verification_text = None
             verification_passed = False
@@ -1578,7 +1624,7 @@ class ChatExporter:
                                 self.logger.debug_msg(f"Verified: Button text is '{verification_text}'")
                     except:
                         pass
-                
+
                 # If not verified yet, check TextView children
                 if not verification_passed:
                     text_views = upload_button.find_elements("xpath", ".//android.widget.TextView")
@@ -1593,7 +1639,7 @@ class ChatExporter:
                                     break
                         except:
                             continue
-                
+
                 # If still not verified, check content description
                 if not verification_passed:
                     try:
@@ -1604,39 +1650,43 @@ class ChatExporter:
                             self.logger.debug_msg(f"Verified: Content description is '{verification_text}'")
                     except:
                         pass
-                
+
                 # If found by resource ID (com.google.android.apps.docs:id/save_button), trust it
                 if not verification_passed:
                     try:
                         resource_id = upload_button.get_attribute("resource-id")
                         if resource_id and "save_button" in resource_id:
                             verification_passed = True
-                            self.logger.debug_msg(f"Verified: Found by resource ID '{resource_id}' - trusting it's the Upload button")
+                            self.logger.debug_msg(
+                                f"Verified: Found by resource ID '{resource_id}' - trusting it's the Upload button"
+                            )
                     except:
                         pass
-                
+
             except Exception as e:
                 self.logger.debug_msg(f"Verification check error: {e}")
-            
+
             # Only fail if we have verification text but it doesn't contain "upload"
             if verification_text and not verification_passed:
                 verification_text_lower = verification_text.lower()
                 if "upload" not in verification_text_lower:
                     raise Exception(f"VERIFICATION FAILED: Not Upload button! Got '{verification_text}'")
-            
+
             # If we got here without verification but button exists, log warning but proceed
             if not verification_passed:
-                self.logger.debug_msg("Could not verify button text, but proceeding with click (button found by search strategies)")
-            
+                self.logger.debug_msg(
+                    "Could not verify button text, but proceeding with click (button found by search strategies)"
+                )
+
             upload_button.click()
             sleep(0.5)  # Brief delay after clicking Upload
             self.logger.success("'Upload' button clicked - export should now be processing")
-            
+
         except Exception as e:
             self.logger.error(f"ERROR clicking 'Upload' button: {e}")
             self.driver.get_page_source(f"upload_error_{chat_name}.xml")
             raise
-        
+
         self.logger.success(f"SUCCESS: Export initiated for '{chat_name}'")
         self.logger.info("📤 Google Drive should now be handling the export...")
         _fire(6, 6, "Export initiated - uploading to Google Drive")
@@ -1656,8 +1706,14 @@ class ChatExporter:
             minutes = int((seconds % 3600) // 60)
             secs = seconds % 60
             return f"{hours}h {minutes}m {secs:.1f}s"
-    
-    def export_chats(self, chat_names: List[str], include_media: bool = True, resume_folder: Optional[Path] = None, google_drive_folder: Optional[str] = None) -> Tuple[Dict[str, bool], Dict[str, float], float, Dict[str, bool]]:
+
+    def export_chats(
+        self,
+        chat_names: list[str],
+        include_media: bool = True,
+        resume_folder: Path | None = None,
+        google_drive_folder: str | None = None,
+    ) -> tuple[dict[str, bool], dict[str, float], float, dict[str, bool]]:
         """Export multiple chats.
 
         Args:
@@ -1690,9 +1746,9 @@ class ChatExporter:
         self._consecutive_verify_failure_count = 0
 
         # Set up parallel pipeline if pipeline is configured
-        parallel: Optional[ParallelPipeline] = None
+        parallel: ParallelPipeline | None = None
         if self.pipeline:
-            max_workers = getattr(self.pipeline.config, 'max_concurrent', 2)
+            max_workers = getattr(self.pipeline.config, "max_concurrent", 2)
             parallel = ParallelPipeline(
                 pipeline=self.pipeline,
                 logger=self.logger,
@@ -1807,9 +1863,7 @@ class ChatExporter:
                     # submit the pipeline task to the background pool and
                     # continue to the next chat immediately.
                     if parallel is not None:
-                        self.logger.info(
-                            f"Queuing background pipeline for '{chat_name}'"
-                        )
+                        self.logger.info(f"Queuing background pipeline for '{chat_name}'")
                         parallel.submit(chat_name, google_drive_folder)
                         # Optimistically mark as True; collect_results() will
                         # update to False if the background task fails.
@@ -1888,9 +1942,7 @@ class ChatExporter:
 
         # Collect parallel pipeline results (if any)
         if parallel is not None:
-            self.logger.info(
-                f"\nWaiting for {parallel.pending_count} background pipeline task(s)..."
-            )
+            self.logger.info(f"\nWaiting for {parallel.pending_count} background pipeline task(s)...")
             pipeline_results = parallel.collect_results()
 
             # Reconcile pipeline outcomes with the optimistic results set above
@@ -1901,9 +1953,7 @@ class ChatExporter:
                         self.logger.info(f"   Output: {pr.output_path}")
                     results[pr.chat_name] = True
                 else:
-                    self.logger.warning(
-                        f"Pipeline failed for '{pr.chat_name}': {pr.errors}"
-                    )
+                    self.logger.warning(f"Pipeline failed for '{pr.chat_name}': {pr.errors}")
                     results[pr.chat_name] = False
 
                 # Update structured timing with pipeline breakdown
@@ -1925,4 +1975,3 @@ class ChatExporter:
         print_timing_summary(self.chat_timings, self.logger)
 
         return results, timings, total_time, skipped_already_exists
-

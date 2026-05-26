@@ -4,13 +4,11 @@ Welcome screen for TUI.
 Displays application title and initial options.
 """
 
-from typing import Optional, Callable
-
-from rich.console import Console, RenderableType
+from rich.align import Align
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.align import Align
 
 
 class WelcomeScreen:

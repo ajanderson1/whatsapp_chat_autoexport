@@ -7,7 +7,6 @@ independent of the state layer's serialization framework.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -22,13 +21,13 @@ class ChatMetadata:
     """
 
     name: str
-    timestamp: Optional[str] = None
-    message_preview: Optional[str] = None
+    timestamp: str | None = None
+    message_preview: str | None = None
     is_muted: bool = False
     is_group: bool = False
-    group_sender: Optional[str] = None
+    group_sender: str | None = None
     has_type_indicator: bool = False
-    photo_description: Optional[str] = None
+    photo_description: str | None = None
 
     def __str__(self) -> str:
         return self.name

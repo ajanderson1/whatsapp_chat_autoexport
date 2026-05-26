@@ -2,8 +2,6 @@
 
 from datetime import datetime
 
-import pytest
-
 from whatsapp_chat_autoexport.preflight.report import (
     CheckResult,
     PreflightReport,

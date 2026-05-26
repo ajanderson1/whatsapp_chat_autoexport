@@ -14,10 +14,10 @@ import yaml
 from whatsapp_chat_autoexport.output.index_builder import IndexBuilder
 from whatsapp_chat_autoexport.processing.transcript_parser import Message
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _msg(
     ts: str,
@@ -56,6 +56,7 @@ def _extract_body(content: str) -> str:
 # Direct chat index.md
 # ---------------------------------------------------------------------------
 
+
 class TestDirectChatIndex:
     """Tests for direct chat index.md generation."""
 
@@ -68,29 +69,33 @@ class TestDirectChatIndex:
         return [
             _msg("2015-07-29T00:05:00", "AJ Anderson", "Hello"),
             _msg("2015-07-29T00:11:00", "Tim Cocking", "Hi there"),
-            _msg("2026-03-25T10:00:00", "Tim Cocking",
-                 "IMG.jpg", True, "image"),
-            _msg("2026-03-25T10:01:00", "Tim Cocking",
-                 "PTT.opus", True, "audio"),
+            _msg("2026-03-25T10:00:00", "Tim Cocking", "IMG.jpg", True, "image"),
+            _msg("2026-03-25T10:01:00", "Tim Cocking", "PTT.opus", True, "audio"),
         ]
 
     def test_type_is_note(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "447956173473@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "447956173473@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["type"] == "note"
 
     def test_description_direct(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["description"] == "WhatsApp correspondence with Tim Cocking"
 
     def test_tags_direct(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert "whatsapp" in fm["tags"]
@@ -99,28 +104,36 @@ class TestDirectChatIndex:
 
     def test_cssclasses(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert "whatsapp-chat" in fm["cssclasses"]
 
     def test_chat_type_direct(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["chat_type"] == "direct"
 
     def test_contact_wikilink(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["contact"] == "[[Tim Cocking]]"
 
     def test_phone_field(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             phone="+44 7956 173473",
         )
         fm = _parse_frontmatter(result)
@@ -129,35 +142,45 @@ class TestDirectChatIndex:
     def test_jid_field(self, builder, sample_messages):
         jid = "447956173473@s.whatsapp.net"
         result = builder.build_index(
-            sample_messages, jid, "Tim Cocking",
+            sample_messages,
+            jid,
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["jid"] == jid
 
     def test_message_count(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["message_count"] == 4
 
     def test_media_count(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["media_count"] == 2
 
     def test_voice_count(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["voice_count"] == 1
 
     def test_date_first(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         # YAML may parse as date object
@@ -165,14 +188,18 @@ class TestDirectChatIndex:
 
     def test_date_last(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert str(fm["date_last"]) == "2026-03-25"
 
     def test_last_synced_present(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert "last_synced" in fm
@@ -184,7 +211,9 @@ class TestDirectChatIndex:
             {"type": "appium_export", "date": "2026-03-26", "messages": 16950},
         ]
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             sources=sources,
         )
         fm = _parse_frontmatter(result)
@@ -194,14 +223,18 @@ class TestDirectChatIndex:
 
     def test_coverage_gaps_default(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["coverage_gaps"] == 0
 
     def test_timezone_field(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             timezone="Europe/London",
         )
         fm = _parse_frontmatter(result)
@@ -209,14 +242,18 @@ class TestDirectChatIndex:
 
     def test_timezone_default(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["timezone"] == "Europe/Stockholm"
 
     def test_languages_field(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             languages=["en", "sv"],
         )
         fm = _parse_frontmatter(result)
@@ -224,7 +261,9 @@ class TestDirectChatIndex:
 
     def test_languages_default(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert fm["languages"] == ["en"]
@@ -232,14 +271,18 @@ class TestDirectChatIndex:
     def test_summary_field(self, builder, sample_messages):
         summary_text = "Close personal friendship spanning 11 years."
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             summary=summary_text,
         )
         assert "Close personal friendship" in result
 
     def test_summary_empty_default(self, builder, sample_messages):
         result = builder.build_index(
-            sample_messages, "jid@s.whatsapp.net", "Tim Cocking",
+            sample_messages,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         fm = _parse_frontmatter(result)
         assert "summary" in fm
@@ -248,6 +291,7 @@ class TestDirectChatIndex:
 # ---------------------------------------------------------------------------
 # Group chat index.md
 # ---------------------------------------------------------------------------
+
 
 class TestGroupChatIndex:
     """Tests for group chat index.md generation."""
@@ -266,7 +310,9 @@ class TestGroupChatIndex:
 
     def test_chat_type_group(self, builder, group_messages):
         result = builder.build_index(
-            group_messages, "491749580928-1452027796@g.us", "Brothers",
+            group_messages,
+            "491749580928-1452027796@g.us",
+            "Brothers",
             chat_type="group",
             participants=["[[Tim Cocking]]", "[[Peter Cocking]]"],
         )
@@ -275,7 +321,9 @@ class TestGroupChatIndex:
 
     def test_description_group(self, builder, group_messages):
         result = builder.build_index(
-            group_messages, "jid@g.us", "Brothers",
+            group_messages,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
         )
         fm = _parse_frontmatter(result)
@@ -284,7 +332,9 @@ class TestGroupChatIndex:
 
     def test_group_chat_tag(self, builder, group_messages):
         result = builder.build_index(
-            group_messages, "jid@g.us", "Brothers",
+            group_messages,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
         )
         fm = _parse_frontmatter(result)
@@ -292,7 +342,9 @@ class TestGroupChatIndex:
 
     def test_chat_name_field(self, builder, group_messages):
         result = builder.build_index(
-            group_messages, "jid@g.us", "Brothers",
+            group_messages,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
         )
         fm = _parse_frontmatter(result)
@@ -301,7 +353,9 @@ class TestGroupChatIndex:
     def test_participants_list(self, builder, group_messages):
         participants = ["[[Tim Cocking]]", "[[Peter Cocking]]", "+49 174 9580928"]
         result = builder.build_index(
-            group_messages, "jid@g.us", "Brothers",
+            group_messages,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
             participants=participants,
         )
@@ -310,7 +364,9 @@ class TestGroupChatIndex:
 
     def test_no_contact_field_for_group(self, builder, group_messages):
         result = builder.build_index(
-            group_messages, "jid@g.us", "Brothers",
+            group_messages,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
         )
         fm = _parse_frontmatter(result)
@@ -318,7 +374,9 @@ class TestGroupChatIndex:
 
     def test_no_phone_field_for_group(self, builder, group_messages):
         result = builder.build_index(
-            group_messages, "jid@g.us", "Brothers",
+            group_messages,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
         )
         fm = _parse_frontmatter(result)
@@ -328,6 +386,7 @@ class TestGroupChatIndex:
 # ---------------------------------------------------------------------------
 # Body section
 # ---------------------------------------------------------------------------
+
 
 class TestIndexBody:
     """Tests for the body section of index.md."""
@@ -371,7 +430,9 @@ class TestIndexBody:
     def test_body_group_chat(self, builder):
         msgs = [_msg("2016-01-05T10:00:00", "Tim Cocking", "Hello group")]
         result = builder.build_index(
-            msgs, "jid@g.us", "Brothers",
+            msgs,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
         )
         body = _extract_body(result)
@@ -392,13 +453,16 @@ class TestIndexBody:
 # Empty messages
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyMessages:
     """Tests for edge case with no messages."""
 
     def test_empty_messages_produces_valid_yaml(self):
         builder = IndexBuilder()
         result = builder.build_index(
-            [], "jid@s.whatsapp.net", "Nobody",
+            [],
+            "jid@s.whatsapp.net",
+            "Nobody",
         )
         fm = _parse_frontmatter(result)
 
@@ -409,7 +473,9 @@ class TestEmptyMessages:
     def test_empty_messages_date_fields(self):
         builder = IndexBuilder()
         result = builder.build_index(
-            [], "jid@s.whatsapp.net", "Nobody",
+            [],
+            "jid@s.whatsapp.net",
+            "Nobody",
         )
         fm = _parse_frontmatter(result)
 
@@ -420,6 +486,7 @@ class TestEmptyMessages:
 # ---------------------------------------------------------------------------
 # update_index
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateIndex:
     """Tests for updating an existing index.md."""
@@ -436,7 +503,9 @@ class TestUpdateIndex:
             _msg("2015-07-29T00:06:00", "Tim Cocking", "Hi"),
         ]
         return builder.build_index(
-            msgs, "447956173473@s.whatsapp.net", "Tim Cocking",
+            msgs,
+            "447956173473@s.whatsapp.net",
+            "Tim Cocking",
             sources=[{"type": "appium_export", "date": "2026-03-01", "messages": 2}],
         )
 
@@ -453,8 +522,7 @@ class TestUpdateIndex:
 
     def test_update_increments_media_count(self, builder, existing_index):
         new_msgs = [
-            _msg("2026-03-26T10:00:00", "Tim Cocking",
-                 "IMG.jpg", True, "image"),
+            _msg("2026-03-26T10:00:00", "Tim Cocking", "IMG.jpg", True, "image"),
         ]
         result = builder.update_index(existing_index, new_msgs)
         fm = _parse_frontmatter(result)
@@ -526,6 +594,7 @@ class TestUpdateIndex:
 # Spec examples
 # ---------------------------------------------------------------------------
 
+
 class TestSpecExamples:
     """Test against examples from transcript-format-spec.md."""
 
@@ -534,14 +603,15 @@ class TestSpecExamples:
         builder = IndexBuilder()
         msgs = [
             _msg("2015-07-29T00:05:00", "AJ Anderson", "Hello"),
-            _msg("2026-03-25T10:00:00", "Tim Cocking",
-                 "IMG.jpg", True, "image"),
+            _msg("2026-03-25T10:00:00", "Tim Cocking", "IMG.jpg", True, "image"),
         ]
         sources = [
             {"type": "appium_export", "date": "2026-03-26", "messages": 16950},
         ]
         result = builder.build_index(
-            msgs, "447956173473@s.whatsapp.net", "Tim Cocking",
+            msgs,
+            "447956173473@s.whatsapp.net",
+            "Tim Cocking",
             chat_type="direct",
             sources=sources,
             phone="+44 7956 173473",
@@ -583,7 +653,9 @@ class TestSpecExamples:
             "+49 174 9580928",
         ]
         result = builder.build_index(
-            msgs, "491749580928-1452027796@g.us", "Brothers",
+            msgs,
+            "491749580928-1452027796@g.us",
+            "Brothers",
             chat_type="group",
             participants=participants,
         )
@@ -605,7 +677,9 @@ class TestSpecExamples:
             _msg("2026-03-25T10:00:00", "Tim Cocking", "Latest"),
         ]
         result = builder.build_index(
-            msgs, "jid@s.whatsapp.net", "Tim Cocking",
+            msgs,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
         )
         body = _extract_body(result)
 
@@ -618,6 +692,7 @@ class TestSpecExamples:
 # YAML validity
 # ---------------------------------------------------------------------------
 
+
 class TestYamlValidity:
     """Tests that generated frontmatter is valid YAML."""
 
@@ -625,7 +700,9 @@ class TestYamlValidity:
         builder = IndexBuilder()
         msgs = [_msg("2015-07-29T00:05:00", "AJ Anderson", "Hello")]
         result = builder.build_index(
-            msgs, "jid@s.whatsapp.net", "Tim Cocking",
+            msgs,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             phone="+44 7956 173473",
             sources=[{"type": "appium_export", "date": "2026-03-26", "messages": 100}],
         )
@@ -638,7 +715,9 @@ class TestYamlValidity:
         builder = IndexBuilder()
         msgs = [_msg("2016-01-05T10:00:00", "Tim Cocking", "Hello")]
         result = builder.build_index(
-            msgs, "jid@g.us", "Brothers",
+            msgs,
+            "jid@g.us",
+            "Brothers",
             chat_type="group",
             participants=["[[Tim Cocking]]", "+49 174 9580928"],
         )
@@ -651,7 +730,9 @@ class TestYamlValidity:
         builder = IndexBuilder()
         msgs = [_msg("2015-07-29T00:05:00", "AJ Anderson", "Hello")]
         result = builder.build_index(
-            msgs, "jid@s.whatsapp.net", "O'Brien: The \"Great\"",
+            msgs,
+            "jid@s.whatsapp.net",
+            'O\'Brien: The "Great"',
         )
 
         # Should parse without error
@@ -662,7 +743,9 @@ class TestYamlValidity:
         builder = IndexBuilder()
         msgs = [_msg("2015-07-29T00:05:00", "AJ Anderson", "Hello")]
         result = builder.build_index(
-            msgs, "jid@s.whatsapp.net", "Tim Cocking",
+            msgs,
+            "jid@s.whatsapp.net",
+            "Tim Cocking",
             sources=[],
         )
 

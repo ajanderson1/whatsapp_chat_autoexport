@@ -53,7 +53,6 @@ def test_three_consecutive_verify_failures_halts_batch(tmp_path):
 
     # The halt message reaches the logger.
     halt_messages = [
-        call for call in logger.error.call_args_list
-        if "consecutive WhatsApp verification failures" in str(call)
+        call for call in logger.error.call_args_list if "consecutive WhatsApp verification failures" in str(call)
     ]
     assert halt_messages, "Expected a 'consecutive verify failures' halt log message"

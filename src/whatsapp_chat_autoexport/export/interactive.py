@@ -6,16 +6,15 @@ Handles interactive chat selection and user prompts.
 
 import sys
 import threading
-from time import sleep
-from typing import Optional, Tuple, List
 from pathlib import Path
+from time import sleep
 
-from .whatsapp_driver import WhatsAppDriver
-from .chat_exporter import ChatExporter
 from ..utils.logger import Logger
+from .chat_exporter import ChatExporter
+from .whatsapp_driver import WhatsAppDriver
 
 
-def parse_range_max_index(range_str: str) -> Optional[int]:
+def parse_range_max_index(range_str: str) -> int | None:
     """Parse a range string and return the maximum index needed.
 
     Args:
@@ -24,16 +23,16 @@ def parse_range_max_index(range_str: str) -> Optional[int]:
     Returns:
         Maximum index needed to satisfy the range, or None if invalid/empty
     """
-    if not range_str or range_str.lower() == 'all':
+    if not range_str or range_str.lower() == "all":
         return None
 
     try:
         max_index = 0
-        parts = [x.strip() for x in range_str.split(',')]
+        parts = [x.strip() for x in range_str.split(",")]
         for part in parts:
-            if '-' in part:
+            if "-" in part:
                 # Handle range (e.g., "100-200")
-                range_parts = part.split('-')
+                range_parts = part.split("-")
                 if len(range_parts) == 2:
                     end = int(range_parts[1].strip())
                     max_index = max(max_index, end)
@@ -45,26 +44,26 @@ def parse_range_max_index(range_str: str) -> Optional[int]:
         return None
 
 
-def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value: str = "") -> Tuple[str, bool]:
+def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value: str = "") -> tuple[str, bool]:
     """Get user input with optional timeout and countdown display.
-    
+
     Args:
         prompt: Prompt string to display
         timeout: Timeout in seconds (0 = no timeout)
         logger: Logger instance for output
         default_value: Default value to return if timeout expires
-        
+
     Returns:
         Tuple of (user input string or default_value if timeout expires, timeout_occurred)
     """
     if timeout <= 0:
         # No timeout, just get input normally
         return input(prompt).strip(), False
-    
+
     result = [None]
     timeout_occurred = [False]
     input_received = threading.Event()
-    
+
     def get_input():
         """Get input in a separate thread."""
         try:
@@ -72,7 +71,7 @@ def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value:
             input_received.set()
         except (EOFError, KeyboardInterrupt):
             input_received.set()
-    
+
     # Start input thread
     input_thread = threading.Thread(target=get_input, daemon=True)
     input_thread.start()
@@ -103,11 +102,22 @@ def input_with_timeout(prompt: str, timeout: int, logger: Logger, default_value:
         result[0] = default_value
         timeout_occurred[0] = True
         print()  # New line after timeout
-    
+
     return result[0] if result[0] is not None else default_value, timeout_occurred[0]
 
 
-def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Logger, test_limit: Optional[int] = None, include_media: bool = True, sort_alphabetical: bool = True, resume_folder: Optional[Path] = None, auto_all: bool = False, google_drive_folder: Optional[str] = None, default_range: Optional[str] = None):
+def interactive_mode(
+    driver: WhatsAppDriver,
+    exporter: ChatExporter,
+    logger: Logger,
+    test_limit: int | None = None,
+    include_media: bool = True,
+    sort_alphabetical: bool = True,
+    resume_folder: Path | None = None,
+    auto_all: bool = False,
+    google_drive_folder: str | None = None,
+    default_range: str | None = None,
+):
     """Interactive mode: prompt user to select chats to export.
 
     Args:
@@ -161,17 +171,17 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     else:
         logger.info("Loading all chats...")
         all_chats = driver.collect_all_chats(sort_alphabetical=sort_alphabetical)
-    
+
     if not all_chats:
         logger.error("No chats found!")
         return
-    
+
     # Display chats
     logger.info(f"\nFound {len(all_chats)} chats:")
     logger.info("-" * 70)
     for i, chat_name in enumerate(all_chats, 1):
         logger.info(f"{i:3d}. {chat_name}")
-    
+
     # Prompt user for selection
     sort_info = "alphabetically" if sort_alphabetical else "in original order"
     logger.info("\n" + "=" * 70)
@@ -201,7 +211,9 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
     logger.info("=" * 70)
 
     # Get user input with optional timeout
-    selection, timeout_occurred = input_with_timeout("\nYour selection: ", timeout_seconds, logger, default_value=default_value)
+    selection, timeout_occurred = input_with_timeout(
+        "\nYour selection: ", timeout_seconds, logger, default_value=default_value
+    )
     selection = selection.lower()
 
     if timeout_occurred:
@@ -209,31 +221,31 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
             logger.info(f"⏱️  Timeout reached - defaulting to range '{default_range}'")
         else:
             logger.info("⏱️  Timeout reached - defaulting to 'all'")
-    
+
     # Handle exit gracefully
-    if selection == 'q' or selection == 'quit' or selection == 'exit':
+    if selection == "q" or selection == "quit" or selection == "exit":
         logger.info("Exiting...")
         return
-    
+
     # Handle empty input
     if not selection:
         logger.warning("No selection entered. Exiting...")
         return
-    
+
     # Parse selection — all_chats contains ChatMetadata objects;
     # extract .name at the export boundary.
     selected = []
-    if selection == 'all':
+    if selection == "all":
         selected = list(all_chats)
     else:
         try:
             indices = []
             # Split by comma first
-            parts = [x.strip() for x in selection.split(',')]
+            parts = [x.strip() for x in selection.split(",")]
             for part in parts:
-                if '-' in part:
+                if "-" in part:
                     # Handle range (e.g., "100-200")
-                    range_parts = part.split('-')
+                    range_parts = part.split("-")
                     if len(range_parts) != 2:
                         raise ValueError(f"Invalid range format: {part}")
                     start = int(range_parts[0].strip())
@@ -260,7 +272,9 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
                 else:
                     logger.warning(f"Invalid index: {idx}")
         except ValueError as e:
-            logger.error(f"Invalid input: {e}. Please enter numbers separated by commas, ranges with hyphens (e.g., 100-200), 'all', or 'q' to quit.")
+            logger.error(
+                f"Invalid input: {e}. Please enter numbers separated by commas, ranges with hyphens (e.g., 100-200), 'all', or 'q' to quit."
+            )
             return
 
     if not selected:
@@ -272,32 +286,32 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
 
     media_status = "with media" if include_media else "without media"
     logger.info(f"\n📤 Exporting {len(chats_to_export)} chat(s) {media_status}...")
-    
+
     if resume_folder:
         logger.info(f"🔄 Resume mode enabled: Checking for existing exports in {resume_folder}")
-    
+
     # Export selected chats
     results, timings, total_time, skipped_already_exists = exporter.export_chats(
-        chats_to_export, 
-        include_media=include_media, 
+        chats_to_export,
+        include_media=include_media,
         resume_folder=resume_folder,
-        google_drive_folder=google_drive_folder
+        google_drive_folder=google_drive_folder,
     )
-    
+
     # Summary
     logger.info("\n" + "=" * 70)
     logger.info("✅ EXPORT COMPLETE")
     logger.info("=" * 70)
-    
+
     total_exported = sum(1 for v in results.values() if v)
     total_skipped_already_exists = len(skipped_already_exists)
     total_skipped_other = sum(1 for v in results.values() if not v) - total_skipped_already_exists
-    
+
     # Calculate average time (only for successfully exported chats)
     exported_timings = [timings[chat] for chat, success in results.items() if success]
     avg_time = sum(exported_timings) / len(exported_timings) if exported_timings else 0
-    
-    logger.info(f"\n📊 FINAL STATISTICS:")
+
+    logger.info("\n📊 FINAL STATISTICS:")
     logger.info(f"   Total chats processed: {len(results)}")
     logger.info(f"   Successfully exported: {total_exported}")
     if total_skipped_already_exists > 0:
@@ -306,8 +320,8 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
         logger.info(f"   Skipped (error/community): {total_skipped_other}")
     if total_skipped_already_exists == 0 and total_skipped_other == 0:
         logger.info(f"   Skipped: {sum(1 for v in results.values() if not v)}")
-    
-    logger.info(f"\n⏱️  TIMING SUMMARY:")
+
+    logger.info("\n⏱️  TIMING SUMMARY:")
     logger.info(f"   Total time taken: {exporter.format_time(total_time)}")
     if exported_timings:
         logger.info(f"   Average time per chat: {exporter.format_time(avg_time)}")
@@ -316,8 +330,8 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
             slowest_time = max(exported_timings)
             logger.info(f"   Fastest chat: {exporter.format_time(fastest_time)}")
             logger.info(f"   Slowest chat: {exporter.format_time(slowest_time)}")
-    
-    logger.info(f"\n📋 RESULTS BY CHAT:")
+
+    logger.info("\n📋 RESULTS BY CHAT:")
     logger.info("-" * 70)
     for chat_name, success in sorted(results.items()):
         if chat_name in skipped_already_exists:
@@ -328,12 +342,10 @@ def interactive_mode(driver: WhatsAppDriver, exporter: ChatExporter, logger: Log
             status = "⚠️ SKIPPED"
         chat_time = timings.get(chat_name, 0)
         logger.info(f"   {status}: {chat_name} ({exporter.format_time(chat_time)})")
-        
+
         # In debug mode, show matching files for skipped chats
         if logger.debug and chat_name in skipped_already_exists:
             exists, matching_files = check_chat_exists(resume_folder, chat_name)
             if matching_files:
                 for file_name in matching_files:
                     logger.debug_msg(f"      Found: {file_name}")
-
-

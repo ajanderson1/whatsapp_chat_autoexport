@@ -5,13 +5,11 @@ about().get(fields="storageQuota,user").execute() and reports free space.
 Pooled (Workspace) accounts return no limit → always OK.
 """
 
-from typing import Optional
-
 from ..report import CheckResult, Status
 
 _DISPLAY = "Google Drive"
 _HARD_FAIL_BYTES = 500 * 1024**2  # 500 MB
-_WARN_BYTES = 5 * 1024**3         # 5 GB
+_WARN_BYTES = 5 * 1024**3  # 5 GB
 
 
 def _format_bytes(n: int) -> str:

@@ -16,7 +16,7 @@ from whatsapp_chat_autoexport.config.api_key_manager import (
 @pytest.fixture
 def temp_env_file():
     """Create a temporary .env file for testing."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
         f.write("# Test .env file\n")
         f.write("OPENAI_API_KEY=test-openai-key-123\n")
         f.write("ELEVENLABS_API_KEY=\n")  # Empty value

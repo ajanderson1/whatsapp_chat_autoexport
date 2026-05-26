@@ -2,12 +2,10 @@
 Step 4: Select media option (Include/Without media).
 """
 
-from typing import Any, Dict, Optional
-
-from .base_step import BaseExportStep, StepContext, StepResult, StepStatus
-from ....core.result import Result, Ok, Err
-from ....core.errors import ExportError, ExportWorkflowError
 from ....config.selectors import create_default_selectors
+from ....core.errors import ExportError, ExportWorkflowError
+from ....core.result import Err, Ok, Result
+from .base_step import BaseExportStep, StepContext, StepResult
 
 
 class SelectMediaStep(BaseExportStep):
@@ -43,9 +41,7 @@ class SelectMediaStep(BaseExportStep):
 
         # Check if this is a text-only chat (element_finder.find() already waits) (share dialog appeared directly)
         if self._is_share_dialog_visible(context):
-            context.log_debug(
-                "Share dialog visible - chat may have no media, skipping media selection"
-            )
+            context.log_debug("Share dialog visible - chat may have no media, skipping media selection")
             context.step_data["share_dialog_open"] = True
             return StepResult.success(
                 "Media selection skipped (text-only chat)",
@@ -176,9 +172,7 @@ class SelectMediaStep(BaseExportStep):
                 return False
         return True
 
-    def validate_preconditions(
-        self, context: StepContext
-    ) -> Result[bool, ExportError]:
+    def validate_preconditions(self, context: StepContext) -> Result[bool, ExportError]:
         """
         Validate that export dialog is open.
 

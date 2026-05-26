@@ -5,9 +5,8 @@ Processes exported WhatsApp files through the pipeline:
 download, extract, transcribe, and build output.
 """
 
-from typing import Optional
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -123,7 +122,7 @@ def process_main(
         console.print(f"  Force re-transcribe: {force_transcribe}")
     console.print(f"  Output media: {not no_media}")
     if delete_from_drive:
-        console.print(f"  Delete from Drive: yes")
+        console.print("  Delete from Drive: yes")
     console.print()
 
     # TODO: Connect to actual pipeline
@@ -219,7 +218,7 @@ def extract(
         help="Directory with exported zip files",
         exists=True,
     ),
-    output_dir: Optional[Path] = typer.Option(
+    output_dir: Path | None = typer.Option(
         None,
         "--output",
         "-o",

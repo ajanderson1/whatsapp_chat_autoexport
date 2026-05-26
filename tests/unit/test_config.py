@@ -2,40 +2,39 @@
 Tests for configuration system.
 """
 
-import pytest
-from pathlib import Path
 import tempfile
-import yaml
+from pathlib import Path
+
+import pytest
 
 from whatsapp_chat_autoexport.config import (
+    DeviceConfig,
     # Settings
     ExportConfig,
-    TranscriptionConfig,
     PipelineConfig,
-    DeviceConfig,
-    TUIConfig,
-    get_config,
-    load_config,
-    # Selectors
-    SelectorStrategy,
     SelectorDefinition,
     SelectorRegistry,
-    get_selector_registry,
+    # Selectors
+    SelectorStrategy,
+    TimeoutConfig,
     # Timeouts
     TimeoutProfile,
-    TimeoutConfig,
+    TranscriptionConfig,
+    TUIConfig,
+    get_config,
     get_timeout,
+    load_config,
 )
-from whatsapp_chat_autoexport.config.settings import AppConfig, reset_config
 from whatsapp_chat_autoexport.config.selectors import (
     ElementSelectors,
-    reset_selector_registry,
     create_default_selectors,
+    reset_selector_registry,
 )
+from whatsapp_chat_autoexport.config.settings import AppConfig, reset_config
 from whatsapp_chat_autoexport.config.timeouts import (
     get_timeout_config,
-    set_timeout_profile,
     reset_timeout_config,
+    set_timeout_profile,
 )
 
 
@@ -326,9 +325,7 @@ selectors:
         value: "com.test:id/button"
         priority: 1
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             f.flush()
             path = Path(f.name)
@@ -350,12 +347,7 @@ selectors:
     def test_load_from_directory(self):
         """Test loading selectors from directory."""
         # Use the actual selectors directory
-        selectors_path = (
-            Path(__file__).parent.parent.parent
-            / "whatsapp_chat_autoexport"
-            / "config"
-            / "selectors"
-        )
+        selectors_path = Path(__file__).parent.parent.parent / "whatsapp_chat_autoexport" / "config" / "selectors"
         if selectors_path.exists():
             registry = SelectorRegistry(selectors_path)
             # Should have loaded WhatsApp selectors
@@ -449,4 +441,3 @@ class TestCleanupDriveDuplicatesSetting:
         """PipelineConfig.cleanup_drive_duplicates defaults to True."""
         config = PipelineConfig()
         assert config.cleanup_drive_duplicates is True
-

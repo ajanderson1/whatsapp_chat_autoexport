@@ -6,8 +6,8 @@ from Appium exports, existing vault transcripts, or the MCP bridge
 without coupling to any single input format.
 """
 
-from .base import MessageSource, ChatInfo
 from .appium_source import AppiumSource
+from .base import ChatInfo, MessageSource
 from .transcript_source import TranscriptSource
 
 __all__ = [

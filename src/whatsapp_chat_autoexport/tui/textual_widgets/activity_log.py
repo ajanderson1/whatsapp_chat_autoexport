@@ -8,11 +8,10 @@ Shows a scrolling log of export activities with:
 """
 
 from datetime import datetime
-from typing import List
+
 from textual.app import ComposeResult
 from textual.widget import Widget
-from textual.widgets import Static, RichLog
-from textual.containers import Vertical
+from textual.widgets import RichLog, Static
 
 
 class ActivityLog(Widget):
@@ -220,7 +219,7 @@ class ActivityLog(Widget):
         richlog.clear()
         self._message_count = 0
 
-    def write_batch(self, messages: List[str]) -> None:
+    def write_batch(self, messages: list[str]) -> None:
         """
         Write multiple messages at once.
 

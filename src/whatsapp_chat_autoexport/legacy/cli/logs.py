@@ -11,11 +11,13 @@ import time
 from pathlib import Path
 
 try:
-    from colorama import init, Fore, Style
+    from colorama import Fore, Style, init
+
     init(autoreset=True)
     COLORAMA_AVAILABLE = True
 except ImportError:
     COLORAMA_AVAILABLE = False
+
     class Fore:
         GREEN = ""
         YELLOW = ""
@@ -23,6 +25,7 @@ except ImportError:
         CYAN = ""
         MAGENTA = ""
         RESET = ""
+
     class Style:
         RESET_ALL = ""
         BRIGHT = ""
@@ -53,7 +56,7 @@ def _get_log_file(log_dir: Path) -> Path:
 
 def _format_size(size_bytes: int) -> str:
     """Format file size in human-readable format."""
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
@@ -71,15 +74,15 @@ def _print_colored(text: str, color: str = "") -> None:
 def _color_line(line: str) -> None:
     """Print a log line with color based on level."""
     line = line.rstrip()
-    if '| ERROR' in line:
+    if "| ERROR" in line:
         _print_colored(line, Fore.RED)
-    elif '| WARNING' in line:
+    elif "| WARNING" in line:
         _print_colored(line, Fore.YELLOW)
-    elif '| DEBUG' in line:
+    elif "| DEBUG" in line:
         _print_colored(line, Fore.MAGENTA)
-    elif 'Session started' in line or 'Session ended' in line:
+    elif "Session started" in line or "Session ended" in line:
         _print_colored(line, Fore.GREEN)
-    elif line.startswith('=' * 10):
+    elif line.startswith("=" * 10):
         _print_colored(line, Fore.CYAN)
     else:
         print(line)
@@ -97,10 +100,10 @@ def cmd_info(log_file: Path) -> int:
     _print_colored(f"Size: {_format_size(stat.st_size)}", Fore.CYAN)
 
     # Count lines and sessions
-    with open(log_file, 'r', encoding='utf-8') as f:
+    with open(log_file, encoding="utf-8") as f:
         lines = f.readlines()
 
-    sessions = sum(1 for line in lines if 'Session started' in line)
+    sessions = sum(1 for line in lines if "Session started" in line)
     _print_colored(f"Total lines: {len(lines)}", Fore.CYAN)
     _print_colored(f"Sessions recorded: {sessions}", Fore.CYAN)
 
@@ -124,7 +127,7 @@ def cmd_show(log_file: Path, num_lines: int = 50) -> int:
     _print_colored(f"\n=== {log_file.name} (last {num_lines} lines) ===\n", Fore.CYAN)
 
     try:
-        with open(log_file, 'r', encoding='utf-8') as f:
+        with open(log_file, encoding="utf-8") as f:
             lines = f.readlines()
 
         display_lines = lines[-num_lines:] if len(lines) > num_lines else lines
@@ -134,7 +137,7 @@ def cmd_show(log_file: Path, num_lines: int = 50) -> int:
 
         if len(lines) > num_lines:
             _print_colored(f"\n... showing last {num_lines} of {len(lines)} lines", Fore.CYAN)
-            _print_colored(f"Use -n to show more lines, or -f to follow in real-time", Fore.CYAN)
+            _print_colored("Use -n to show more lines, or -f to follow in real-time", Fore.CYAN)
 
     except Exception as e:
         _print_colored(f"Error reading log file: {e}", Fore.RED)
@@ -156,7 +159,7 @@ def cmd_follow(log_file: Path) -> int:
         while not log_file.exists():
             time.sleep(0.5)
 
-        with open(log_file, 'r', encoding='utf-8') as f:
+        with open(log_file, encoding="utf-8") as f:
             # Go to end of file
             f.seek(0, 2)
 
@@ -193,7 +196,7 @@ def cmd_clear(log_file: Path) -> int:
     _print_colored("\nThis will delete the log file and all backups.", Fore.RED)
     response = input("Are you sure? (yes/no): ").strip().lower()
 
-    if response not in ['y', 'yes']:
+    if response not in ["y", "yes"]:
         _print_colored("Cancelled.", Fore.YELLOW)
         return 0
 
@@ -222,41 +225,20 @@ Examples:
   %(prog)s --info             # Show log file info
   %(prog)s --clear            # Clear the log file
   %(prog)s --log-dir /path    # Use custom log directory
-        """
+        """,
     )
 
     parser.add_argument(
-        '-n', '--lines',
-        type=int,
-        default=50,
-        metavar='NUM',
-        help='Number of lines to show (default: 50)'
+        "-n", "--lines", type=int, default=50, metavar="NUM", help="Number of lines to show (default: 50)"
     )
 
-    parser.add_argument(
-        '-f', '--follow',
-        action='store_true',
-        help='Follow mode (like tail -f)'
-    )
+    parser.add_argument("-f", "--follow", action="store_true", help="Follow mode (like tail -f)")
 
-    parser.add_argument(
-        '--info',
-        action='store_true',
-        help='Show log file information'
-    )
+    parser.add_argument("--info", action="store_true", help="Show log file information")
 
-    parser.add_argument(
-        '--clear',
-        action='store_true',
-        help='Clear the log file'
-    )
+    parser.add_argument("--clear", action="store_true", help="Clear the log file")
 
-    parser.add_argument(
-        '--log-dir',
-        type=str,
-        metavar='DIR',
-        help='Log directory (default: .logs/)'
-    )
+    parser.add_argument("--log-dir", type=str, metavar="DIR", help="Log directory (default: .logs/)")
 
     return parser
 

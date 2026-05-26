@@ -3,23 +3,21 @@
 import os
 from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import patch
 
 from whatsapp_chat_autoexport.export.models import ChatMetadata
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_args(**overrides) -> Namespace:
     """Build a minimal args Namespace for headless mode."""
     defaults = {
         "output": "/tmp/test_output",
         "debug": False,
-        "no_transcribe": True,       # skip transcription by default in tests
+        "no_transcribe": True,  # skip transcription by default in tests
         "force_transcribe": False,
         "transcription_provider": "whisper",
         "transcription_language": None,
@@ -54,6 +52,7 @@ _PREFLIGHT = "whatsapp_chat_autoexport.headless.run_preflight"
 # Happy path
 # ---------------------------------------------------------------------------
 
+
 class TestHappyPath:
     """All steps succeed — exit code 0."""
 
@@ -82,9 +81,9 @@ class TestHappyPath:
         exporter = MockExporter.return_value
         exporter.export_chats.return_value = (
             {"Chat A": True, "Chat B": True},  # results
-            {"Chat A": 5.0, "Chat B": 3.0},    # timings
-            8.0,                                 # total_time
-            {},                                  # skipped
+            {"Chat A": 5.0, "Chat B": 3.0},  # timings
+            8.0,  # total_time
+            {},  # skipped
         )
 
         args = _make_args()
@@ -129,6 +128,7 @@ class TestHappyPath:
 # Partial failure
 # ---------------------------------------------------------------------------
 
+
 class TestPartialFailure:
     """Some exports fail — exit code 1."""
 
@@ -166,6 +166,7 @@ class TestPartialFailure:
 # ---------------------------------------------------------------------------
 # Fatal errors — exit code 2
 # ---------------------------------------------------------------------------
+
 
 class TestFatalErrors:
     """Various fatal error conditions that should exit with code 2."""
@@ -254,7 +255,10 @@ class TestFatalErrors:
         driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
 
         MockExporter.return_value.export_chats.return_value = (
-            {"Chat A": False}, {"Chat A": 0.5}, 0.5, {},
+            {"Chat A": False},
+            {"Chat A": 0.5},
+            0.5,
+            {},
         )
 
         code = run_headless(_make_args())
@@ -265,8 +269,8 @@ class TestFatalErrors:
 # API key validation
 # ---------------------------------------------------------------------------
 
-class TestApiKeyValidation:
 
+class TestApiKeyValidation:
     @patch(_VALIDATE_API)
     def test_api_key_failure_with_transcription_returns_2(self, mock_validate):
         from whatsapp_chat_autoexport.headless import run_headless
@@ -291,7 +295,10 @@ class TestApiKeyValidation:
         driver.navigate_to_main.return_value = True
         driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
         MockExporter.return_value.export_chats.return_value = (
-            {"Chat A": True}, {"Chat A": 1.0}, 1.0, {},
+            {"Chat A": True},
+            {"Chat A": 1.0},
+            1.0,
+            {},
         )
 
         # No API key set — should still succeed because transcription is off
@@ -306,8 +313,8 @@ class TestApiKeyValidation:
 # Cleanup on failure
 # ---------------------------------------------------------------------------
 
-class TestCleanup:
 
+class TestCleanup:
     @patch(_PIPELINE)
     @patch(_EXPORTER)
     @patch(_DRIVER)
@@ -351,8 +358,8 @@ class TestCleanup:
 # Skip-appium flag
 # ---------------------------------------------------------------------------
 
-class TestSkipAppium:
 
+class TestSkipAppium:
     @patch(_DRIVER)
     @patch(_APPIUM)
     def test_skip_appium_does_not_start(self, MockAppium, MockDriver):
@@ -370,8 +377,8 @@ class TestSkipAppium:
 # Resume mode
 # ---------------------------------------------------------------------------
 
-class TestResumeMode:
 
+class TestResumeMode:
     @patch(_VALIDATE_RESUME, return_value=None)
     def test_invalid_resume_dir_returns_2(self, mock_validate):
         from whatsapp_chat_autoexport.headless import run_headless
@@ -387,7 +394,13 @@ class TestResumeMode:
     @patch(_VALIDATE_RESUME)
     @patch(_PREFLIGHT)
     def test_resume_folder_passed_to_exporter(
-        self, MockPreflight, mock_validate, MockAppium, MockDriver, MockExporter, MockPipeline,
+        self,
+        MockPreflight,
+        mock_validate,
+        MockAppium,
+        MockDriver,
+        MockExporter,
+        MockPipeline,
     ):
         from whatsapp_chat_autoexport.headless import run_headless
 
@@ -403,7 +416,10 @@ class TestResumeMode:
         driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
 
         MockExporter.return_value.export_chats.return_value = (
-            {"Chat A": True}, {"Chat A": 1.0}, 1.0, {},
+            {"Chat A": True},
+            {"Chat A": 1.0},
+            1.0,
+            {},
         )
 
         code = run_headless(_make_args(auto_select=False, resume="/valid/resume"))
@@ -418,8 +434,8 @@ class TestResumeMode:
 # Progress callback
 # ---------------------------------------------------------------------------
 
-class TestProgressCallback:
 
+class TestProgressCallback:
     def test_log_progress_to_stderr(self, capsys):
         from whatsapp_chat_autoexport.headless import _log_progress
 
@@ -442,8 +458,8 @@ class TestProgressCallback:
 # Pipeline config wiring
 # ---------------------------------------------------------------------------
 
-class TestPipelineConfigWiring:
 
+class TestPipelineConfigWiring:
     @patch(_PIPELINE)
     @patch(_EXPORTER)
     @patch(_DRIVER)
@@ -461,7 +477,10 @@ class TestPipelineConfigWiring:
         driver.navigate_to_main.return_value = True
         driver.collect_all_chats.return_value = [ChatMetadata(name="Chat A")]
         MockExporter.return_value.export_chats.return_value = (
-            {"Chat A": True}, {"Chat A": 1.0}, 1.0, {},
+            {"Chat A": True},
+            {"Chat A": 1.0},
+            1.0,
+            {},
         )
 
         args = _make_args(

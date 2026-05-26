@@ -8,16 +8,19 @@ optional rotating file logging for persistent log history.
 import logging
 import re
 import sys
+from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional, Callable, Literal
+from typing import Literal
 
 try:
-    from colorama import init, Fore, Style
+    from colorama import Fore, Style, init
+
     init(autoreset=True)
     COLORAMA_AVAILABLE = True
 except ImportError:
     COLORAMA_AVAILABLE = False
+
     # Create dummy color classes
     class Fore:
         GREEN = ""
@@ -26,27 +29,29 @@ except ImportError:
         CYAN = ""
         MAGENTA = ""
         RESET = ""
+
     class Style:
         RESET_ALL = ""
         BRIGHT = ""
 
+
 # Regex to strip leading emoji sequences from messages
 _EMOJI_PREFIX_RE = re.compile(
-    r'^[\U0001F300-\U0001FAFF\u2600-\u27BF\u2700-\u27BF\uFE00-\uFE0F\u200D\u20E3'
-    r'\U0000FE0F\U000E0020-\U000E007F\u2B50\u2B55\u23CF\u23E9-\u23F3'
-    r'\u23F8-\u23FA\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2614\u2615'
-    r'\u2648-\u2653\u267F\u2693\u26A1\u26AA\u26AB\u26BD\u26BE\u26C4'
-    r'\u26C5\u26CE\u26D4\u26EA\u26F2\u26F3\u26F5\u26FA\u26FD\u2702'
-    r'\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728'
-    r'\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763'
-    r'\u2764\u2795-\u2797\u27A1\u27B0\u27BF]+\s*'
+    r"^[\U0001F300-\U0001FAFF\u2600-\u27BF\u2700-\u27BF\uFE00-\uFE0F\u200D\u20E3"
+    r"\U0000FE0F\U000E0020-\U000E007F\u2B50\u2B55\u23CF\u23E9-\u23F3"
+    r"\u23F8-\u23FA\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2614\u2615"
+    r"\u2648-\u2653\u267F\u2693\u26A1\u26AA\u26AB\u26BD\u26BE\u26C4"
+    r"\u26C5\u26CE\u26D4\u26EA\u26F2\u26F3\u26F5\u26FA\u26FD\u2702"
+    r"\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728"
+    r"\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763"
+    r"\u2764\u2795-\u2797\u27A1\u27B0\u27BF]+\s*"
 )
 
 # Regex to strip ANSI escape codes
-_ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+_ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 # Regex to detect separator lines (e.g. "=====" or "-----")
-_SEPARATOR_RE = re.compile(r'^[=\-]{10,}$')
+_SEPARATOR_RE = re.compile(r"^[=\-]{10,}$")
 
 
 def _get_project_root() -> Path:
@@ -81,9 +86,9 @@ def _get_default_log_dir() -> Path:
 def _strip_ansi_and_emoji(text: str) -> str:
     """Strip ANSI escape codes and leading emojis from text."""
     # Remove ANSI escape codes
-    text = _ANSI_ESCAPE_RE.sub('', text)
+    text = _ANSI_ESCAPE_RE.sub("", text)
     # Remove leading emojis
-    text = _EMOJI_PREFIX_RE.sub('', text)
+    text = _EMOJI_PREFIX_RE.sub("", text)
     return text.strip()
 
 
@@ -101,13 +106,13 @@ class Logger:
     def __init__(
         self,
         debug: bool = False,
-        on_message: Optional[Callable] = None,
-        log_dir: Optional[Path] = None,
+        on_message: Callable | None = None,
+        log_dir: Path | None = None,
         log_file_enabled: bool = True,
         log_level: Literal["debug", "info", "warning", "error"] = "info",
         max_bytes: int = 10 * 1024 * 1024,  # 10MB
         backup_count: int = 5,
-        logger_name: str = "whatsapp_export"
+        logger_name: str = "whatsapp_export",
     ):
         """
         Initialize logger.
@@ -132,8 +137,8 @@ class Logger:
         self._backup_count = backup_count
         self._logger_name = logger_name
         self._log_dir = log_dir
-        self._log_file_path: Optional[Path] = None
-        self._file_logger: Optional[logging.Logger] = None
+        self._log_file_path: Path | None = None
+        self._file_logger: logging.Logger | None = None
 
         # Set up file logging if enabled
         if log_file_enabled:
@@ -167,10 +172,7 @@ class Logger:
 
             # Create rotating file handler (appends to existing file)
             file_handler = RotatingFileHandler(
-                self._log_file_path,
-                maxBytes=self._max_bytes,
-                backupCount=self._backup_count,
-                encoding='utf-8'
+                self._log_file_path, maxBytes=self._max_bytes, backupCount=self._backup_count, encoding="utf-8"
             )
 
             # Set handler level based on config
@@ -178,14 +180,13 @@ class Logger:
                 "debug": logging.DEBUG,
                 "info": logging.INFO,
                 "warning": logging.WARNING,
-                "error": logging.ERROR
+                "error": logging.ERROR,
             }
             file_handler.setLevel(level_map.get(self._log_level, logging.INFO))
 
             # Create formatter (clean, parseable format without emojis/ANSI)
             formatter = logging.Formatter(
-                '%(asctime)s.%(msecs)03d | %(levelname)-8s | %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
+                "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
             )
             file_handler.setFormatter(formatter)
 
@@ -194,7 +195,7 @@ class Logger:
 
             # Log session start marker
             self._file_logger.info("=" * 60)
-            self._file_logger.info(f"Session started")
+            self._file_logger.info("Session started")
             self._file_logger.info("=" * 60)
 
         except Exception as e:
@@ -231,7 +232,7 @@ class Logger:
         except Exception:
             pass  # Silently ignore file logging errors
 
-    def get_log_file_path(self) -> Optional[Path]:
+    def get_log_file_path(self) -> Path | None:
         """
         Get the current log file path.
 
@@ -240,7 +241,7 @@ class Logger:
         """
         return self._log_file_path
 
-    def get_log_dir(self) -> Optional[Path]:
+    def get_log_dir(self) -> Path | None:
         """
         Get the log directory.
 
@@ -272,7 +273,7 @@ class Logger:
             return
 
         # Strip leading emoji prefixes (the TUI has its own prefix system)
-        clean = _EMOJI_PREFIX_RE.sub('', clean).strip()
+        clean = _EMOJI_PREFIX_RE.sub("", clean).strip()
 
         # Skip if nothing left after stripping
         if not clean:

@@ -9,27 +9,19 @@ transcript format spec — into the unified Message model.
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from ..processing.transcript_parser import Message, TranscriptParser
 from ..utils.logger import Logger
 from .base import ChatInfo, MessageSource
 
-
 # New .md spec format: [HH:MM] Sender: content
-_MD_MESSAGE_RE = re.compile(
-    r'^\[(\d{2}:\d{2})\]\s+(.+?):\s(.*)$'
-)
+_MD_MESSAGE_RE = re.compile(r"^\[(\d{2}:\d{2})\]\s+(.+?):\s(.*)$")
 
 # Day header in .md spec format: ## YYYY-MM-DD
-_MD_DAY_HEADER_RE = re.compile(
-    r'^##\s+(\d{4}-\d{2}-\d{2})\s*$'
-)
+_MD_DAY_HEADER_RE = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})\s*$")
 
 # System event in .md spec format: [HH:MM] event text (no colon-separated sender)
-_MD_SYSTEM_RE = re.compile(
-    r'^\[(\d{2}:\d{2})\]\s+(.+)$'
-)
+_MD_SYSTEM_RE = re.compile(r"^\[(\d{2}:\d{2})\]\s+(.+)$")
 
 
 class TranscriptSource(MessageSource):
@@ -49,7 +41,7 @@ class TranscriptSource(MessageSource):
     def __init__(
         self,
         transcript_dir: Path,
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
     ):
         """
         Initialize the transcript source.
@@ -63,9 +55,9 @@ class TranscriptSource(MessageSource):
         self.transcript_dir = transcript_dir
         self._parser = TranscriptParser(logger=self.logger)
         # Cache: chat_id -> messages
-        self._cache: Dict[str, List[Message]] = {}
+        self._cache: dict[str, list[Message]] = {}
 
-    def get_chats(self) -> List[ChatInfo]:
+    def get_chats(self) -> list[ChatInfo]:
         """
         List all chats found under the transcript directory.
 
@@ -75,7 +67,7 @@ class TranscriptSource(MessageSource):
         - Nested: ``transcript_dir/<chat>/transcript.txt`` or
           ``transcript_dir/<chat>/transcript.md``
         """
-        chats: List[ChatInfo] = []
+        chats: list[ChatInfo] = []
 
         if not self.transcript_dir.is_dir():
             self.log_error(f"Transcript directory not found: {self.transcript_dir}")
@@ -152,9 +144,9 @@ class TranscriptSource(MessageSource):
     def get_messages(
         self,
         chat_id: str,
-        after: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> List[Message]:
+        after: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[Message]:
         """
         Retrieve messages for a chat from an existing transcript.
 
@@ -180,7 +172,7 @@ class TranscriptSource(MessageSource):
 
         return messages
 
-    def get_media(self, message_id: str) -> Optional[Path]:
+    def get_media(self, message_id: str) -> Path | None:
         """
         Media lookup is not supported for transcript sources.
         """
@@ -188,7 +180,7 @@ class TranscriptSource(MessageSource):
 
     # ----- internal helpers -----
 
-    def _find_transcript_in(self, directory: Path) -> Optional[Path]:
+    def _find_transcript_in(self, directory: Path) -> Path | None:
         """Find a transcript file inside a chat directory."""
         # Prefer the new spec format
         for name in ("transcript.md", "transcript.txt"):
@@ -208,7 +200,7 @@ class TranscriptSource(MessageSource):
 
         return None
 
-    def _resolve_transcript(self, chat_id: str) -> Optional[Path]:
+    def _resolve_transcript(self, chat_id: str) -> Path | None:
         """Resolve a chat_id to a transcript file path."""
         # Nested layout
         nested = self.transcript_dir / chat_id
@@ -225,9 +217,7 @@ class TranscriptSource(MessageSource):
 
         return None
 
-    def _load_messages(
-        self, chat_id: str, transcript: Path
-    ) -> List[Message]:
+    def _load_messages(self, chat_id: str, transcript: Path) -> list[Message]:
         """Load and cache messages from a transcript file."""
         if chat_id in self._cache:
             return self._cache[chat_id]
@@ -242,7 +232,7 @@ class TranscriptSource(MessageSource):
         self._cache[chat_id] = messages
         return messages
 
-    def _parse_md_transcript(self, path: Path) -> List[Message]:
+    def _parse_md_transcript(self, path: Path) -> list[Message]:
         """
         Parse a new-format ``.md`` transcript.
 
@@ -258,7 +248,7 @@ class TranscriptSource(MessageSource):
             [10:30] Alice: Hello!
             [10:31] Bob: Hi there
         """
-        messages: List[Message] = []
+        messages: list[Message] = []
 
         try:
             text = path.read_text(encoding="utf-8")
@@ -266,7 +256,7 @@ class TranscriptSource(MessageSource):
             self.log_error(f"Error reading transcript: {e}")
             return messages
 
-        current_date: Optional[str] = None
+        current_date: str | None = None
         in_frontmatter = False
         line_num = 0
 
@@ -326,13 +316,11 @@ class TranscriptSource(MessageSource):
             if messages:
                 messages[-1].content += "\n" + stripped
 
-        self.log_info(
-            f"Parsed {len(messages)} messages from .md transcript: {path.name}"
-        )
+        self.log_info(f"Parsed {len(messages)} messages from .md transcript: {path.name}")
         return messages
 
     @staticmethod
-    def _build_timestamp(date_str: str, time_str: str) -> Optional[datetime]:
+    def _build_timestamp(date_str: str, time_str: str) -> datetime | None:
         """Combine a YYYY-MM-DD date and HH:MM time into a datetime."""
         try:
             return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
@@ -340,7 +328,7 @@ class TranscriptSource(MessageSource):
             return None
 
     @staticmethod
-    def _detect_md_media(content: str) -> Tuple[bool, Optional[str]]:
+    def _detect_md_media(content: str) -> tuple[bool, str | None]:
         """
         Detect typed media tags in new-format transcripts.
 

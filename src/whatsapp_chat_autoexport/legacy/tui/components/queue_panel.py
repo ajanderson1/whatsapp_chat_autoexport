@@ -4,15 +4,14 @@ Queue panel component for TUI.
 Displays the export queue with status indicators.
 """
 
-from typing import Optional, List
 from dataclasses import dataclass
 
-from rich.console import Console, RenderableType
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from whatsapp_chat_autoexport.state.models import ChatStatus, ChatState
+from whatsapp_chat_autoexport.state.models import ChatState, ChatStatus
 
 
 @dataclass
@@ -22,7 +21,7 @@ class QueueItemDisplay:
     name: str
     status: ChatStatus
     step: str = ""
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class QueuePanel:
@@ -52,12 +51,12 @@ class QueuePanel:
         Args:
             max_visible: Maximum number of items to show at once
         """
-        self._items: List[QueueItemDisplay] = []
+        self._items: list[QueueItemDisplay] = []
         self._max_visible = max_visible
         self._scroll_offset = 0
         self._current_index: int = 0
 
-    def set_items(self, items: List[QueueItemDisplay]) -> None:
+    def set_items(self, items: list[QueueItemDisplay]) -> None:
         """
         Set the queue items.
 
@@ -66,7 +65,7 @@ class QueuePanel:
         """
         self._items = items
 
-    def update_from_chats(self, chats: List[ChatState]) -> None:
+    def update_from_chats(self, chats: list[ChatState]) -> None:
         """
         Update from list of ChatState objects.
 
@@ -93,9 +92,9 @@ class QueuePanel:
     def update_item(
         self,
         name: str,
-        status: Optional[ChatStatus] = None,
-        step: Optional[str] = None,
-        error: Optional[str] = None,
+        status: ChatStatus | None = None,
+        step: str | None = None,
+        error: str | None = None,
     ) -> None:
         """
         Update a specific item in the queue.

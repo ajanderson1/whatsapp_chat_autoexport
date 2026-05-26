@@ -7,15 +7,13 @@ Provides robust element finding with:
 - Configurable timeouts and retries
 """
 
-from dataclasses import dataclass, field
-from typing import Any, List, Optional, Callable
-from datetime import datetime
 import time
+from dataclasses import dataclass
+from typing import Any, Optional
 
-from ...core.result import Result, Ok, Err
-from ...core.errors import ElementNotFoundError, ErrorCategory
-from ...config.selectors import SelectorDefinition, ElementSelectors, SelectorStrategy
-from ...config.timeouts import get_timeout
+from ...config.selectors import ElementSelectors, SelectorDefinition
+from ...core.errors import ElementNotFoundError
+from ...core.result import Err, Ok, Result
 
 
 @dataclass
@@ -46,7 +44,7 @@ class ElementFinder:
         self,
         driver: Any,  # Appium WebDriver
         cache: Optional["ElementCache"] = None,
-        logger: Optional[Any] = None,
+        logger: Any | None = None,
     ):
         """
         Initialize the element finder.
@@ -63,9 +61,9 @@ class ElementFinder:
     def find(
         self,
         selectors: ElementSelectors,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         wait_visible: bool = True,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> Result[FindResult, ElementNotFoundError]:
         """
         Find an element using multiple strategies.
@@ -90,9 +88,7 @@ class ElementFinder:
             cached_strategy = self.cache.get(context_key)
             if cached_strategy:
                 self._log_debug(f"Trying cached strategy for {context_key}")
-                result = self._try_strategy(
-                    cached_strategy, timeout, wait_visible
-                )
+                result = self._try_strategy(cached_strategy, timeout, wait_visible)
                 if result is not None:
                     duration = time.time() - start_time
                     return Ok(
@@ -113,18 +109,14 @@ class ElementFinder:
         sorted_strategies = selectors.get_sorted_strategies()
         for strategy in sorted_strategies:
             strategies_tried.append(strategy.strategy.value)
-            self._log_debug(
-                f"Trying {strategy.strategy.value}: {strategy.value}"
-            )
+            self._log_debug(f"Trying {strategy.strategy.value}: {strategy.value}")
 
             strategy_timeout = timeout or strategy.timeout
             result = self._try_strategy(strategy, strategy_timeout, wait_visible)
 
             if result is not None:
                 duration = time.time() - start_time
-                self._log_debug(
-                    f"Found element with {strategy.strategy.value} in {duration:.2f}s"
-                )
+                self._log_debug(f"Found element with {strategy.strategy.value} in {duration:.2f}s")
 
                 # Cache successful strategy
                 if self.cache:
@@ -153,8 +145,8 @@ class ElementFinder:
     def find_all(
         self,
         selectors: ElementSelectors,
-        timeout: Optional[float] = None,
-    ) -> Result[List[Any], ElementNotFoundError]:
+        timeout: float | None = None,
+    ) -> Result[list[Any], ElementNotFoundError]:
         """
         Find all matching elements.
 
@@ -173,9 +165,7 @@ class ElementFinder:
 
             try:
                 locator_type, locator_value = strategy.to_appium_locator()
-                elements = self._find_elements_with_timeout(
-                    locator_type, locator_value, strategy_timeout
-                )
+                elements = self._find_elements_with_timeout(locator_type, locator_value, strategy_timeout)
                 if elements:
                     return Ok(elements)
             except Exception as e:
@@ -207,9 +197,7 @@ class ElementFinder:
         for strategy in selectors.get_sorted_strategies():
             try:
                 locator_type, locator_value = strategy.to_appium_locator()
-                elements = self._find_elements_with_timeout(
-                    locator_type, locator_value, timeout
-                )
+                elements = self._find_elements_with_timeout(locator_type, locator_value, timeout)
                 if elements:
                     return True
             except Exception:
@@ -220,7 +208,7 @@ class ElementFinder:
         self,
         selectors: ElementSelectors,
         condition: str = "visible",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> Result[FindResult, ElementNotFoundError]:
         """
         Wait for an element with a specific condition.
@@ -241,7 +229,7 @@ class ElementFinder:
         strategy: SelectorDefinition,
         timeout: float,
         wait_visible: bool,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Try a single strategy to find an element.
 
@@ -251,9 +239,7 @@ class ElementFinder:
             locator_type, locator_value = strategy.to_appium_locator()
 
             if wait_visible:
-                return self._find_visible_element(
-                    locator_type, locator_value, timeout
-                )
+                return self._find_visible_element(locator_type, locator_value, timeout)
             else:
                 return self._find_element(locator_type, locator_value, timeout)
         except Exception as e:
@@ -265,12 +251,11 @@ class ElementFinder:
         locator_type: str,
         locator_value: str,
         timeout: float,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """Find a single element with timeout."""
         try:
-            from selenium.webdriver.support.ui import WebDriverWait
             from selenium.webdriver.support import expected_conditions as EC
-            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
 
             by_type = self._get_by_type(locator_type)
             wait = WebDriverWait(self.driver, timeout)
@@ -283,18 +268,15 @@ class ElementFinder:
         locator_type: str,
         locator_value: str,
         timeout: float,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """Find a visible element with timeout."""
         try:
-            from selenium.webdriver.support.ui import WebDriverWait
             from selenium.webdriver.support import expected_conditions as EC
-            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
 
             by_type = self._get_by_type(locator_type)
             wait = WebDriverWait(self.driver, timeout)
-            return wait.until(
-                EC.visibility_of_element_located((by_type, locator_value))
-            )
+            return wait.until(EC.visibility_of_element_located((by_type, locator_value)))
         except Exception:
             return None
 
@@ -303,11 +285,10 @@ class ElementFinder:
         locator_type: str,
         locator_value: str,
         timeout: float,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Find all matching elements with timeout."""
         try:
             from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
 
             by_type = self._get_by_type(locator_type)
 

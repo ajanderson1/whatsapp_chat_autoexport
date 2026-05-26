@@ -5,13 +5,11 @@ Shows a dialog when the user presses Escape during an active export,
 allowing them to return to selection, exit the app, or continue.
 """
 
-from typing import Optional
-
 from textual.app import ComposeResult
-from textual.screen import ModalScreen
-from textual.widgets import Static, Button, Checkbox
-from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Button, Checkbox, Static
 
 
 class CancelModal(ModalScreen[str]):
@@ -71,10 +69,10 @@ class CancelModal(ModalScreen[str]):
 
     def __init__(
         self,
-        current_chat: Optional[str] = None,
+        current_chat: str | None = None,
         completed: int = 0,
         total: int = 0,
-        message: Optional[str] = None,
+        message: str | None = None,
         **kwargs,
     ) -> None:
         """

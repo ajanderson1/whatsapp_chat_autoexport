@@ -6,11 +6,10 @@ Provides a centralized way to create transcriber instances based on provider nam
 
 import os
 from pathlib import Path
-from typing import Optional, Tuple
 
 from .base_transcriber import BaseTranscriber
-from .whisper_transcriber import WhisperTranscriber
 from .elevenlabs_transcriber import ElevenLabsTranscriber
+from .whisper_transcriber import WhisperTranscriber
 
 
 class TranscriberFactory:
@@ -22,17 +21,17 @@ class TranscriberFactory:
     - 'elevenlabs': ElevenLabs Scribe API
     """
 
-    SUPPORTED_PROVIDERS = ['whisper', 'elevenlabs']
+    SUPPORTED_PROVIDERS = ["whisper", "elevenlabs"]
 
     @staticmethod
     def create_transcriber(
         provider: str,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         logger=None,
         convert_opus: bool = True,
         video_test_mode: bool = False,
-        debug_dir: Optional[Path] = None,
-        **provider_kwargs
+        debug_dir: Path | None = None,
+        **provider_kwargs,
     ) -> BaseTranscriber:
         """
         Create a transcriber instance for the specified provider.
@@ -75,22 +74,14 @@ class TranscriberFactory:
                 f"Supported providers: {', '.join(TranscriberFactory.SUPPORTED_PROVIDERS)}"
             )
 
-        if provider_lower == 'whisper':
+        if provider_lower == "whisper":
             return WhisperTranscriber(
-                api_key=api_key,
-                logger=logger,
-                convert_opus=convert_opus,
-                debug_dir=debug_dir,
-                **provider_kwargs
+                api_key=api_key, logger=logger, convert_opus=convert_opus, debug_dir=debug_dir, **provider_kwargs
             )
 
-        elif provider_lower == 'elevenlabs':
+        elif provider_lower == "elevenlabs":
             return ElevenLabsTranscriber(
-                api_key=api_key,
-                logger=logger,
-                convert_opus=convert_opus,
-                debug_dir=debug_dir,
-                **provider_kwargs
+                api_key=api_key, logger=logger, convert_opus=convert_opus, debug_dir=debug_dir, **provider_kwargs
             )
 
         # This should never be reached due to the validation above
@@ -107,7 +98,7 @@ class TranscriberFactory:
         return TranscriberFactory.SUPPORTED_PROVIDERS.copy()
 
     @staticmethod
-    def is_provider_available(provider: str, api_key: Optional[str] = None) -> bool:
+    def is_provider_available(provider: str, api_key: str | None = None) -> bool:
         """
         Check if a transcription provider is available.
 
@@ -122,17 +113,13 @@ class TranscriberFactory:
             return False
 
         try:
-            transcriber = TranscriberFactory.create_transcriber(
-                provider,
-                api_key=api_key,
-                logger=None
-            )
+            transcriber = TranscriberFactory.create_transcriber(provider, api_key=api_key, logger=None)
             return transcriber.is_available()
         except Exception:
             return False
 
     @staticmethod
-    def validate_provider(provider: str, api_key: Optional[str] = None) -> Tuple[bool, str]:
+    def validate_provider(provider: str, api_key: str | None = None) -> tuple[bool, str]:
         """
         Validate that a transcription provider is properly configured.
 
@@ -165,10 +152,7 @@ class TranscriberFactory:
             )
 
         # Determine which environment variable to check
-        env_var_map = {
-            'whisper': 'OPENAI_API_KEY',
-            'elevenlabs': 'ELEVENLABS_API_KEY'
-        }
+        env_var_map = {"whisper": "OPENAI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
         required_env_var = env_var_map[provider_lower]
 
         # Check 2: If no API key provided, check environment variable is set
@@ -183,24 +167,17 @@ class TranscriberFactory:
 
         # Check 3: Try to initialize the provider
         try:
-            transcriber = TranscriberFactory.create_transcriber(
-                provider,
-                api_key=api_key,
-                logger=None
-            )
+            transcriber = TranscriberFactory.create_transcriber(provider, api_key=api_key, logger=None)
 
             if not transcriber.is_available():
                 return False, (
-                    f"{provider} transcriber initialization failed. "
-                    f"Please check your {required_env_var} is valid."
+                    f"{provider} transcriber initialization failed. Please check your {required_env_var} is valid."
                 )
 
             return True, ""
 
         except Exception as e:
-            return False, (
-                f"Failed to initialize {provider} transcriber: {str(e)}"
-            )
+            return False, (f"Failed to initialize {provider} transcriber: {str(e)}")
 
     @staticmethod
     def get_default_provider() -> str:
@@ -210,4 +187,4 @@ class TranscriberFactory:
         Returns:
             Default provider name ('whisper')
         """
-        return 'whisper'
+        return "whisper"

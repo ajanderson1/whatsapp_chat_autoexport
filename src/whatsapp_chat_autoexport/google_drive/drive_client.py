@@ -16,22 +16,22 @@ import io
 import re
 import threading
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseDownload
 
-from .auth import GoogleDriveAuth
 from ..utils.logger import Logger
+from .auth import GoogleDriveAuth
 
 
 class GoogleDriveClient:
     """Low-level Google Drive API client."""
 
-    def __init__(self, auth: GoogleDriveAuth, logger: Optional[Logger] = None):
+    def __init__(self, auth: GoogleDriveAuth, logger: Logger | None = None):
         """
         Initialize Google Drive client.
 
@@ -57,7 +57,7 @@ class GoogleDriveClient:
                 self.logger.error("Failed to get credentials")
                 return False
 
-            self.service = build('drive', 'v3', credentials=credentials)
+            self.service = build("drive", "v3", credentials=credentials)
             self.logger.success("Connected to Google Drive API")
             return True
 
@@ -65,10 +65,9 @@ class GoogleDriveClient:
             self.logger.error(f"Failed to connect to Google Drive API: {e}")
             return False
 
-    def list_files(self,
-                   query: Optional[str] = None,
-                   folder_id: Optional[str] = None,
-                   page_size: int = 100) -> List[Dict[str, Any]]:
+    def list_files(
+        self, query: str | None = None, folder_id: str | None = None, page_size: int = 100
+    ) -> list[dict[str, Any]]:
         """
         List files in Google Drive.
 
@@ -96,13 +95,17 @@ class GoogleDriveClient:
 
         with self._service_lock:
             try:
-                results = self.service.files().list(
-                    q=full_query,
-                    pageSize=page_size,
-                    fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
-                ).execute()
+                results = (
+                    self.service.files()
+                    .list(
+                        q=full_query,
+                        pageSize=page_size,
+                        fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)",
+                    )
+                    .execute()
+                )
 
-                files = results.get('files', [])
+                files = results.get("files", [])
                 self.logger.debug_msg(f"Found {len(files)} files")
 
                 return files
@@ -114,10 +117,7 @@ class GoogleDriveClient:
                 self.logger.error(f"Error listing files: {e}")
                 return []
 
-    def download_file(self,
-                      file_id: str,
-                      dest_path: Path,
-                      show_progress: bool = True) -> bool:
+    def download_file(self, file_id: str, dest_path: Path, show_progress: bool = True) -> bool:
         """
         Download a file from Google Drive.
 
@@ -139,13 +139,10 @@ class GoogleDriveClient:
         with self._service_lock:
             try:
                 # Get file metadata first
-                file_metadata = self.service.files().get(
-                    fileId=file_id,
-                    fields="name, size"
-                ).execute()
+                file_metadata = self.service.files().get(fileId=file_id, fields="name, size").execute()
 
-                file_name = file_metadata.get('name', 'unknown')
-                file_size = int(file_metadata.get('size', 0))
+                file_name = file_metadata.get("name", "unknown")
+                file_size = int(file_metadata.get("size", 0))
 
                 self.logger.info(f"Downloading: {file_name} ({file_size} bytes)")
 
@@ -171,7 +168,7 @@ class GoogleDriveClient:
         # Local filesystem I/O: safe to do without the Drive lock.
         try:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(dest_path, 'wb') as f:
+            with open(dest_path, "wb") as f:
                 f.write(file_handle.getvalue())
             self.logger.success(f"Downloaded to: {dest_path}")
             return True
@@ -196,11 +193,8 @@ class GoogleDriveClient:
         with self._service_lock:
             # Get file name first for logging
             try:
-                file_metadata = self.service.files().get(
-                    fileId=file_id,
-                    fields="name"
-                ).execute()
-                file_name = file_metadata.get('name', file_id)
+                file_metadata = self.service.files().get(fileId=file_id, fields="name").execute()
+                file_name = file_metadata.get("name", file_id)
             except Exception:
                 file_name = file_id
 
@@ -220,7 +214,7 @@ class GoogleDriveClient:
                 self.logger.error(f"Error deleting file: {e}")
                 return False
 
-    def delete_sibling_exports(self, chat_name: str, folder_id: Optional[str] = None) -> int:
+    def delete_sibling_exports(self, chat_name: str, folder_id: str | None = None) -> int:
         """
         Delete all Drive root files in the chat name-group for ``chat_name``.
 
@@ -245,29 +239,28 @@ class GoogleDriveClient:
         # Drive query: escape single quotes for the contains filter.
         safe_name = chat_name.replace("'", "\\'")
         parent_clause = f"'{folder_id}' in parents" if folder_id else "'root' in parents"
-        query = (
-            f"name contains 'WhatsApp Chat with {safe_name}' and {parent_clause}"
-        )
+        query = f"name contains 'WhatsApp Chat with {safe_name}' and {parent_clause}"
 
         # Client-side strict regex. We escape the chat name so characters like
         # '.' or '(' in the chat name are treated literally.
-        pattern = re.compile(
-            rf"^WhatsApp Chat with {re.escape(chat_name)}(?: \(\d+\))?(?:\.zip)?$"
-        )
+        pattern = re.compile(rf"^WhatsApp Chat with {re.escape(chat_name)}(?: \(\d+\))?(?:\.zip)?$")
 
         removed = 0
         with self._service_lock:
             try:
-                results = self.service.files().list(
-                    q=query,
-                    pageSize=1000,
-                    fields="files(id, name)",
-                ).execute()
+                results = (
+                    self.service.files()
+                    .list(
+                        q=query,
+                        pageSize=1000,
+                        fields="files(id, name)",
+                    )
+                    .execute()
+                )
                 files = results.get("files", [])
             except Exception as e:
                 self.logger.warning(
-                    f"Drive cleanup: failed to list siblings for '{chat_name}' — "
-                    f"skipping (Drive error: {e})"
+                    f"Drive cleanup: failed to list siblings for '{chat_name}' — skipping (Drive error: {e})"
                 )
                 return 0
 
@@ -282,29 +275,23 @@ class GoogleDriveClient:
                 except HttpError as e:
                     # 404 means the file is already gone — that's the desired state.
                     if getattr(getattr(e, "resp", None), "status", None) == 404:
-                        self.logger.debug_msg(
-                            f"Drive cleanup: '{name}' already gone (404)"
-                        )
+                        self.logger.debug_msg(f"Drive cleanup: '{name}' already gone (404)")
                         removed += 1
                     else:
-                        self.logger.warning(
-                            f"Drive cleanup: failed to delete '{name}' — {e}"
-                        )
+                        self.logger.warning(f"Drive cleanup: failed to delete '{name}' — {e}")
                 except Exception as e:
-                    self.logger.warning(
-                        f"Drive cleanup: failed to delete '{name}' — {e}"
-                    )
+                    self.logger.warning(f"Drive cleanup: failed to delete '{name}' — {e}")
 
         return removed
 
     def move_file(self, file_id: str, destination_folder_id: str) -> bool:
         """
         Move a file to a different folder in Google Drive.
-        
+
         Args:
             file_id: Google Drive file ID to move
             destination_folder_id: Destination folder ID
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -315,20 +302,17 @@ class GoogleDriveClient:
         with self._service_lock:
             try:
                 # Get current parents
-                file_metadata = self.service.files().get(
-                    fileId=file_id,
-                    fields='name, parents'
-                ).execute()
+                file_metadata = self.service.files().get(fileId=file_id, fields="name, parents").execute()
 
-                file_name = file_metadata.get('name', file_id)
-                previous_parents = file_metadata.get('parents', [])
+                file_name = file_metadata.get("name", file_id)
+                previous_parents = file_metadata.get("parents", [])
 
                 # Move file to new folder (remove from old parents, add to new parent)
                 self.service.files().update(
                     fileId=file_id,
                     addParents=destination_folder_id,
-                    removeParents=','.join(previous_parents) if previous_parents else None,
-                    fields='id, parents'
+                    removeParents=",".join(previous_parents) if previous_parents else None,
+                    fields="id, parents",
                 ).execute()
 
                 self.logger.success(f"Moved to folder: {file_name}")
@@ -345,7 +329,7 @@ class GoogleDriveClient:
                 self.logger.error(f"Error moving file: {e}")
                 return False
 
-    def get_file_metadata(self, file_id: str) -> Optional[Dict[str, Any]]:
+    def get_file_metadata(self, file_id: str) -> dict[str, Any] | None:
         """
         Get metadata for a file.
 
@@ -361,10 +345,11 @@ class GoogleDriveClient:
 
         with self._service_lock:
             try:
-                metadata = self.service.files().get(
-                    fileId=file_id,
-                    fields="id, name, mimeType, size, modifiedTime, parents"
-                ).execute()
+                metadata = (
+                    self.service.files()
+                    .get(fileId=file_id, fields="id, name, mimeType, size, modifiedTime, parents")
+                    .execute()
+                )
 
                 return metadata
 
@@ -375,7 +360,7 @@ class GoogleDriveClient:
                 self.logger.error(f"Error getting file metadata: {e}")
                 return None
 
-    def find_folder_by_name(self, folder_name: str) -> Optional[str]:
+    def find_folder_by_name(self, folder_name: str) -> str | None:
         """
         Find a folder by name and return its ID.
 
@@ -389,14 +374,14 @@ class GoogleDriveClient:
         folders = self.list_files(query=query)
 
         if folders:
-            folder_id = folders[0]['id']
+            folder_id = folders[0]["id"]
             self.logger.debug_msg(f"Found folder '{folder_name}': {folder_id}")
             return folder_id
         else:
             self.logger.warning(f"Folder not found: {folder_name}")
             return None
 
-    def list_whatsapp_exports(self, folder_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_whatsapp_exports(self, folder_id: str | None = None) -> list[dict[str, Any]]:
         """
         List WhatsApp chat export files.
 
@@ -411,20 +396,22 @@ class GoogleDriveClient:
 
         self.logger.info(f"Found {len(files)} WhatsApp export file(s)")
         for file in files:
-            size_mb = int(file.get('size', 0)) / (1024 * 1024)
+            size_mb = int(file.get("size", 0)) / (1024 * 1024)
             self.logger.debug_msg(f"  - {file['name']} ({size_mb:.2f} MB)")
 
         return files
 
-    def poll_for_new_export(self,
-                           initial_interval: int = 2,
-                           max_interval: int = 8,
-                           timeout: int = 300,
-                           created_within_seconds: int = 300,
-                           chat_name: Optional[str] = None,
-                           include_media: bool = False,
-                           # Legacy parameter — ignored, use initial_interval instead
-                           poll_interval: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    def poll_for_new_export(
+        self,
+        initial_interval: int = 2,
+        max_interval: int = 8,
+        timeout: int = 300,
+        created_within_seconds: int = 300,
+        chat_name: str | None = None,
+        include_media: bool = False,
+        # Legacy parameter — ignored, use initial_interval instead
+        poll_interval: int | None = None,
+    ) -> dict[str, Any] | None:
         """
         Poll Google Drive root for newly created WhatsApp export.
 
@@ -461,7 +448,7 @@ class GoogleDriveClient:
             timeout = 120
 
         start_time = time.time()
-        cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=created_within_seconds)
+        cutoff_time = datetime.now(UTC) - timedelta(seconds=created_within_seconds)
         poll_count = 0
         current_interval = initial_interval
 
@@ -483,16 +470,20 @@ class GoogleDriveClient:
                 safe_name = chat_name.replace("'", "\\'")
                 query += f" and name contains '{safe_name}'"
 
-            files: List[Dict[str, Any]] = []
+            files: list[dict[str, Any]] = []
             with self._service_lock:
                 try:
-                    results = self.service.files().list(
-                        q=query,
-                        pageSize=100,
-                        fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
-                        orderBy="createdTime desc"
-                    ).execute()
-                    files = results.get('files', [])
+                    results = (
+                        self.service.files()
+                        .list(
+                            q=query,
+                            pageSize=100,
+                            fields="files(id, name, mimeType, size, createdTime, modifiedTime, parents)",
+                            orderBy="createdTime desc",
+                        )
+                        .execute()
+                    )
+                    files = results.get("files", [])
                 except HttpError as error:
                     self.logger.error(f"HTTP error during polling: {error}")
                     files = []
@@ -501,20 +492,22 @@ class GoogleDriveClient:
                     files = []
 
             for file in files:
-                created_time_str = file.get('createdTime')
+                created_time_str = file.get("createdTime")
                 if not created_time_str:
                     continue
 
-                created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
+                created_time = datetime.fromisoformat(created_time_str.replace("Z", "+00:00"))
 
                 if created_time > cutoff_time:
-                    size_mb = int(file.get('size', 0)) / (1024 * 1024)
+                    size_mb = int(file.get("size", 0)) / (1024 * 1024)
                     self.logger.success(f"Found new export: {file['name']} ({size_mb:.2f} MB)")
                     self.logger.success(f"Created: {created_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
                     return file
 
             remaining = timeout - elapsed
-            self.logger.debug_msg(f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)")
+            self.logger.debug_msg(
+                f"Poll #{poll_count}: No new exports found. Waiting {current_interval}s... ({remaining:.0f}s remaining)"
+            )
             time.sleep(current_interval)
 
             if poll_count % 2 == 0:

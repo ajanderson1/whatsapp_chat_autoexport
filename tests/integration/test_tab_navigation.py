@@ -9,15 +9,13 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from textual.widgets import TabbedContent
 
 from whatsapp_chat_autoexport.tui.textual_app import WhatsAppExporterApp
-from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
 from whatsapp_chat_autoexport.tui.textual_panes.connect_pane import ConnectPane
 from whatsapp_chat_autoexport.tui.textual_panes.discover_select_pane import DiscoverSelectPane
 from whatsapp_chat_autoexport.tui.textual_panes.export_pane import ExportPane
-from whatsapp_chat_autoexport.tui.textual_panes.summary_pane import SummaryPane
+from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
 
 
 def _make_app(**kwargs) -> WhatsAppExporterApp:

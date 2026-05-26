@@ -16,12 +16,10 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Optional
 
 from ..processing.transcript_parser import Message
-
 
 # Map from Message.media_type to the spec tag (excluding document, handled separately)
 _MEDIA_TAG = {
@@ -54,9 +52,9 @@ class SpecFormatter:
     def __init__(
         self,
         contact_name: str,
-        chat_jid: Optional[str] = None,
+        chat_jid: str | None = None,
         chat_type: str = "direct",
-        participants: Optional[List[str]] = None,
+        participants: list[str] | None = None,
         timezone: str = "Europe/Stockholm",
     ) -> None:
         self.contact_name = contact_name
@@ -69,7 +67,7 @@ class SpecFormatter:
     # Public API
     # ------------------------------------------------------------------
 
-    def format_index(self, messages: List[Message]) -> str:
+    def format_index(self, messages: list[Message]) -> str:
         """
         Return complete index.md content for *messages*.
 
@@ -86,7 +84,7 @@ class SpecFormatter:
         str
             Full Markdown string ready to be written to ``index.md``.
         """
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         today_str = now.strftime("%Y-%m-%d")
         last_synced_str = now.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -103,11 +101,11 @@ class SpecFormatter:
 
         # Build description based on chat type
         if self.chat_type == "group":
-            description = f'WhatsApp group chat: {self.contact_name}'
+            description = f"WhatsApp group chat: {self.contact_name}"
         else:
-            description = f'WhatsApp correspondence with {self.contact_name}'
+            description = f"WhatsApp correspondence with {self.contact_name}"
 
-        lines: List[str] = ["---"]
+        lines: list[str] = ["---"]
         lines.append("type: note")
         lines.append(f'description: "{description}"')
         lines.append("tags:")
@@ -155,13 +153,9 @@ class SpecFormatter:
         period_line = f"> Period: {date_first} to {date_last} | {message_count:,} messages"
 
         if self.chat_type == "group":
-            transcript_link = (
-                f"[[People/Correspondence/Whatsapp/{self.contact_name}/transcript|Full Transcript]]"
-            )
+            transcript_link = f"[[People/Correspondence/Whatsapp/{self.contact_name}/transcript|Full Transcript]]"
         else:
-            transcript_link = (
-                f"[[People/Correspondence/Whatsapp/{self.contact_name}/transcript|Full Transcript]]"
-            )
+            transcript_link = f"[[People/Correspondence/Whatsapp/{self.contact_name}/transcript|Full Transcript]]"
 
         body_parts = [summary, period_line, "", transcript_link]
         body = "\n".join(body_parts)
@@ -169,7 +163,7 @@ class SpecFormatter:
         frontmatter = "\n".join(lines)
         return frontmatter + "\n\n" + body + "\n"
 
-    def format_transcript(self, messages: List[Message], media_dir: Optional[Path] = None) -> str:
+    def format_transcript(self, messages: list[Message], media_dir: Path | None = None) -> str:
         """
         Return complete transcript.md content for *messages*.
 
@@ -199,9 +193,9 @@ class SpecFormatter:
 
     def build_output(
         self,
-        messages: List[Message],
+        messages: list[Message],
         dest_dir: Path,
-        media_dir: Optional[Path] = None,
+        media_dir: Path | None = None,
         include_transcriptions: bool = True,
         copy_media: bool = True,
     ) -> dict:
@@ -266,10 +260,7 @@ class SpecFormatter:
             media_files = list(media_dir.iterdir())
 
             if include_transcriptions:
-                transcription_files = [
-                    f for f in media_files
-                    if f.is_file() and f.name.endswith("_transcription.txt")
-                ]
+                transcription_files = [f for f in media_files if f.is_file() and f.name.endswith("_transcription.txt")]
                 if transcription_files:
                     transcriptions_dir = contact_dir / "transcriptions"
                     transcriptions_dir.mkdir(exist_ok=True)
@@ -281,8 +272,7 @@ class SpecFormatter:
 
             if copy_media:
                 non_transcription_files = [
-                    f for f in media_files
-                    if f.is_file() and not f.name.endswith("_transcription.txt")
+                    f for f in media_files if f.is_file() and not f.name.endswith("_transcription.txt")
                 ]
                 if non_transcription_files:
                     media_out_dir = contact_dir / "media"
@@ -312,16 +302,10 @@ class SpecFormatter:
     # ------------------------------------------------------------------
 
     def _build_frontmatter(self) -> str:
-        return (
-            "---\n"
-            "cssclasses:\n"
-            "  - whatsapp-transcript\n"
-            "  - exclude-from-graph\n"
-            "---"
-        )
+        return "---\ncssclasses:\n  - whatsapp-transcript\n  - exclude-from-graph\n---"
 
-    def _build_metadata(self, messages: List[Message], body: str = "") -> str:
-        generated = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    def _build_metadata(self, messages: list[Message], body: str = "") -> str:
+        generated = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         message_count = len(messages)
         media_count = sum(1 for m in messages if m.is_media)
 
@@ -350,14 +334,14 @@ class SpecFormatter:
         ]
         return "\n".join(lines)
 
-    def _format_message_body(self, messages: List[Message], media_dir: Optional[Path] = None) -> str:
+    def _format_message_body(self, messages: list[Message], media_dir: Path | None = None) -> str:
         """Build day-grouped message lines."""
         if not messages:
             return ""
 
-        sections: List[str] = []
-        current_date: Optional[str] = None
-        day_lines: List[str] = []
+        sections: list[str] = []
+        current_date: str | None = None
+        day_lines: list[str] = []
 
         for msg in messages:
             date_str = msg.timestamp.date().isoformat()
@@ -435,5 +419,3 @@ class SpecFormatter:
             return match.group(1).strip()
         # Fallback: return content up to first space if no parenthesis pattern
         return content.split()[0] if content.split() else ""
-
-

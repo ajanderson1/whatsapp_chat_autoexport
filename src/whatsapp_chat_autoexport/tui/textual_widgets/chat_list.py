@@ -9,23 +9,24 @@ Also supports status display during export (completed, in_progress, failed, skip
 import hashlib
 import re
 from enum import Enum
-from typing import List, Set, Dict, Optional
+
 from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.widgets import Static, ListView, ListItem, Label, Button, Rule
-from textual.reactive import reactive
-from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.message import Message
+from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import Button, Label, ListItem, ListView, Rule, Static
 
 
 class ChatDisplayStatus(str, Enum):
     """Display status for a chat in the list."""
-    PENDING = "pending"       # [ ] Not yet processed
+
+    PENDING = "pending"  # [ ] Not yet processed
     IN_PROGRESS = "progress"  # [●] Currently being exported
-    COMPLETED = "completed"   # [✓] Successfully exported
-    FAILED = "failed"         # [✗] Export failed
-    SKIPPED = "skipped"       # [⊘] Skipped (e.g., community chat)
+    COMPLETED = "completed"  # [✓] Successfully exported
+    FAILED = "failed"  # [✗] Export failed
+    SKIPPED = "skipped"  # [⊘] Skipped (e.g., community chat)
 
 
 class ChatListWidget(Widget):
@@ -58,10 +59,10 @@ class ChatListWidget(Widget):
     """
 
     # Track selected chat names
-    selected_chats: reactive[Set[str]] = reactive(set, init=False)
+    selected_chats: reactive[set[str]] = reactive(set, init=False)
 
     # Track chat statuses (for export view)
-    chat_statuses: reactive[Dict[str, ChatDisplayStatus]] = reactive(dict, init=False)
+    chat_statuses: reactive[dict[str, ChatDisplayStatus]] = reactive(dict, init=False)
 
     # Mode: "select" (selection mode) or "status" (status display mode)
     display_mode: reactive[str] = reactive("select")
@@ -69,13 +70,13 @@ class ChatListWidget(Widget):
     class SelectionChanged(Message):
         """Message sent when selection changes."""
 
-        def __init__(self, selected: Set[str]) -> None:
+        def __init__(self, selected: set[str]) -> None:
             self.selected = selected
             super().__init__()
 
     def __init__(
         self,
-        chats: List[str] | None = None,
+        chats: list[str] | None = None,
         title: str = "CHAT INVENTORY",
         locked: bool = False,
         display_mode: str = "select",
@@ -91,17 +92,17 @@ class ChatListWidget(Widget):
             display_mode: "select" for selection mode, "status" for status display
         """
         super().__init__(**kwargs)
-        self._chats: List[str] = chats or []
+        self._chats: list[str] = chats or []
         self._title = title
         self._locked = locked
         self.display_mode = display_mode
         self.selected_chats = set(self._chats)  # Select all by default
         self.chat_statuses = {}  # Initialize empty statuses
         # Map chat names to their widget IDs (for efficient lookup)
-        self._chat_to_widget_id: Dict[str, str] = {}
+        self._chat_to_widget_id: dict[str, str] = {}
         # Optional per-chat reason strings (failure/skip detail). Not reactive;
         # read opportunistically via get_status_reasons() for retry/tooltip UX.
-        self._status_reasons: Dict[str, str] = {}
+        self._status_reasons: dict[str, str] = {}
 
     @property
     def _listview_id(self) -> str:
@@ -112,10 +113,12 @@ class ChatListWidget(Widget):
 
     class StartExportRequested(Message):
         """Message sent when Start Export button is clicked."""
+
         pass
 
     class RefreshRequested(Message):
         """Message sent when Refresh button is clicked."""
+
         pass
 
     def compose(self) -> ComposeResult:
@@ -130,7 +133,7 @@ class ChatListWidget(Widget):
             yield Button("Invert", id="btn-chat-invert", variant="default")
             yield Button("Start Export", id="btn-chat-start-export", variant="success")
 
-    def _create_items(self) -> List[ListItem]:
+    def _create_items(self) -> list[ListItem]:
         """Create list items for all chats with unique IDs."""
         items = []
         seen_ids = set()
@@ -210,7 +213,7 @@ class ChatListWidget(Widget):
         Uses hash suffix for long names to ensure uniqueness while
         keeping IDs recognizable for debugging.
         """
-        sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name)
+        sanitized = re.sub(r"[^a-zA-Z0-9]", "_", name)
 
         # If name is too long, use hash suffix for uniqueness
         if len(sanitized) > 40:
@@ -378,7 +381,7 @@ class ChatListWidget(Widget):
         except Exception:
             pass
 
-    def set_chats(self, chats: List[str], select_all: bool = True) -> None:
+    def set_chats(self, chats: list[str], select_all: bool = True) -> None:
         """
         Update the chat list.
 
@@ -409,7 +412,7 @@ class ChatListWidget(Widget):
         except Exception:
             pass  # Widget may not be mounted yet
 
-    def get_selected(self) -> List[str]:
+    def get_selected(self) -> list[str]:
         """
         Get list of selected chat names.
 
@@ -427,7 +430,13 @@ class ChatListWidget(Widget):
         """
         self._locked = locked
         try:
-            for btn_id in ("#btn-chat-refresh", "#btn-chat-select-all", "#btn-chat-select-none", "#btn-chat-invert", "#btn-chat-start-export"):
+            for btn_id in (
+                "#btn-chat-refresh",
+                "#btn-chat-select-all",
+                "#btn-chat-select-none",
+                "#btn-chat-invert",
+                "#btn-chat-start-export",
+            ):
                 self.query_one(btn_id, Button).disabled = locked
         except Exception:
             pass
@@ -472,7 +481,7 @@ class ChatListWidget(Widget):
         # Update the display
         self._update_item_display(name)
 
-    def get_status_reasons(self) -> Dict[str, str]:
+    def get_status_reasons(self) -> dict[str, str]:
         """Return a shallow copy of per-chat status reasons (failure/skip detail)."""
         return dict(self._status_reasons)
 
@@ -489,7 +498,7 @@ class ChatListWidget(Widget):
                 new_statuses[chat] = ChatDisplayStatus.SKIPPED
         self.chat_statuses = new_statuses
 
-    def get_chats_by_status(self, status: ChatDisplayStatus) -> List[str]:
+    def get_chats_by_status(self, status: ChatDisplayStatus) -> list[str]:
         """
         Get list of chats with a specific status.
 
@@ -499,10 +508,7 @@ class ChatListWidget(Widget):
         Returns:
             List of chat names with the specified status
         """
-        return [
-            chat for chat in self._chats
-            if self.chat_statuses.get(chat) == status
-        ]
+        return [chat for chat in self._chats if self.chat_statuses.get(chat) == status]
 
     def reset_for_reselection(self) -> None:
         """
@@ -533,7 +539,7 @@ class ChatListWidget(Widget):
         for chat in self._chats:
             self._update_item_display(chat)
 
-    def get_status_counts(self) -> Dict[str, int]:
+    def get_status_counts(self) -> dict[str, int]:
         """
         Get counts of chats by status.
 

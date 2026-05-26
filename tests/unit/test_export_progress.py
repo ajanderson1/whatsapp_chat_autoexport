@@ -5,9 +5,9 @@ Verifies that export_chat_to_google_drive fires on_progress callbacks
 at each step boundary and that callback errors do not crash the export.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from time import sleep
 
 
 class TestExportChatProgressCallbacks:
@@ -88,8 +88,7 @@ class TestExportChatProgressCallbacks:
 
             if "TextView" in value:
                 # Return different elements based on what step we're likely in
-                return [more_elem, export_elem, include_media_elem,
-                        drive_elem, upload_elem]
+                return [more_elem, export_elem, include_media_elem, drive_elem, upload_elem]
             if "Button" in value:
                 return [upload_elem, include_media_elem]
             if "LinearLayout" in value or "RelativeLayout" in value or "FrameLayout" in value:
@@ -139,6 +138,7 @@ class TestExportChatProgressCallbacks:
 
     def _setup_full_export_mock(self, exporter):
         """Set up mocks for a complete successful export flow."""
+
         def make_text_element(text):
             el = MagicMock()
             el.is_displayed.return_value = True
@@ -160,9 +160,9 @@ class TestExportChatProgressCallbacks:
         driver = exporter.driver
         driver._wait_for_element = MagicMock(return_value=make_text_element("menu"))
         driver.driver = MagicMock()
-        driver.driver.find_elements = MagicMock(return_value=[
-            more_elem, export_elem, include_media_elem, drive_elem, upload_elem
-        ])
+        driver.driver.find_elements = MagicMock(
+            return_value=[more_elem, export_elem, include_media_elem, drive_elem, upload_elem]
+        )
         driver.driver.get_window_size.return_value = {"width": 1080, "height": 2400}
         driver.driver.current_package = "com.google.android.apps.drive"
         driver.driver.current_activity = "DriveActivity"
@@ -175,6 +175,7 @@ class TestExportChatProgressCallbacks:
     def test_export_without_callback_accepts_none(self):
         """export_chat_to_google_drive accepts on_progress=None without error."""
         import inspect
+
         from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
 
         sig = inspect.signature(ChatExporter.export_chat_to_google_drive)
@@ -220,9 +221,7 @@ class TestExportChatProgressCallbacks:
         driver.get_page_source = MagicMock()
 
         with patch("whatsapp_chat_autoexport.export.chat_exporter.sleep"):
-            result = exporter.export_chat_to_google_drive(
-                "Community Chat", include_media=True, on_progress=recorder
-            )
+            result = exporter.export_chat_to_google_drive("Community Chat", include_media=True, on_progress=recorder)
 
         # Should return a non-SUCCESS ExportOutcome (skipped/failed)
         assert bool(result) is False

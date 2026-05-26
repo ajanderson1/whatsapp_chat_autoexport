@@ -6,17 +6,14 @@ a temporary output directory, and exercises the rebuild flow
 programmatically via ``run_rebuild``. No subprocesses are spawned.
 """
 
-import json
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from whatsapp_chat_autoexport.cli.commands.rebuild import run_rebuild
 from whatsapp_chat_autoexport.mcp.state import MCPState
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -81,16 +78,11 @@ def bridge_db(tmp_path):
         ("alice@s.whatsapp.net", "Alice Smith", _ts(_NOW)),
     ]
     messages = [
-        ("msg_a1", "alice@s.whatsapp.net", "alice@s.whatsapp.net",
-         "Hello!", _ts(_TWO_DAYS_AGO), 0, None, None),
-        ("msg_a2", "alice@s.whatsapp.net", "",
-         "Hi Alice!", _ts(_TWO_DAYS_AGO + timedelta(minutes=1)), 1, None, None),
-        ("msg_a3", "alice@s.whatsapp.net", "alice@s.whatsapp.net",
-         "How are you?", _ts(_YESTERDAY), 0, None, None),
-        ("msg_a4", "alice@s.whatsapp.net", "",
-         "I'm good!", _ts(_YESTERDAY + timedelta(minutes=5)), 1, None, None),
-        ("msg_a5", "alice@s.whatsapp.net", "alice@s.whatsapp.net",
-         "See you later!", _ts(_NOW), 0, None, None),
+        ("msg_a1", "alice@s.whatsapp.net", "alice@s.whatsapp.net", "Hello!", _ts(_TWO_DAYS_AGO), 0, None, None),
+        ("msg_a2", "alice@s.whatsapp.net", "", "Hi Alice!", _ts(_TWO_DAYS_AGO + timedelta(minutes=1)), 1, None, None),
+        ("msg_a3", "alice@s.whatsapp.net", "alice@s.whatsapp.net", "How are you?", _ts(_YESTERDAY), 0, None, None),
+        ("msg_a4", "alice@s.whatsapp.net", "", "I'm good!", _ts(_YESTERDAY + timedelta(minutes=5)), 1, None, None),
+        ("msg_a5", "alice@s.whatsapp.net", "alice@s.whatsapp.net", "See you later!", _ts(_NOW), 0, None, None),
     ]
     _create_bridge_db(db_path, chats=chats, messages=messages)
     return db_path
@@ -107,6 +99,7 @@ def output_dir(tmp_path):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestRebuildFull:
     """Test full rebuild from MCP bridge."""
@@ -285,10 +278,8 @@ class TestRebuildErrors:
                 ("alice2@s.whatsapp.net", "Alice Jones", _ts(_NOW)),
             ],
             messages=[
-                ("msg1", "alice1@s.whatsapp.net", "alice1@s.whatsapp.net",
-                 "Hello!", _ts(_NOW), 0, None, None),
-                ("msg2", "alice2@s.whatsapp.net", "alice2@s.whatsapp.net",
-                 "Hi!", _ts(_NOW), 0, None, None),
+                ("msg1", "alice1@s.whatsapp.net", "alice1@s.whatsapp.net", "Hello!", _ts(_NOW), 0, None, None),
+                ("msg2", "alice2@s.whatsapp.net", "alice2@s.whatsapp.net", "Hi!", _ts(_NOW), 0, None, None),
             ],
         )
 

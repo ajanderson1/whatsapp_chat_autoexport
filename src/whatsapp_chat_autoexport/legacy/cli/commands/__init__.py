@@ -7,9 +7,7 @@ Each module provides a Typer sub-application:
 - wizard: Interactive workflow
 """
 
-from . import export
-from . import process
-from . import wizard
+from . import export, process, wizard
 
 __all__ = [
     "export",

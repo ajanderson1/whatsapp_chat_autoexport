@@ -9,7 +9,9 @@ another locked method while holding the lock.
 They use unittest.mock and do NOT exercise real httplib2 or Google Drive.
 Real-concurrency coverage lives in tests/integration/test_drive_client_concurrency.py.
 """
+
 import threading
+from datetime import UTC
 from unittest.mock import MagicMock
 
 import pytest
@@ -93,6 +95,7 @@ class _ExecReturning:
 
 class _GetMediaRequest:
     """Placeholder for a get_media() request handed to MediaIoBaseDownload."""
+
     pass
 
 
@@ -152,13 +155,14 @@ class TestPollForNewExportLocking:
         file so the loop exits. Otherwise sleep_observations would be empty
         and the 'sleep outside the lock' assertion would be vacuously true.
         """
+        from datetime import datetime
+
         from whatsapp_chat_autoexport.google_drive import drive_client as dc_module
-        from datetime import datetime, timezone
 
         auth = MagicMock()
         c = GoogleDriveClient(auth=auth)
 
-        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         # Build a fake service that returns {} on the first .list() call and a
         # matching file on the second. We can't reuse _LockObservingService here
@@ -221,9 +225,7 @@ class TestPollForNewExportLocking:
         # Sleep must actually have been called (at least once between polls).
         # This is the crux of the regression guard: if sleep were moved inside
         # the `with` block, the assertion below would fail.
-        assert sleep_observations, (
-            "Expected time.sleep() to be called at least once between polls"
-        )
+        assert sleep_observations, "Expected time.sleep() to be called at least once between polls"
         assert all(held is False for held in sleep_observations), (
             f"time.sleep() must not hold the service lock; got {sleep_observations}"
         )
@@ -410,6 +412,7 @@ class _SleepyLockProbeService:
 
     def execute(self):
         import time as _t
+
         with self._inflight_lock:
             self._inflight += 1
             if self._inflight > self.max_observed_inflight:
@@ -437,6 +440,5 @@ class TestConcurrentCallsAreSerialized:
         # Because _service_lock serializes every list_files call, the probe's
         # max_observed_inflight should be exactly 1.
         assert probe.max_observed_inflight == 1, (
-            f"Expected serialized access (max 1 in-flight), observed "
-            f"{probe.max_observed_inflight} concurrent calls"
+            f"Expected serialized access (max 1 in-flight), observed {probe.max_observed_inflight} concurrent calls"
         )

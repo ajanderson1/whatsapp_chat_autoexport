@@ -5,24 +5,20 @@ callback firing, termination detection, error handling, and proportional
 scroll coordinates.
 """
 
-import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from whatsapp_chat_autoexport.export.models import ChatMetadata
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_driver():
     """Create a WhatsAppDriver with mocked dependencies."""
-    with patch(
-        "whatsapp_chat_autoexport.export.whatsapp_driver.webdriver"
-    ), patch(
-        "whatsapp_chat_autoexport.export.whatsapp_driver.UiAutomator2Options"
+    with (
+        patch("whatsapp_chat_autoexport.export.whatsapp_driver.webdriver"),
+        patch("whatsapp_chat_autoexport.export.whatsapp_driver.UiAutomator2Options"),
     ):
         from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
 
@@ -60,9 +56,19 @@ def _chat_row(
 ) -> str:
     """Build XML for a single chat row with optional metadata elements."""
     mute = '<android.widget.ImageView resource-id="com.whatsapp:id/mute_indicator" />' if is_muted else ""
-    group_photo = '<android.widget.ImageView resource-id="com.whatsapp:id/parent_group_profile_photo" />' if is_group else ""
-    sender = f'<android.widget.TextView resource-id="com.whatsapp:id/msg_from_tv" text="{group_sender}" />' if group_sender else ""
-    type_ind = '<android.widget.ImageView resource-id="com.whatsapp:id/message_type_indicator" />' if has_type_indicator else ""
+    group_photo = (
+        '<android.widget.ImageView resource-id="com.whatsapp:id/parent_group_profile_photo" />' if is_group else ""
+    )
+    sender = (
+        f'<android.widget.TextView resource-id="com.whatsapp:id/msg_from_tv" text="{group_sender}" />'
+        if group_sender
+        else ""
+    )
+    type_ind = (
+        '<android.widget.ImageView resource-id="com.whatsapp:id/message_type_indicator" />'
+        if has_type_indicator
+        else ""
+    )
     contact_photo_desc = f' content-desc="{photo_desc}"' if photo_desc else ""
 
     return f"""
@@ -443,10 +449,10 @@ class TestProportionalScrollCoords:
 
         first_swipe = swipe_calls[0]
         args = first_swipe[0]
-        assert args[0] == 360   # 720 // 2
+        assert args[0] == 360  # 720 // 2
         assert args[1] == 1200  # int(1600 * 0.75)
-        assert args[2] == 360   # 720 // 2
-        assert args[3] == 400   # int(1600 * 0.25)
+        assert args[2] == 360  # 720 // 2
+        assert args[3] == 400  # int(1600 * 0.25)
 
 
 # ===========================================================================
@@ -497,15 +503,9 @@ class TestQueryWhatsAppContacts:
     def test_parses_adb_output(self):
         """Parses 'Row: N display_name=...' lines from adb output."""
         driver = _make_driver()
-        adb_output = (
-            "Row: 0 display_name=Alice\n"
-            "Row: 1 display_name=Bob\n"
-            "Row: 2 display_name=Charlie\n"
-        )
+        adb_output = "Row: 0 display_name=Alice\nRow: 1 display_name=Bob\nRow: 2 display_name=Charlie\n"
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=adb_output, stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout=adb_output, stderr="")
             result = driver._query_whatsapp_contacts()
 
         assert result == {"Alice", "Bob", "Charlie"}
@@ -518,9 +518,7 @@ class TestQueryWhatsAppContacts:
         """Returns empty set when adb command fails."""
         driver = _make_driver()
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=1, stdout="", stderr="error"
-            )
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
             result = driver._query_whatsapp_contacts()
 
         assert result == set()
@@ -530,6 +528,7 @@ class TestQueryWhatsAppContacts:
         driver = _make_driver()
         with patch("subprocess.run") as mock_run:
             import subprocess
+
             mock_run.side_effect = subprocess.TimeoutExpired("adb", 15)
             result = driver._query_whatsapp_contacts()
 
@@ -538,15 +537,9 @@ class TestQueryWhatsAppContacts:
     def test_skips_empty_names(self):
         """Filters out rows with empty display_name."""
         driver = _make_driver()
-        adb_output = (
-            "Row: 0 display_name=Alice\n"
-            "Row: 1 display_name=\n"
-            "Row: 2 display_name=Bob\n"
-        )
+        adb_output = "Row: 0 display_name=Alice\nRow: 1 display_name=\nRow: 2 display_name=Bob\n"
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=adb_output, stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout=adb_output, stderr="")
             result = driver._query_whatsapp_contacts()
 
         assert result == {"Alice", "Bob"}
@@ -556,9 +549,7 @@ class TestQueryWhatsAppContacts:
         driver = _make_driver()
         driver.device_id = None
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="Row: 0 display_name=Alice\n", stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout="Row: 0 display_name=Alice\n", stderr="")
             driver._query_whatsapp_contacts()
 
         call_args = mock_run.call_args[0][0]
@@ -575,9 +566,7 @@ class TestSearchForChat:
         mock_search_bar = MagicMock()
         mock_search_input = MagicMock()
 
-        driver.driver.find_element = MagicMock(
-            side_effect=[mock_search_bar, mock_search_input, MagicMock()]
-        )
+        driver.driver.find_element = MagicMock(side_effect=[mock_search_bar, mock_search_input, MagicMock()])
 
         # Build search result XML with a matching chat
         search_xml = _build_xml(_chat_row("Alice"))
@@ -593,9 +582,7 @@ class TestSearchForChat:
         mock_search_bar = MagicMock()
         mock_search_input = MagicMock()
 
-        driver.driver.find_element = MagicMock(
-            side_effect=[mock_search_bar, mock_search_input, MagicMock()]
-        )
+        driver.driver.find_element = MagicMock(side_effect=[mock_search_bar, mock_search_input, MagicMock()])
 
         # Search results show Bob but we searched for Alice
         search_xml = _build_xml(_chat_row("Bob"))
@@ -611,9 +598,7 @@ class TestSearchForChat:
         mock_search_bar = MagicMock()
         mock_search_input = MagicMock()
 
-        driver.driver.find_element = MagicMock(
-            side_effect=[mock_search_bar, mock_search_input, MagicMock()]
-        )
+        driver.driver.find_element = MagicMock(side_effect=[mock_search_bar, mock_search_input, MagicMock()])
 
         search_xml = _build_xml(_chat_row("alice"))
         type(driver.driver).page_source = property(lambda self: search_xml)
@@ -628,14 +613,10 @@ class TestReconcileContacts:
     def test_finds_missing_contacts(self):
         """Discovers chats for contacts not found during scrolling."""
         driver = _make_driver()
-        driver._query_whatsapp_contacts = MagicMock(
-            return_value={"Alice", "Bob", "Charlie"}
-        )
+        driver._query_whatsapp_contacts = MagicMock(return_value={"Alice", "Bob", "Charlie"})
         # Alice already found, Bob and Charlie missing
         # But only Bob has an active chat
-        driver._search_for_chat = MagicMock(
-            side_effect=lambda name: name if name == "Bob" else None
-        )
+        driver._search_for_chat = MagicMock(side_effect=lambda name: name if name == "Bob" else None)
         driver.restart_app_to_top = MagicMock(return_value=True)
 
         seen = {"Alice"}
@@ -650,9 +631,7 @@ class TestReconcileContacts:
     def test_no_gaps_skips_search(self):
         """When all contacts are already found, no searches are performed."""
         driver = _make_driver()
-        driver._query_whatsapp_contacts = MagicMock(
-            return_value={"Alice", "Bob"}
-        )
+        driver._query_whatsapp_contacts = MagicMock(return_value={"Alice", "Bob"})
         driver._search_for_chat = MagicMock()
         driver.restart_app_to_top = MagicMock(return_value=True)
 
@@ -677,9 +656,7 @@ class TestReconcileContacts:
     def test_fires_callback_for_new_chats(self):
         """on_chat_found callback is fired for each newly discovered chat."""
         driver = _make_driver()
-        driver._query_whatsapp_contacts = MagicMock(
-            return_value={"Alice", "Bob"}
-        )
+        driver._query_whatsapp_contacts = MagicMock(return_value={"Alice", "Bob"})
         driver._search_for_chat = MagicMock(return_value="Bob")
         driver.restart_app_to_top = MagicMock(return_value=True)
 
@@ -694,9 +671,7 @@ class TestReconcileContacts:
     def test_case_insensitive_dedup(self):
         """Contact 'alice' is not searched if 'Alice' is already seen."""
         driver = _make_driver()
-        driver._query_whatsapp_contacts = MagicMock(
-            return_value={"alice"}
-        )
+        driver._query_whatsapp_contacts = MagicMock(return_value={"alice"})
         driver._search_for_chat = MagicMock()
         driver.restart_app_to_top = MagicMock(return_value=True)
 

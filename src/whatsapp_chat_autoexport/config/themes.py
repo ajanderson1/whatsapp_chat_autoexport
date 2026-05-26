@@ -7,7 +7,6 @@ Each theme defines primary, secondary, accent, and semantic colors.
 
 from textual.theme import Theme
 
-
 # =============================================================================
 # Theme Definitions
 # =============================================================================

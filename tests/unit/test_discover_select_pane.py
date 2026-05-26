@@ -8,18 +8,15 @@ Tests cover:
 """
 
 import pytest
+from textual.containers import Container
+from textual.message import Message
+from textual.widgets import Button, Static, TabbedContent
 
 from whatsapp_chat_autoexport.tui.textual_panes.discover_select_pane import (
     DiscoverSelectPane,
 )
-from whatsapp_chat_autoexport.tui.textual_screens.main_screen import MainScreen
 from whatsapp_chat_autoexport.tui.textual_widgets.chat_list import ChatListWidget
 from whatsapp_chat_autoexport.tui.textual_widgets.settings_panel import SettingsPanel
-
-from textual.containers import Container
-from textual.message import Message
-from textual.widgets import Button, ListView, Static, TabbedContent
-
 
 # =============================================================================
 # DiscoverSelectPane Initialisation

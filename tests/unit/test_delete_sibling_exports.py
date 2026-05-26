@@ -9,6 +9,7 @@ Verifies the post-download Drive cleanup primitive:
 - never raises; returns count of successful deletes
 - handles listing failures, per-file delete failures, and stale 404s
 """
+
 import threading
 from unittest.mock import MagicMock
 
@@ -205,9 +206,7 @@ class TestRootOnlyScope:
         c.delete_sibling_exports("Daniel Cocking")
 
         assert captured["q"], "expected a query to be passed to files().list()"
-        assert "'root' in parents" in captured["q"], (
-            f"expected root-scope clause in query, got: {captured['q']!r}"
-        )
+        assert "'root' in parents" in captured["q"], f"expected root-scope clause in query, got: {captured['q']!r}"
         assert "WhatsApp Chat with Daniel Cocking" in captured["q"]
 
 
@@ -232,9 +231,7 @@ class TestLockHeldDuringCleanup:
         names = [name for name, _ in fake.observations]
         assert "list" in names
         assert names.count("delete") == 3
-        assert all(held for _, held in fake.observations), (
-            f"expected lock held for every call, got {fake.observations}"
-        )
+        assert all(held for _, held in fake.observations), f"expected lock held for every call, got {fake.observations}"
         assert c._service_lock.locked() is False
 
 
@@ -275,10 +272,9 @@ class TestListingFailureReturnsZero:
         # message that identifies this as the listing-failure path.
         assert c.logger.warning.called, "expected a warning log on listing failure"
         warning_messages = [call.args[0] for call in c.logger.warning.call_args_list]
-        assert any(
-            "Drive cleanup" in msg and "failed to list" in msg
-            for msg in warning_messages
-        ), f"expected listing-failure warning, got: {warning_messages!r}"
+        assert any("Drive cleanup" in msg and "failed to list" in msg for msg in warning_messages), (
+            f"expected listing-failure warning, got: {warning_messages!r}"
+        )
 
 
 class TestPerFileDeleteFailureContinues:
@@ -371,10 +367,12 @@ class TestStale404CountedAsSuccess:
             def list(self_inner, **kwargs):
                 class _Exec:
                     def execute(self_e):
-                        return {"files": [
-                            {"id": "gone", "name": "WhatsApp Chat with X"},
-                            {"id": "present", "name": "WhatsApp Chat with X.zip"},
-                        ]}
+                        return {
+                            "files": [
+                                {"id": "gone", "name": "WhatsApp Chat with X"},
+                                {"id": "present", "name": "WhatsApp Chat with X.zip"},
+                            ]
+                        }
 
                 return _Exec()
 
@@ -410,6 +408,4 @@ class TestManagerPassthrough:
         result = mgr.delete_sibling_exports("Daniel Cocking")
 
         assert result == 2
-        mgr.client.delete_sibling_exports.assert_called_once_with(
-            "Daniel Cocking", folder_id=None
-        )
+        mgr.client.delete_sibling_exports.assert_called_once_with("Daniel Cocking", folder_id=None)

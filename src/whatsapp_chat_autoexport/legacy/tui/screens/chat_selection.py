@@ -4,14 +4,13 @@ Chat selection screen for TUI.
 Allows users to select which chats to export.
 """
 
-from typing import Optional, List, Set
 from dataclasses import dataclass
 
-from rich.console import Console, RenderableType
+from rich.align import Align
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.align import Align
 
 
 @dataclass
@@ -44,8 +43,8 @@ class ChatSelectionScreen:
         Args:
             max_visible: Maximum chats visible at once
         """
-        self._chats: List[ChatInfo] = []
-        self._selected: Set[str] = set()
+        self._chats: list[ChatInfo] = []
+        self._selected: set[str] = set()
         self._cursor: int = 0
         self._scroll_offset: int = 0
         self._max_visible = max_visible
@@ -54,12 +53,12 @@ class ChatSelectionScreen:
         self._loading: bool = False
 
     @property
-    def chats(self) -> List[ChatInfo]:
+    def chats(self) -> list[ChatInfo]:
         """Get all chats."""
         return self._chats
 
     @property
-    def selected_chats(self) -> List[str]:
+    def selected_chats(self) -> list[str]:
         """Get list of selected chat names."""
         return list(self._selected)
 
@@ -68,7 +67,7 @@ class ChatSelectionScreen:
         """Get number of selected chats."""
         return len(self._selected)
 
-    def set_chats(self, chats: List[ChatInfo]) -> None:
+    def set_chats(self, chats: list[ChatInfo]) -> None:
         """Set the available chats."""
         self._chats = chats
         self._cursor = 0
@@ -88,7 +87,7 @@ class ChatSelectionScreen:
         """Toggle showing already exported chats."""
         self._show_exported = not self._show_exported
 
-    def _filtered_chats(self) -> List[ChatInfo]:
+    def _filtered_chats(self) -> list[ChatInfo]:
         """Get filtered list of chats."""
         filtered = []
         for chat in self._chats:
@@ -247,9 +246,9 @@ class ChatSelectionScreen:
     def _render_chat_list(self) -> Table:
         """Render the chat list."""
         list_table = Table.grid(expand=True)
-        list_table.add_column(width=3)   # Selection marker
-        list_table.add_column(width=3)   # Type icon
-        list_table.add_column(ratio=1)   # Chat name
+        list_table.add_column(width=3)  # Selection marker
+        list_table.add_column(width=3)  # Type icon
+        list_table.add_column(ratio=1)  # Chat name
         list_table.add_column(width=15)  # Status
 
         filtered = self._filtered_chats()

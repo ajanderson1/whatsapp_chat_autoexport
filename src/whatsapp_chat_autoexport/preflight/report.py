@@ -8,7 +8,6 @@ ask `has_hard_fail` / `has_warning` without inspecting individual rows.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 
 class Status(str, Enum):
@@ -25,7 +24,7 @@ class CheckResult:
     status: Status
     summary: str
     details: dict = field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass

@@ -6,18 +6,14 @@ Tests message parsing, media detection, and file correlation.
 """
 
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Add project to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from whatsapp_chat_autoexport.processing.transcript_parser import (
-    TranscriptParser,
-    Message,
-    MediaReference
-)
+from whatsapp_chat_autoexport.processing.transcript_parser import TranscriptParser
 from whatsapp_chat_autoexport.utils.logger import Logger
 
 
@@ -76,7 +72,7 @@ def test_message_structure():
     # Check first message
     first_msg = messages[0]
 
-    print(f"\nFirst message:")
+    print("\nFirst message:")
     print(f"  Timestamp: {first_msg.timestamp}")
     print(f"  Sender: {first_msg.sender}")
     print(f"  Content: {first_msg.content}")
@@ -118,14 +114,14 @@ def test_media_detection():
     # Verify media types are detected
     media_types = [ref.media_type for ref in media_refs]
 
-    expected_types = ['image', 'audio', 'video', 'image', 'image']
+    expected_types = ["image", "audio", "video", "image", "image"]
 
     # Check if we have the expected media types (order might vary)
     type_counts = {}
     for mt in media_types:
         type_counts[mt] = type_counts.get(mt, 0) + 1
 
-    expected_counts = {'image': 3, 'audio': 1, 'video': 1}
+    expected_counts = {"image": 3, "audio": 1, "video": 1}
 
     for media_type, expected_count in expected_counts.items():
         actual_count = type_counts.get(media_type, 0)
@@ -181,20 +177,20 @@ def test_generate_summary():
     print(f"  Senders: {', '.join(summary['senders'])}")
     print(f"  Media types: {summary['media_type_counts']}")
 
-    if summary['date_range']:
+    if summary["date_range"]:
         print(f"  Date range: {summary['date_range']['first']} to {summary['date_range']['last']}")
         print(f"  Duration: {summary['date_range']['days']} days")
 
     # Verify summary statistics
-    if summary['total_messages'] != len(messages):
+    if summary["total_messages"] != len(messages):
         print("✗ Total messages count incorrect")
         return False
 
-    if summary['media_messages'] != len(media_refs):
+    if summary["media_messages"] != len(media_refs):
         print("✗ Media messages count incorrect")
         return False
 
-    if len(summary['senders']) != 2:
+    if len(summary["senders"]) != 2:
         print("✗ Expected 2 senders (Alice and Bob)")
         return False
 
@@ -209,7 +205,6 @@ def test_media_correlation():
 
     # Create a temporary directory structure for testing
     import tempfile
-    import os
 
     with tempfile.TemporaryDirectory() as tmpdir:
         media_dir = Path(tmpdir) / "media"
@@ -233,7 +228,7 @@ def test_media_correlation():
         correlation_list = parser.correlate_media_files(
             media_refs,
             media_dir,
-            time_tolerance_seconds=3600  # 1 hour tolerance for testing
+            time_tolerance_seconds=3600,  # 1 hour tolerance for testing
         )
 
         print(f"\n✓ Correlation attempted for {len(media_refs)} references")
@@ -252,7 +247,7 @@ def test_multiline_messages():
     # Create a test transcript with multi-line message
     import tempfile
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         f.write("1/15/24, 10:30 AM - Alice: This is a long message\n")
         f.write("that continues on the next line\n")
         f.write("and even another line\n")
@@ -301,7 +296,7 @@ def main():
     for test_name, test_func in tests:
         print(f"\n{'─' * 70}")
         print(f"Test: {test_name}")
-        print('─' * 70)
+        print("─" * 70)
 
         try:
             result = test_func()
@@ -309,6 +304,7 @@ def main():
         except Exception as e:
             print(f"✗ Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((test_name, False))
 

@@ -5,10 +5,10 @@ Defines the abstract interface for transcription services.
 """
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -16,11 +16,11 @@ class TranscriptionResult:
     """Result of a transcription operation."""
 
     success: bool
-    text: Optional[str] = None
-    error: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    language: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    text: str | None = None
+    error: str | None = None
+    duration_seconds: float | None = None
+    language: str | None = None
+    metadata: dict[str, Any] | None = None
     timestamp: datetime = None
 
     def __post_init__(self):
@@ -80,7 +80,7 @@ class BaseTranscriber(ABC):
         """
         pass
 
-    def validate_file(self, file_path: Path) -> tuple[bool, Optional[str]]:
+    def validate_file(self, file_path: Path) -> tuple[bool, str | None]:
         """
         Validate that a file can be transcribed.
 

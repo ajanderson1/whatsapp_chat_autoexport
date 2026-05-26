@@ -14,29 +14,28 @@ import json
 import os
 import re
 import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
-from ...mcp.bridge_reader import BridgeReader
 from ...mcp.state import MCPState
 from ...output.index_builder import IndexBuilder
 from ...output.spec_formatter import SpecFormatter
-from ...processing.transcript_parser import Message
 from ...sources.base import ChatInfo
 from ...sources.mcp_source import MCPSource
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _progress(msg: str) -> None:
     """Print a progress line to stderr."""
     print(msg, file=sys.stderr, flush=True)
 
 
-def _json_summary(data: Dict[str, Any]) -> None:
+def _json_summary(data: dict[str, Any]) -> None:
     """Print a JSON summary to stdout."""
     print(json.dumps(data, indent=2, default=str))
 
@@ -55,15 +54,15 @@ def _atomic_write(target: Path, content: str) -> None:
 
 def _sanitise_folder_name(name: str) -> str:
     """Make a string safe for use as a directory name."""
-    sanitised = re.sub(r'[<>:"/\\|?*]', '', name)
-    sanitised = re.sub(r'\s+', ' ', sanitised).strip()
+    sanitised = re.sub(r'[<>:"/\\|?*]', "", name)
+    sanitised = re.sub(r"\s+", " ", sanitised).strip()
     return sanitised or "unknown"
 
 
 def _resolve_chat(
     chat_identifier: str,
     mcp_source: MCPSource,
-) -> Optional[ChatInfo]:
+) -> ChatInfo | None:
     """
     Resolve a chat name or JID to a ChatInfo object.
 
@@ -84,8 +83,7 @@ def _resolve_chat(
         return matches[0]
     elif len(matches) > 1:
         _progress(
-            f"Ambiguous chat identifier '{chat_identifier}' matches "
-            f"{len(matches)} chats: {[c.name for c in matches]}"
+            f"Ambiguous chat identifier '{chat_identifier}' matches {len(matches)} chats: {[c.name for c in matches]}"
         )
         return None
 
@@ -96,13 +94,14 @@ def _resolve_chat(
 # Main rebuild orchestration
 # ---------------------------------------------------------------------------
 
+
 def run_rebuild(
     chat_identifier: str,
     output_dir: Path,
-    db_path: Optional[Path] = None,
-    state_file: Optional[Path] = None,
+    db_path: Path | None = None,
+    state_file: Path | None = None,
     user_display_name: str = "AJ Anderson",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Rebuild a single chat from MCP bridge (full history, no watermark).
 
@@ -119,7 +118,7 @@ def run_rebuild(
     Returns:
         JSON-serialisable summary dict.
     """
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "success": False,
         "timestamp": datetime.now().isoformat(),
         "chat_identifier": chat_identifier,
@@ -138,7 +137,7 @@ def run_rebuild(
 
     # ---- 2. Create MCP source ----
     try:
-        source_kwargs: Dict[str, Any] = {"user_display_name": user_display_name}
+        source_kwargs: dict[str, Any] = {"user_display_name": user_display_name}
         if db_path:
             source_kwargs["db_path"] = db_path
         mcp_source = MCPSource(**source_kwargs)
@@ -243,6 +242,7 @@ def run_rebuild(
 # CLI argument parser
 # ---------------------------------------------------------------------------
 
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the rebuild command."""
     parser = argparse.ArgumentParser(
@@ -295,7 +295,7 @@ Examples:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point for the rebuild command."""
     parser = create_parser()
     args = parser.parse_args(argv)

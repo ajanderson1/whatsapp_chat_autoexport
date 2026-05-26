@@ -1,14 +1,13 @@
 """Tests for WhatsAppDriver.is_community_chat() upfront probe and ExportOutcome."""
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
 from whatsapp_chat_autoexport.export.chat_exporter import (
     ChatExporter,
     ExportOutcome,
     ExportOutcomeKind,
 )
+from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
 
 
 def _make_driver():

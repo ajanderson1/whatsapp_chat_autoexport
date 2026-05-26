@@ -6,13 +6,12 @@ reader, and backward compatibility of the extended Message dataclass.
 """
 
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
 from whatsapp_chat_autoexport.processing.transcript_parser import (
-    Message,
     MediaReference,
+    Message,
     TranscriptParser,
 )
 from whatsapp_chat_autoexport.sources import (
@@ -22,7 +21,6 @@ from whatsapp_chat_autoexport.sources import (
     TranscriptSource,
 )
 from whatsapp_chat_autoexport.utils.logger import Logger
-
 
 # =========================================================================
 # Message dataclass backward compatibility
@@ -178,9 +176,7 @@ class TestAppiumSource:
         bob_dir = tmp_path / "Bob"
         bob_dir.mkdir()
         transcript_b = bob_dir / "WhatsApp Chat with Bob.txt"
-        transcript_b.write_text(
-            "2/20/24, 3:00 PM - Bob: Hey\n"
-        )
+        transcript_b.write_text("2/20/24, 3:00 PM - Bob: Hey\n")
 
         # Non-chat file at root (should be ignored)
         (tmp_path / "readme.txt").write_text("not a chat")
@@ -263,9 +259,7 @@ class TestAppiumSource:
 
     def test_missing_export_dir(self, tmp_path):
         """get_chats returns empty list when export_dir doesn't exist."""
-        source = AppiumSource(
-            tmp_path / "nonexistent", logger=Logger(log_file_enabled=False)
-        )
+        source = AppiumSource(tmp_path / "nonexistent", logger=Logger(log_file_enabled=False))
         assert source.get_chats() == []
 
     def test_produces_same_messages_as_parser(self, appium_export):
@@ -304,15 +298,11 @@ class TestTranscriptSourceLegacy:
         alice_dir = tmp_path / "Alice"
         alice_dir.mkdir()
         (alice_dir / "transcript.txt").write_text(
-            "1/15/24, 10:30 AM - Alice: Hello!\n"
-            "1/15/24, 10:31 AM - Me: Hi there\n"
+            "1/15/24, 10:30 AM - Alice: Hello!\n1/15/24, 10:31 AM - Me: Hi there\n"
         )
 
         # Flat layout: chat_name.txt
-        (tmp_path / "Bob.txt").write_text(
-            "2/20/24, 3:00 PM - Bob: Hey\n"
-            "2/20/24, 3:01 PM - Me: What's up\n"
-        )
+        (tmp_path / "Bob.txt").write_text("2/20/24, 3:00 PM - Bob: Hey\n2/20/24, 3:01 PM - Me: What's up\n")
 
         return tmp_path
 
@@ -501,9 +491,7 @@ class TestTranscriptSourceEdgeCases:
         """Messages before any day header are skipped."""
         chat_dir = tmp_path / "NoDates"
         chat_dir.mkdir()
-        (chat_dir / "transcript.md").write_text(
-            "[10:30] Alice: No date header above\n"
-        )
+        (chat_dir / "transcript.md").write_text("[10:30] Alice: No date header above\n")
 
         source = TranscriptSource(tmp_path, logger=Logger(log_file_enabled=False))
         messages = source.get_messages("NoDates")
@@ -512,9 +500,7 @@ class TestTranscriptSourceEdgeCases:
 
     def test_missing_directory(self, tmp_path):
         """Missing transcript_dir returns empty chats."""
-        source = TranscriptSource(
-            tmp_path / "nonexistent", logger=Logger(log_file_enabled=False)
-        )
+        source = TranscriptSource(tmp_path / "nonexistent", logger=Logger(log_file_enabled=False))
         assert source.get_chats() == []
 
     def test_get_media_returns_none(self, tmp_path):
@@ -526,13 +512,9 @@ class TestTranscriptSourceEdgeCases:
         """When both transcript.md and transcript.txt exist, .md is preferred."""
         chat_dir = tmp_path / "Both"
         chat_dir.mkdir()
-        (chat_dir / "transcript.txt").write_text(
-            "1/15/24, 10:30 AM - Alice: From txt\n"
-        )
+        (chat_dir / "transcript.txt").write_text("1/15/24, 10:30 AM - Alice: From txt\n")
         (chat_dir / "transcript.md").write_text(
-            "---\ncssclasses: [whatsapp-transcript]\n---\n\n"
-            "## 2024-01-15\n\n"
-            "[10:30] Alice: From md\n"
+            "---\ncssclasses: [whatsapp-transcript]\n---\n\n## 2024-01-15\n\n[10:30] Alice: From md\n"
         )
 
         source = TranscriptSource(tmp_path, logger=Logger(log_file_enabled=False))

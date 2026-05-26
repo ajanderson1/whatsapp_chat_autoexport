@@ -11,20 +11,18 @@ Covers:
 """
 
 import time
-from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from whatsapp_chat_autoexport.export.timing import (
-    ChatTiming,
     ChatStatus,
+    ChatTiming,
     PhaseTimer,
     format_duration,
     print_timing_summary,
 )
-
 
 # ---------------------------------------------------------------------------
 # ChatTiming dataclass
@@ -194,10 +192,17 @@ class TestPrintTimingSummary:
     def test_totals_sum_phases(self):
         logger = MagicMock()
         timings = [
-            ChatTiming(chat_name="A", ui_time_s=1.0, poll_time_s=2.0,
-                       download_time_s=3.0, process_time_s=4.0, total_time_s=10.0),
-            ChatTiming(chat_name="B", ui_time_s=0.5, poll_time_s=1.0,
-                       download_time_s=1.5, process_time_s=2.0, total_time_s=5.0),
+            ChatTiming(
+                chat_name="A",
+                ui_time_s=1.0,
+                poll_time_s=2.0,
+                download_time_s=3.0,
+                process_time_s=4.0,
+                total_time_s=10.0,
+            ),
+            ChatTiming(
+                chat_name="B", ui_time_s=0.5, poll_time_s=1.0, download_time_s=1.5, process_time_s=2.0, total_time_s=5.0
+            ),
         ]
         print_timing_summary(timings, logger)
 
@@ -225,7 +230,7 @@ def _make_exporter(pipeline=None):
 
     # Ensure mock pipeline has max_concurrent for ParallelPipeline
     if pipeline is not None:
-        if not hasattr(pipeline.config, '_mock_name') or True:
+        if not hasattr(pipeline.config, "_mock_name") or True:
             pipeline.config.max_concurrent = 2
 
     exporter = ChatExporter(mock_driver, mock_logger, pipeline=pipeline)
@@ -241,9 +246,7 @@ class TestExportChatsTiming:
         """Successful export without pipeline: timing captures UI phase, status=SUCCESS."""
         exporter = _make_exporter()
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Chat A", "Chat B"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Chat A", "Chat B"], include_media=True)
 
         assert len(exporter.chat_timings) == 2
         for ct in exporter.chat_timings:
@@ -275,7 +278,8 @@ class TestExportChatsTiming:
         exporter = _make_exporter()
 
         # Create a temp resume folder with a matching file
-        import tempfile, os
+        import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a file matching the chat name pattern
             Path(tmpdir, "WhatsApp Chat with Test Chat.zip").touch()
@@ -297,9 +301,7 @@ class TestExportChatsTiming:
         exporter = _make_exporter()
         exporter.export_chat_to_google_drive = MagicMock(return_value=False)
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Fail Chat"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Fail Chat"], include_media=True)
 
         assert len(exporter.chat_timings) == 1
         ct = exporter.chat_timings[0]
@@ -327,9 +329,7 @@ class TestExportChatsTiming:
         exporter.driver.verify_whatsapp_is_open.return_value = False
         exporter.driver.reconnect.return_value = False
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Unreachable"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Unreachable"], include_media=True)
 
         assert len(exporter.chat_timings) == 1
         ct = exporter.chat_timings[0]
@@ -340,9 +340,7 @@ class TestExportChatsTiming:
         exporter = _make_exporter()
         exporter.driver.click_chat.return_value = False
 
-        results, timings, total_time, skipped = exporter.export_chats(
-            ["Hidden Chat"], include_media=True
-        )
+        results, timings, total_time, skipped = exporter.export_chats(["Hidden Chat"], include_media=True)
 
         assert len(exporter.chat_timings) == 1
         ct = exporter.chat_timings[0]
@@ -353,9 +351,7 @@ class TestExportChatsTiming:
         """Verify print_timing_summary is called at the end of export_chats."""
         exporter = _make_exporter()
 
-        with patch(
-            "whatsapp_chat_autoexport.export.chat_exporter.print_timing_summary"
-        ) as mock_print:
+        with patch("whatsapp_chat_autoexport.export.chat_exporter.print_timing_summary") as mock_print:
             exporter.export_chats(["Chat A"], include_media=True)
             mock_print.assert_called_once()
             args = mock_print.call_args[0]
@@ -396,9 +392,7 @@ class TestExportChatsTiming:
         }
         exporter = _make_exporter(pipeline=mock_pipeline)
 
-        exporter.export_chats(
-            ["Fail Pipeline"], include_media=True, google_drive_folder="F"
-        )
+        exporter.export_chats(["Fail Pipeline"], include_media=True, google_drive_folder="F")
 
         ct = exporter.chat_timings[0]
         assert ct.status == ChatStatus.FAILED
@@ -407,9 +401,7 @@ class TestExportChatsTiming:
         """Batch with mixed success/failure populates timing for each."""
         exporter = _make_exporter()
         # First call succeeds, second fails
-        exporter.export_chat_to_google_drive = MagicMock(
-            side_effect=[True, False]
-        )
+        exporter.export_chat_to_google_drive = MagicMock(side_effect=[True, False])
 
         exporter.export_chats(["Good", "Bad"], include_media=True)
 

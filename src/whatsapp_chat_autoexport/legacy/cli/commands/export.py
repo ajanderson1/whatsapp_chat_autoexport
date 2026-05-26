@@ -4,18 +4,12 @@ Export command for WhatsApp Chat Auto-Export.
 Exports chats from WhatsApp on an Android device to Google Drive.
 """
 
-import sys
-import time
-from typing import Optional, List, Tuple
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-from rich.panel import Panel
 from rich.table import Table
-from rich.live import Live
 
 app = typer.Typer(
     name="export",
@@ -33,7 +27,7 @@ class ConnectionType(str, Enum):
     wireless = "wireless"
 
 
-def _scan_adb_devices(console: Console) -> List[Tuple[str, str]]:
+def _scan_adb_devices(console: Console) -> list[tuple[str, str]]:
     """
     Scan for connected ADB devices.
 
@@ -48,14 +42,14 @@ def _scan_adb_devices(console: Console) -> List[Tuple[str, str]]:
             capture_output=True,
             text=True,
             timeout=10,
-            close_fds=True  # Prevent fd inheritance issues in threaded contexts
+            close_fds=True,  # Prevent fd inheritance issues in threaded contexts
         )
 
         if result.returncode != 0:
             return []
 
         devices = []
-        for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
             if not line.strip():
                 continue
 
@@ -85,7 +79,7 @@ def _scan_adb_devices(console: Console) -> List[Tuple[str, str]]:
         return []
 
 
-def _select_device(console: Console) -> Tuple[Optional[str], bool]:
+def _select_device(console: Console) -> tuple[str | None, bool]:
     """
     Scan for devices and let user select one.
 
@@ -106,6 +100,7 @@ def _select_device(console: Console) -> Tuple[Optional[str], bool]:
         console.print("  3. Cancel")
 
         from rich.prompt import Prompt
+
         choice = Prompt.ask("Select option", choices=["1", "2", "3"], default="1")
 
         if choice == "1":
@@ -134,11 +129,8 @@ def _select_device(console: Console) -> Tuple[Optional[str], bool]:
     console.print(f"  {len(devices) + 2}. Rescan")
 
     from rich.prompt import Prompt
-    choice = Prompt.ask(
-        "Select device",
-        choices=[str(i) for i in range(1, len(devices) + 3)],
-        default="1"
-    )
+
+    choice = Prompt.ask("Select device", choices=[str(i) for i in range(1, len(devices) + 3)], default="1")
 
     choice_num = int(choice)
 
@@ -161,18 +153,18 @@ def _select_device(console: Console) -> Tuple[Optional[str], bool]:
 
 def _create_driver_and_exporter(
     connection: ConnectionType,
-    wireless_address: Optional[str],
+    wireless_address: str | None,
     debug: bool,
-) -> Tuple["WhatsAppDriver", "ChatExporter", "Logger"]:
+) -> tuple["WhatsAppDriver", "ChatExporter", "Logger"]:
     """
     Create WhatsAppDriver and ChatExporter instances.
 
     Returns:
         Tuple of (WhatsAppDriver, ChatExporter, Logger)
     """
-    from whatsapp_chat_autoexport.utils.logger import Logger
-    from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
     from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+    from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+    from whatsapp_chat_autoexport.utils.logger import Logger
 
     logger = Logger(debug=debug)
 
@@ -193,7 +185,7 @@ def _create_driver_and_exporter(
 def _connect_device(
     driver: "WhatsAppDriver",
     connection: ConnectionType,
-    wireless_address: Optional[str],
+    wireless_address: str | None,
     console: Console,
 ) -> bool:
     """
@@ -248,9 +240,9 @@ def _verify_whatsapp(driver: "WhatsAppDriver", console: Console) -> bool:
 
 def _collect_chats(
     driver: "WhatsAppDriver",
-    limit: Optional[int],
+    limit: int | None,
     console: Console,
-) -> List[str]:
+) -> list[str]:
     """
     Collect list of chats from WhatsApp.
 
@@ -285,12 +277,12 @@ def _collect_chats(
 def _export_chats(
     exporter: "ChatExporter",
     driver: "WhatsAppDriver",
-    chats: List[str],
+    chats: list[str],
     include_media: bool,
-    resume_path: Optional[Path],
+    resume_path: Path | None,
     use_new_workflow: bool,
     console: Console,
-) -> Tuple[dict, dict, float, dict]:
+) -> tuple[dict, dict, float, dict]:
     """
     Export all chats to Google Drive.
 
@@ -371,7 +363,7 @@ def _run_pipeline(
     console.print("\n[bold]Running processing pipeline...[/]\n")
 
     try:
-        from whatsapp_chat_autoexport.pipeline import WhatsAppPipeline, PipelineConfig
+        from whatsapp_chat_autoexport.pipeline import PipelineConfig, WhatsAppPipeline
 
         config = PipelineConfig(
             output_dir=Path(output),
@@ -405,13 +397,13 @@ def _run_pipeline(
 @app.callback(invoke_without_command=True)
 def export_main(
     ctx: typer.Context,
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None,
         "--output",
         "-o",
         help="Output directory for processed files (enables integrated pipeline)",
     ),
-    limit: Optional[int] = typer.Option(
+    limit: int | None = typer.Option(
         None,
         "--limit",
         "-l",
@@ -443,12 +435,12 @@ def export_main(
         "-c",
         help="Device connection type",
     ),
-    wireless_address: Optional[str] = typer.Option(
+    wireless_address: str | None = typer.Option(
         None,
         "--wireless-adb",
         help="Wireless ADB address (IP:PORT or just IP)",
     ),
-    resume_path: Optional[Path] = typer.Option(
+    resume_path: Path | None = typer.Option(
         None,
         "--resume",
         help="Resume mode: skip chats already in this Google Drive folder",
@@ -527,9 +519,9 @@ def export_main(
         console.print(f"  Limit: {limit} chats")
     console.print(f"  Include media: {include_media}")
     if use_new_workflow:
-        console.print(f"  [cyan]Workflow: NEW MODULAR (experimental)[/]")
+        console.print("  [cyan]Workflow: NEW MODULAR (experimental)[/]")
     else:
-        console.print(f"  Workflow: legacy")
+        console.print("  Workflow: legacy")
     if output:
         console.print(f"  Output: {output}")
         console.print(f"  Transcription: {not no_transcribe}")
@@ -547,9 +539,9 @@ def export_main(
 
     try:
         # Import required modules
-        from whatsapp_chat_autoexport.utils.logger import Logger
-        from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
         from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+        from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+        from whatsapp_chat_autoexport.utils.logger import Logger
 
         logger = Logger(debug=debug)
 
@@ -558,7 +550,7 @@ def export_main(
         # ========================================
         # If no wireless address specified, scan for devices and let user choose
         selected_device_id = None
-        use_wireless = (connection == ConnectionType.wireless)
+        use_wireless = connection == ConnectionType.wireless
 
         if not wireless_address:
             # Scan for devices and let user select
@@ -572,6 +564,7 @@ def export_main(
             if use_wireless:
                 # User wants to connect via wireless - prompt for address
                 from rich.prompt import Prompt
+
                 console.print("\n[bold]Wireless ADB Connection[/]")
                 console.print("  On your phone: Settings → Developer Options → Wireless Debugging")
                 console.print("  Tap 'Pair device with pairing code' for new connection")
@@ -588,6 +581,7 @@ def export_main(
         if not skip_appium:
             try:
                 from whatsapp_chat_autoexport.export.appium_manager import AppiumManager
+
                 appium_manager = AppiumManager(logger=logger)
 
                 with console.status("[bold cyan]Starting Appium server..."):
@@ -684,6 +678,7 @@ def export_main(
         console.print(f"\n[red]✗[/] Unexpected error: {e}")
         if debug:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
 
@@ -703,14 +698,14 @@ def export_main(
 
 
 def _show_export_plan(
-    output: Optional[Path],
-    limit: Optional[int],
+    output: Path | None,
+    limit: int | None,
     include_media: bool,
     no_output_media: bool,
     no_transcribe: bool,
     connection: ConnectionType,
-    wireless_address: Optional[str],
-    resume_path: Optional[Path],
+    wireless_address: str | None,
+    resume_path: Path | None,
     use_new_workflow: bool = False,
 ) -> None:
     """Show what the export would do."""
@@ -769,7 +764,7 @@ def list_chats(
         "-c",
         help="Device connection type",
     ),
-    wireless_address: Optional[str] = typer.Option(
+    wireless_address: str | None = typer.Option(
         None,
         "--wireless-adb",
         help="Wireless ADB address",
@@ -797,14 +792,14 @@ def list_chats(
     appium_manager = None
 
     try:
-        from whatsapp_chat_autoexport.utils.logger import Logger
         from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+        from whatsapp_chat_autoexport.utils.logger import Logger
 
         logger = Logger(debug=debug)
 
         # Device selection if no wireless address specified
         selected_device_id = None
-        use_wireless = (connection == ConnectionType.wireless)
+        use_wireless = connection == ConnectionType.wireless
 
         if not wireless_address:
             selected_device_id, use_wireless = _select_device(console)
@@ -815,6 +810,7 @@ def list_chats(
 
             if use_wireless:
                 from rich.prompt import Prompt
+
                 console.print("\n[bold]Wireless ADB Connection[/]")
                 wireless_address = Prompt.ask("Enter device IP:PORT (e.g., 192.168.1.100:5555)")
                 if not wireless_address:
@@ -826,6 +822,7 @@ def list_chats(
         if not skip_appium:
             try:
                 from whatsapp_chat_autoexport.export.appium_manager import AppiumManager
+
                 appium_manager = AppiumManager(logger=logger)
 
                 with console.status("[bold cyan]Starting Appium server..."):
@@ -891,7 +888,7 @@ def verify(
         "-c",
         help="Device connection type",
     ),
-    wireless_address: Optional[str] = typer.Option(
+    wireless_address: str | None = typer.Option(
         None,
         "--wireless-adb",
         help="Wireless ADB address",
@@ -923,14 +920,14 @@ def verify(
     all_passed = True
 
     try:
-        from whatsapp_chat_autoexport.utils.logger import Logger
         from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+        from whatsapp_chat_autoexport.utils.logger import Logger
 
         logger = Logger(debug=debug)
 
         # Device selection if no wireless address specified
         selected_device_id = None
-        use_wireless = (connection == ConnectionType.wireless)
+        use_wireless = connection == ConnectionType.wireless
 
         if not wireless_address:
             selected_device_id, use_wireless = _select_device(console)
@@ -941,6 +938,7 @@ def verify(
 
             if use_wireless:
                 from rich.prompt import Prompt
+
                 console.print("\n[bold]Wireless ADB Connection[/]")
                 wireless_address = Prompt.ask("Enter device IP:PORT (e.g., 192.168.1.100:5555)")
                 if not wireless_address:
@@ -953,6 +951,7 @@ def verify(
         if not skip_appium:
             try:
                 from whatsapp_chat_autoexport.export.appium_manager import AppiumManager
+
                 appium_manager = AppiumManager(logger=logger)
 
                 if appium_manager.start_appium():

@@ -5,24 +5,22 @@ Provides centralized state management with automatic event
 emission for state changes.
 """
 
-from typing import Optional, List, Dict, Any, Callable
-from datetime import datetime
 import threading
+from datetime import datetime
 
-from .models import (
-    ChatStatus,
-    ChatState,
-    SessionStatus,
-    SessionState,
-    ExportProgress,
-)
 from ..core.events import (
     EventBus,
     EventType,
-    StateChangeEvent,
     ExportProgressEvent,
+    StateChangeEvent,
     get_event_bus,
-    emit,
+)
+from .models import (
+    ChatState,
+    ChatStatus,
+    ExportProgress,
+    SessionState,
+    SessionStatus,
 )
 
 
@@ -36,7 +34,7 @@ class StateManager:
 
     def __init__(
         self,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
     ):
         """
         Initialize the state manager.
@@ -44,13 +42,13 @@ class StateManager:
         Args:
             event_bus: Optional event bus for notifications
         """
-        self._session: Optional[SessionState] = None
+        self._session: SessionState | None = None
         self._event_bus = event_bus or get_event_bus()
         self._lock = threading.RLock()
-        self._start_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
 
     @property
-    def session(self) -> Optional[SessionState]:
+    def session(self) -> SessionState | None:
         """Get the current session state."""
         return self._session
 
@@ -62,8 +60,8 @@ class StateManager:
     def create_session(
         self,
         include_media: bool = True,
-        limit: Optional[int] = None,
-        device_id: Optional[str] = None,
+        limit: int | None = None,
+        device_id: str | None = None,
     ) -> SessionState:
         """
         Create a new export session.
@@ -147,7 +145,7 @@ class StateManager:
 
             return chat
 
-    def add_chats(self, chat_names: List[str]) -> List[ChatState]:
+    def add_chats(self, chat_names: list[str]) -> list[ChatState]:
         """
         Add multiple chats to the session.
 
@@ -171,7 +169,7 @@ class StateManager:
 
             return chats
 
-    def start_chat(self, chat_name: str) -> Optional[ChatState]:
+    def start_chat(self, chat_name: str) -> ChatState | None:
         """
         Mark a chat as started.
 
@@ -197,7 +195,7 @@ class StateManager:
 
             return chat
 
-    def complete_chat(self, chat_name: str) -> Optional[ChatState]:
+    def complete_chat(self, chat_name: str) -> ChatState | None:
         """
         Mark a chat as completed.
 
@@ -230,7 +228,7 @@ class StateManager:
 
             return chat
 
-    def fail_chat(self, chat_name: str, error_message: str) -> Optional[ChatState]:
+    def fail_chat(self, chat_name: str, error_message: str) -> ChatState | None:
         """
         Mark a chat as failed.
 
@@ -265,7 +263,7 @@ class StateManager:
 
             return chat
 
-    def skip_chat(self, chat_name: str, reason: str) -> Optional[ChatState]:
+    def skip_chat(self, chat_name: str, reason: str) -> ChatState | None:
         """
         Mark a chat as skipped.
 
@@ -344,9 +342,7 @@ class StateManager:
 
             return ExportProgress(
                 current_chat=current_chat.name if current_chat else None,
-                current_step=current_chat.steps_completed[-1]
-                if current_chat and current_chat.steps_completed
-                else "",
+                current_step=current_chat.steps_completed[-1] if current_chat and current_chat.steps_completed else "",
                 step_index=current_chat.current_step if current_chat else 0,
                 total_steps=6,
                 chats_completed=self._session.completed_chats,
@@ -357,18 +353,14 @@ class StateManager:
                 elapsed_seconds=elapsed,
             )
 
-    def get_pending_chats(self) -> List[ChatState]:
+    def get_pending_chats(self) -> list[ChatState]:
         """Get list of pending chats."""
         with self._lock:
             if self._session is None:
                 return []
-            return [
-                c
-                for c in self._session.chats.values()
-                if c.status == ChatStatus.PENDING
-            ]
+            return [c for c in self._session.chats.values() if c.status == ChatStatus.PENDING]
 
-    def get_next_chat(self) -> Optional[ChatState]:
+    def get_next_chat(self) -> ChatState | None:
         """Get the next pending chat to process."""
         with self._lock:
             pending = self.get_pending_chats()

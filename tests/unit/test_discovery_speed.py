@@ -4,9 +4,7 @@ Validates smart waits in restart_app_to_top() and collect_all_chats().
 """
 
 import time
-from unittest.mock import MagicMock, patch, PropertyMock, call
-
-import pytest
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 from whatsapp_chat_autoexport.config.timeouts import (
     TimeoutConfig,
@@ -17,10 +15,10 @@ from whatsapp_chat_autoexport.config.timeouts import (
 )
 from whatsapp_chat_autoexport.export.models import ChatMetadata
 
-
 # ---------------------------------------------------------------------------
 # XML helpers for mocking page_source
 # ---------------------------------------------------------------------------
+
 
 def _build_page_source_xml(chat_names: list[str]) -> str:
     """Build a minimal WhatsApp-style XML page source with the given chat names."""
@@ -31,22 +29,22 @@ def _build_page_source_xml(chat_names: list[str]) -> str:
             f'<android.widget.RelativeLayout resource-id="com.whatsapp:id/row_content">'
             f'<android.widget.TextView resource-id="com.whatsapp:id/conversations_row_contact_name" text="{name}" />'
             f'<android.widget.TextView resource-id="com.whatsapp:id/conversations_row_date" text="12:00" />'
-            f'</android.widget.RelativeLayout>'
-            f'</android.widget.LinearLayout>'
+            f"</android.widget.RelativeLayout>"
+            f"</android.widget.LinearLayout>"
         )
-    return f'<hierarchy>{"".join(rows)}</hierarchy>'
+    return f"<hierarchy>{''.join(rows)}</hierarchy>"
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_driver(is_wireless: bool = False, device_id: str = "emulator-5554"):
     """Create a WhatsAppDriver with mocked dependencies."""
-    with patch(
-        "whatsapp_chat_autoexport.export.whatsapp_driver.webdriver"
-    ), patch(
-        "whatsapp_chat_autoexport.export.whatsapp_driver.UiAutomator2Options"
+    with (
+        patch("whatsapp_chat_autoexport.export.whatsapp_driver.webdriver"),
+        patch("whatsapp_chat_autoexport.export.whatsapp_driver.UiAutomator2Options"),
     ):
         from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
 
@@ -63,6 +61,7 @@ def _make_driver(is_wireless: bool = False, device_id: str = "emulator-5554"):
 # ---------------------------------------------------------------------------
 # restart_app_to_top tests
 # ---------------------------------------------------------------------------
+
 
 class TestRestartAppToTop:
     """Tests for smart waits in restart_app_to_top()."""
@@ -95,9 +94,7 @@ class TestRestartAppToTop:
         """restart_app_to_top succeeds after verify fails twice then succeeds."""
         driver = _make_driver()
         mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        driver.verify_whatsapp_is_open = MagicMock(
-            side_effect=[False, False, True]
-        )
+        driver.verify_whatsapp_is_open = MagicMock(side_effect=[False, False, True])
 
         result = driver.restart_app_to_top()
 
@@ -136,9 +133,7 @@ class TestRestartAppToTop:
         driver.verify_whatsapp_is_open = MagicMock(return_value=False)
 
         # Use real time but with a tiny app_launch_timeout to keep test fast
-        with patch(
-            "whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config"
-        ) as mock_config:
+        with patch("whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config") as mock_config:
             fast_config = TimeoutConfig(app_launch_timeout=0.3)
             mock_config.return_value = fast_config
 
@@ -159,9 +154,7 @@ class TestRestartAppToTop:
         mock_subprocess.run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         driver.verify_whatsapp_is_open = MagicMock(return_value=False)
 
-        with patch(
-            "whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config"
-        ) as mock_config:
+        with patch("whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config") as mock_config:
             fast_config = TimeoutConfig(app_launch_timeout=0.2)
             mock_config.return_value = fast_config
 
@@ -182,14 +175,13 @@ class TestRestartAppToTop:
 
         for c in mock_sleep.call_args_list:
             val = c[0][0]
-            assert val not in (3, 5, 0.5), (
-                f"Found hardcoded sleep({val}) — should be eliminated"
-            )
+            assert val not in (3, 5, 0.5), f"Found hardcoded sleep({val}) — should be eliminated"
 
 
 # ---------------------------------------------------------------------------
 # collect_all_chats scroll settle tests
 # ---------------------------------------------------------------------------
+
 
 class TestScrollSettle:
     """Tests for smart scroll settle wait in collect_all_chats()."""
@@ -254,9 +246,7 @@ class TestScrollSettle:
         # Check that no sleep(0.5) was called (only 0.05 poll intervals or 0.2 post-stop)
         for c in mock_sleep.call_args_list:
             val = c[0][0]
-            assert val != 0.5, (
-                f"Found hardcoded sleep(0.5) — should be replaced with smart wait"
-            )
+            assert val != 0.5, "Found hardcoded sleep(0.5) — should be replaced with smart wait"
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config")
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.sleep")
@@ -339,12 +329,14 @@ class TestScrollSettle:
 # Integration-style: verify no old sleeps remain
 # ---------------------------------------------------------------------------
 
+
 class TestNoHardcodedSleeps:
     """Verify hardcoded sleeps are eliminated from target methods."""
 
     def test_no_old_sleeps_in_restart_app_to_top(self):
         """Source code of restart_app_to_top has no sleep(3), sleep(5), or sleep(0.5)."""
         import inspect
+
         from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
 
         source = inspect.getsource(WhatsAppDriver.restart_app_to_top)
@@ -358,6 +350,7 @@ class TestNoHardcodedSleeps:
     def test_no_old_sleeps_in_collect_all_chats(self):
         """Source code of collect_all_chats has no hardcoded sleep(0.5) after swipe."""
         import inspect
+
         from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
 
         source = inspect.getsource(WhatsAppDriver.collect_all_chats)
@@ -437,8 +430,7 @@ class TestDiscoveryTimingIntegration:
 
         Returns stable element counts for the settle poll loop.
         """
-        elements = [self._make_chat_element(f"Chat {i}", y=(i + 1) * 100)
-                     for i in range(chats_per_page)]
+        elements = [self._make_chat_element(f"Chat {i}", y=(i + 1) * 100) for i in range(chats_per_page)]
 
         def side_effect(by, value):
             return elements
@@ -463,15 +455,11 @@ class TestDiscoveryTimingIntegration:
 
         # Build progressive page_source that returns 5 chats per page
         # Page 0: Chat 0-4, Page 1: Chat 5-9, then repeats last page
-        get_page_source, advance_page = self._build_progressive_page_source(
-            chats_per_page=5, total_chats=10
-        )
+        get_page_source, advance_page = self._build_progressive_page_source(chats_per_page=5, total_chats=10)
         type(driver.driver).page_source = PropertyMock(side_effect=lambda: get_page_source())
 
         # find_elements for settle detection (stable count)
-        find_elements_fn = self._build_progressive_find_elements(
-            chats_per_page=5, total_chats=10
-        )
+        find_elements_fn = self._build_progressive_find_elements(chats_per_page=5, total_chats=10)
         driver.driver.find_elements.side_effect = find_elements_fn
         driver.driver.swipe = MagicMock(side_effect=advance_page)
 
@@ -485,8 +473,7 @@ class TestDiscoveryTimingIntegration:
 
         # Wall-clock time should be well under the old 10s
         assert elapsed < 5.0, (
-            f"Discovery took {elapsed:.2f}s — expected < 5s with smart waits "
-            f"(old hardcoded sleeps would take ~10s)"
+            f"Discovery took {elapsed:.2f}s — expected < 5s with smart waits (old hardcoded sleeps would take ~10s)"
         )
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
@@ -540,8 +527,7 @@ class TestDiscoveryTimingIntegration:
         # FAST should be faster or equal (shorter settle ceilings)
         # Use generous tolerance — timing can be noisy on CI
         assert elapsed_fast <= elapsed_normal + 0.5, (
-            f"FAST ({elapsed_fast:.2f}s) should not be slower than "
-            f"NORMAL ({elapsed_normal:.2f}s) by more than 0.5s"
+            f"FAST ({elapsed_fast:.2f}s) should not be slower than NORMAL ({elapsed_normal:.2f}s) by more than 0.5s"
         )
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
@@ -567,9 +553,7 @@ class TestDiscoveryTimingIntegration:
         driver.verify_whatsapp_is_open = MagicMock(side_effect=slow_verify)
 
         # Use a small timeout ceiling to keep test fast
-        with patch(
-            "whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config"
-        ) as mock_config:
+        with patch("whatsapp_chat_autoexport.export.whatsapp_driver.get_timeout_config") as mock_config:
             fast_config = TimeoutConfig(app_launch_timeout=5.0)
             mock_config.return_value = fast_config
 
@@ -582,14 +566,10 @@ class TestDiscoveryTimingIntegration:
 
         # With wireless 1.5x multiplier, ceiling is 7.5s
         # Should complete well within that (3 calls * ~0.6s each = ~1.8s)
-        assert elapsed < 5.0, (
-            f"Wireless verify took {elapsed:.2f}s — should complete within ceiling"
-        )
+        assert elapsed < 5.0, f"Wireless verify took {elapsed:.2f}s — should complete within ceiling"
 
         # But should take some time due to simulated latency
-        assert elapsed >= 0.3, (
-            f"Expected >= 0.3s due to simulated latency, got {elapsed:.2f}s"
-        )
+        assert elapsed >= 0.3, f"Expected >= 0.3s due to simulated latency, got {elapsed:.2f}s"
 
     @patch("whatsapp_chat_autoexport.export.whatsapp_driver.subprocess")
     def test_full_discovery_wall_clock_vs_old_sleeps(self, mock_subprocess):

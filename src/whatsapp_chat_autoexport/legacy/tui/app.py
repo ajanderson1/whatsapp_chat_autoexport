@@ -8,21 +8,18 @@ Provides the primary Rich-based terminal interface with:
 - Event integration
 """
 
-from typing import Optional, Callable, Any
-from datetime import datetime
 import threading
+from collections.abc import Callable
 
 from rich.console import Console
 from rich.live import Live
-from rich.layout import Layout
 from rich.panel import Panel
-from rich.text import Text
 
-from .wizard import ExportWizard, WizardController, WizardStep
+from whatsapp_chat_autoexport.core.events import Event, EventBus, EventType
+from whatsapp_chat_autoexport.state.models import ExportProgress, SessionState
+
 from .screens import ExportProgressScreen
-from .components import ProgressPanel, QueuePanel, StatusBar
-from whatsapp_chat_autoexport.state.models import SessionState, ChatState, ExportProgress
-from whatsapp_chat_autoexport.core.events import EventBus, EventType, Event
+from .wizard import ExportWizard, WizardController, WizardStep
 
 
 class WhatsAppExportTUI:
@@ -38,8 +35,8 @@ class WhatsAppExportTUI:
 
     def __init__(
         self,
-        console: Optional[Console] = None,
-        event_bus: Optional[EventBus] = None,
+        console: Console | None = None,
+        event_bus: EventBus | None = None,
         refresh_rate: float = 4.0,
     ):
         """
@@ -60,8 +57,8 @@ class WhatsAppExportTUI:
 
         # State
         self._running = False
-        self._live: Optional[Live] = None
-        self._input_thread: Optional[threading.Thread] = None
+        self._live: Live | None = None
+        self._input_thread: threading.Thread | None = None
 
         # Subscribe to events
         self._setup_event_handlers()
@@ -144,6 +141,7 @@ class WhatsAppExportTUI:
                 # proper async keyboard input handling here.
                 # For now, this serves as the structure.
                 import time
+
                 time.sleep(0.1)
 
         self._live = None
@@ -151,8 +149,8 @@ class WhatsAppExportTUI:
     def run_progress_only(
         self,
         session: SessionState,
-        on_pause: Optional[Callable[[], None]] = None,
-        on_resume: Optional[Callable[[], None]] = None,
+        on_pause: Callable[[], None] | None = None,
+        on_resume: Callable[[], None] | None = None,
     ) -> None:
         """
         Run just the progress screen (non-interactive mode).
@@ -180,13 +178,12 @@ class WhatsAppExportTUI:
 
             while self._running:
                 # Update from session state
-                self._wizard._export_progress.update_from_chats(
-                    list(session.chats.values())
-                )
+                self._wizard._export_progress.update_from_chats(list(session.chats.values()))
 
                 live.update(self.render())
 
                 import time
+
                 time.sleep(0.25)
 
     def stop(self) -> None:
@@ -261,7 +258,7 @@ class ProgressOnlyTUI:
 
     def __init__(
         self,
-        console: Optional[Console] = None,
+        console: Console | None = None,
         refresh_rate: float = 4.0,
     ):
         """
@@ -275,7 +272,7 @@ class ProgressOnlyTUI:
         self._refresh_rate = refresh_rate
         self._progress_screen = ExportProgressScreen(compact_mode=True)
         self._running = False
-        self._live: Optional[Live] = None
+        self._live: Live | None = None
 
     def start(self, total_chats: int, chats: list) -> None:
         """

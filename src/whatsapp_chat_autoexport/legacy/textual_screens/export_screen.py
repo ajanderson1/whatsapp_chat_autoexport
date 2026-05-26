@@ -10,21 +10,20 @@ This is the third screen in the pipeline:
 """
 
 import asyncio
-from typing import List, Optional
 
 from textual.app import ComposeResult
-from textual.screen import Screen
-from textual.widgets import Static, Button
-from textual.containers import Vertical, Horizontal, Container
 from textual.binding import Binding
+from textual.containers import Container, Horizontal, Vertical
+from textual.screen import Screen
+from textual.widgets import Button, Static
 from textual.worker import Worker, WorkerState
 
+from whatsapp_chat_autoexport.state.models import ChatState, ChatStatus
+from whatsapp_chat_autoexport.tui.textual_app import PipelineStage
+from whatsapp_chat_autoexport.tui.textual_widgets.activity_log import ActivityLog
 from whatsapp_chat_autoexport.tui.textual_widgets.pipeline_header import PipelineHeader
 from whatsapp_chat_autoexport.tui.textual_widgets.progress_display import ProgressDisplay
 from whatsapp_chat_autoexport.tui.textual_widgets.queue_widget import QueueWidget
-from whatsapp_chat_autoexport.tui.textual_widgets.activity_log import ActivityLog
-from whatsapp_chat_autoexport.tui.textual_app import PipelineStage
-from whatsapp_chat_autoexport.state.models import ChatStatus, ChatState
 
 
 class ExportScreen(Screen):
@@ -46,8 +45,8 @@ class ExportScreen(Screen):
         """Initialize the export screen."""
         super().__init__(**kwargs)
         self._paused = False
-        self._current_chat: Optional[str] = None
-        self._export_worker: Optional[Worker] = None
+        self._current_chat: str | None = None
+        self._export_worker: Worker | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -79,10 +78,7 @@ class ExportScreen(Screen):
 
         # Initialize queue with ChatState objects
         queue = self.query_one("#queue-widget", QueueWidget)
-        chat_states = [
-            ChatState(name=name, status=ChatStatus.PENDING)
-            for name in selected_chats
-        ]
+        chat_states = [ChatState(name=name, status=ChatStatus.PENDING) for name in selected_chats]
         queue.update_queue(chat_states)
 
         # Start export in background
@@ -92,7 +88,7 @@ class ExportScreen(Screen):
             thread=True,
         )
 
-    async def _run_export(self, chats: List[str]) -> dict:
+    async def _run_export(self, chats: list[str]) -> dict:
         """
         Run the export process for all selected chats.
 
@@ -170,9 +166,10 @@ class ExportScreen(Screen):
         Returns:
             True if successful, False otherwise
         """
-        from whatsapp_chat_autoexport.utils.logger import Logger
-        from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
         import time
+
+        from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter
+        from whatsapp_chat_autoexport.utils.logger import Logger
 
         # Create logger
         debug_mode = getattr(self.app, "debug_mode", False)

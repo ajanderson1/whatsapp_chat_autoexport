@@ -10,8 +10,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from .drive_manager import GoogleDriveManager
 from ..utils.logger import Logger
+from .drive_manager import GoogleDriveManager
 
 
 def create_parser():
@@ -41,61 +41,40 @@ Examples:
 
   # Revoke credentials
   %(prog)s revoke
-        """
+        """,
     )
 
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode (verbose output)'
-    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode (verbose output)")
 
     parser.add_argument(
-        '--credentials-dir',
+        "--credentials-dir",
         type=str,
-        metavar='DIR',
-        help='Directory for OAuth credentials (default: ~/.whatsapp_export)'
+        metavar="DIR",
+        help="Directory for OAuth credentials (default: ~/.whatsapp_export)",
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # Auth command
-    auth_parser = subparsers.add_parser('auth', help='Authenticate with Google Drive')
+    auth_parser = subparsers.add_parser("auth", help="Authenticate with Google Drive")
     auth_parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Force re-authentication even if already authenticated'
+        "--force", action="store_true", help="Force re-authentication even if already authenticated"
     )
 
     # List command
-    list_parser = subparsers.add_parser('list', help='List WhatsApp exports')
-    list_parser.add_argument(
-        '--folder',
-        type=str,
-        metavar='NAME',
-        help='Folder name to search in'
-    )
+    list_parser = subparsers.add_parser("list", help="List WhatsApp exports")
+    list_parser.add_argument("--folder", type=str, metavar="NAME", help="Folder name to search in")
 
     # Download command
-    download_parser = subparsers.add_parser('download', help='Download WhatsApp exports')
+    download_parser = subparsers.add_parser("download", help="Download WhatsApp exports")
+    download_parser.add_argument("destination", help="Destination directory for downloads")
+    download_parser.add_argument("--folder", type=str, metavar="NAME", help="Folder name to download from")
     download_parser.add_argument(
-        'destination',
-        help='Destination directory for downloads'
-    )
-    download_parser.add_argument(
-        '--folder',
-        type=str,
-        metavar='NAME',
-        help='Folder name to download from'
-    )
-    download_parser.add_argument(
-        '--delete-after',
-        action='store_true',
-        help='Delete files from Google Drive after successful download'
+        "--delete-after", action="store_true", help="Delete files from Google Drive after successful download"
     )
 
     # Revoke command
-    revoke_parser = subparsers.add_parser('revoke', help='Revoke Google Drive credentials')
+    revoke_parser = subparsers.add_parser("revoke", help="Revoke Google Drive credentials")
 
     return parser
 
@@ -146,10 +125,10 @@ def cmd_list(manager: GoogleDriveManager, args):
     logger.info(f"Total size: {summary['total_size_mb']:.2f} MB")
     logger.info("=" * 70)
 
-    if summary['files']:
+    if summary["files"]:
         logger.info("\nFiles:")
-        for i, file in enumerate(summary['files'], 1):
-            size_mb = int(file.get('size', 0)) / (1024 * 1024)
+        for i, file in enumerate(summary["files"], 1):
+            size_mb = int(file.get("size", 0)) / (1024 * 1024)
             logger.info(f"{i:3d}. {file['name']} ({size_mb:.2f} MB)")
 
     return 0
@@ -186,11 +165,7 @@ def cmd_download(manager: GoogleDriveManager, args):
     logger.info("Downloading WhatsApp Exports")
     logger.info("=" * 70)
 
-    downloaded = manager.batch_download_exports(
-        files,
-        dest_dir,
-        delete_after=args.delete_after
-    )
+    downloaded = manager.batch_download_exports(files, dest_dir, delete_after=args.delete_after)
 
     logger.info("=" * 70)
     logger.success(f"Downloaded {len(downloaded)} file(s) to: {dest_dir}")
@@ -233,13 +208,13 @@ def main():
 
     # Execute command
     try:
-        if args.command == 'auth':
+        if args.command == "auth":
             return cmd_auth(manager, args)
-        elif args.command == 'list':
+        elif args.command == "list":
             return cmd_list(manager, args)
-        elif args.command == 'download':
+        elif args.command == "download":
             return cmd_download(manager, args)
-        elif args.command == 'revoke':
+        elif args.command == "revoke":
             return cmd_revoke(manager, args)
         else:
             logger.error(f"Unknown command: {args.command}")
@@ -251,6 +226,7 @@ def main():
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

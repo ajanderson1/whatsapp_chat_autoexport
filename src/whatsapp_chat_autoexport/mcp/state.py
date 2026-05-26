@@ -10,11 +10,10 @@ handled gracefully by reinitialising to defaults with a warning.
 import json
 import logging
 import os
-import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +27,12 @@ DEFAULT_STATE_PATH = Path.home() / ".whatsapp-sync" / "state.json"
 @dataclass
 class VoiceRetryItem:
     """A voice message that needs transcription retry."""
+
     message_id: str
     chat_jid: str
     timestamp: str  # ISO-8601 string
     attempts: int = 0
-    last_attempt: Optional[str] = None  # ISO-8601 string
+    last_attempt: str | None = None  # ISO-8601 string
 
 
 @dataclass
@@ -51,17 +51,18 @@ class MCPState:
             failed and should be retried on the next sync run.
         last_sync: ISO-8601 timestamp of the most recent sync run.
     """
+
     version: int = STATE_VERSION
-    watermarks: Dict[str, str] = field(default_factory=dict)
-    contact_cache: Dict[str, str] = field(default_factory=dict)
-    voice_retry_queue: List[VoiceRetryItem] = field(default_factory=list)
-    last_sync: Optional[str] = None
+    watermarks: dict[str, str] = field(default_factory=dict)
+    contact_cache: dict[str, str] = field(default_factory=dict)
+    voice_retry_queue: list[VoiceRetryItem] = field(default_factory=list)
+    last_sync: str | None = None
 
     # ------------------------------------------------------------------
     # Watermark helpers
     # ------------------------------------------------------------------
 
-    def get_watermark(self, jid: str) -> Optional[datetime]:
+    def get_watermark(self, jid: str) -> datetime | None:
         """
         Get the high-water mark for a chat.
 
@@ -85,7 +86,7 @@ class MCPState:
     # Contact cache helpers
     # ------------------------------------------------------------------
 
-    def get_contact_name(self, sender: str) -> Optional[str]:
+    def get_contact_name(self, sender: str) -> str | None:
         """Look up a cached contact name."""
         return self.contact_cache.get(sender)
 
@@ -97,9 +98,7 @@ class MCPState:
     # Voice retry queue helpers
     # ------------------------------------------------------------------
 
-    def add_voice_retry(
-        self, message_id: str, chat_jid: str, timestamp: datetime
-    ) -> None:
+    def add_voice_retry(self, message_id: str, chat_jid: str, timestamp: datetime) -> None:
         """Add a voice message to the retry queue."""
         # Don't add duplicates
         for item in self.voice_retry_queue:
@@ -113,7 +112,7 @@ class MCPState:
             )
         )
 
-    def pop_voice_retries(self, max_attempts: int = 3) -> List[VoiceRetryItem]:
+    def pop_voice_retries(self, max_attempts: int = 3) -> list[VoiceRetryItem]:
         """
         Return and remove retry items that have not exceeded max_attempts.
 
@@ -142,7 +141,7 @@ class MCPState:
     # Serialisation
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise state to a JSON-compatible dictionary."""
         return {
             "version": self.version,
@@ -153,7 +152,7 @@ class MCPState:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MCPState":
+    def from_dict(cls, data: dict[str, Any]) -> "MCPState":
         """
         Deserialise state from a dictionary.
 
@@ -184,7 +183,7 @@ class MCPState:
     # Persistence (atomic file I/O)
     # ------------------------------------------------------------------
 
-    def save(self, path: Optional[Path] = None) -> None:
+    def save(self, path: Path | None = None) -> None:
         """
         Persist state to disk with an atomic write.
 
@@ -221,7 +220,7 @@ class MCPState:
             raise
 
     @classmethod
-    def load(cls, path: Optional[Path] = None) -> "MCPState":
+    def load(cls, path: Path | None = None) -> "MCPState":
         """
         Load state from disk, with graceful degradation on corruption.
 
@@ -242,13 +241,11 @@ class MCPState:
             return cls()
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
 
             if not isinstance(data, dict):
-                raise ValueError(
-                    f"Expected dict at top level, got {type(data).__name__}"
-                )
+                raise ValueError(f"Expected dict at top level, got {type(data).__name__}")
 
             state = cls.from_dict(data)
 
@@ -256,8 +253,7 @@ class MCPState:
             # migrations would go here
             if state.version > STATE_VERSION:
                 logger.warning(
-                    "State file version %d is newer than supported %d — "
-                    "proceeding with best effort",
+                    "State file version %d is newer than supported %d — proceeding with best effort",
                     state.version,
                     STATE_VERSION,
                 )
@@ -265,7 +261,5 @@ class MCPState:
             return state
 
         except (json.JSONDecodeError, ValueError, KeyError, TypeError) as exc:
-            logger.warning(
-                "Corrupt state file at %s (%s) — reinitialising", path, exc
-            )
+            logger.warning("Corrupt state file at %s (%s) — reinitialising", path, exc)
             return cls()

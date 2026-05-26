@@ -4,16 +4,14 @@ Device connection screen for TUI.
 Handles device discovery and connection setup.
 """
 
-from typing import Optional, List
-from enum import Enum, auto
 from dataclasses import dataclass
+from enum import Enum, auto
 
-from rich.console import Console, RenderableType
+from rich.align import Align
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.align import Align
-from rich.spinner import Spinner
 
 
 class ConnectionState(Enum):
@@ -51,10 +49,10 @@ class DeviceConnectScreen:
     def __init__(self):
         """Initialize the device connect screen."""
         self._state = ConnectionState.IDLE
-        self._devices: List[DeviceInfo] = []
+        self._devices: list[DeviceInfo] = []
         self._selected_device: int = 0
         self._selected_method: int = 0  # 0=USB, 1=Wireless
-        self._error_message: Optional[str] = None
+        self._error_message: str | None = None
         self._wireless_ip: str = ""
         self._wireless_port: str = ""
         self._pairing_code: str = ""
@@ -69,7 +67,7 @@ class DeviceConnectScreen:
         """Set the connection state."""
         self._state = state
 
-    def set_devices(self, devices: List[DeviceInfo]) -> None:
+    def set_devices(self, devices: list[DeviceInfo]) -> None:
         """Set discovered devices."""
         self._devices = devices
 
@@ -104,7 +102,7 @@ class DeviceConnectScreen:
         if self._devices:
             self._selected_device = (self._selected_device - 1) % len(self._devices)
 
-    def get_selected_device(self) -> Optional[DeviceInfo]:
+    def get_selected_device(self) -> DeviceInfo | None:
         """Get the currently selected device."""
         if self._devices and 0 <= self._selected_device < len(self._devices):
             return self._devices[self._selected_device]

@@ -10,9 +10,9 @@ import pytest
 
 from whatsapp_chat_autoexport.utils.audio_converter import (
     AudioConverter,
-    is_whatsapp_video_message,
-    ExtractionResult,
     ExtractionErrorCode,
+    ExtractionResult,
+    is_whatsapp_video_message,
 )
 
 
@@ -50,7 +50,7 @@ class TestAudioConverterHasAudioStream:
 
     def test_method_exists(self, converter):
         """Test that _has_audio_stream method exists."""
-        assert hasattr(converter, '_has_audio_stream')
+        assert hasattr(converter, "_has_audio_stream")
         assert callable(converter._has_audio_stream)
 
     def test_returns_bool(self, converter, temp_working_dir):
@@ -58,43 +58,35 @@ class TestAudioConverterHasAudioStream:
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=False):
+        with patch.object(converter, "is_ffmpeg_available", return_value=False):
             result = converter._has_audio_stream(dummy_video)
             assert isinstance(result, bool)
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_video_with_audio_stream(self, mock_run, converter, temp_working_dir):
         """Test detection of video with audio stream."""
         # Mock ffprobe returning "audio" for a stream
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="audio\n",
-            stderr=""
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout="audio\n", stderr="")
 
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter._has_audio_stream(dummy_video)
 
         assert result is True
         mock_run.assert_called_once()
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_video_without_audio_stream(self, mock_run, converter, temp_working_dir):
         """Test detection of video without audio stream."""
         # Mock ffprobe returning empty output (no audio streams)
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="",
-            stderr=""
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter._has_audio_stream(dummy_video)
 
         assert result is False
@@ -104,13 +96,13 @@ class TestAudioConverterHasAudioStream:
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=False):
+        with patch.object(converter, "is_ffmpeg_available", return_value=False):
             result = converter._has_audio_stream(dummy_video)
 
         # Should assume audio exists when we can't check
         assert result is True
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_timeout_returns_true(self, mock_run, converter, temp_working_dir):
         """Test that method returns True on timeout (fail-open)."""
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="ffprobe", timeout=10)
@@ -118,13 +110,13 @@ class TestAudioConverterHasAudioStream:
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter._has_audio_stream(dummy_video)
 
         # Should assume audio exists on timeout
         assert result is True
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_exception_returns_true(self, mock_run, converter, temp_working_dir):
         """Test that method returns True on general exception (fail-open)."""
         mock_run.side_effect = Exception("Unexpected error")
@@ -132,13 +124,13 @@ class TestAudioConverterHasAudioStream:
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter._has_audio_stream(dummy_video)
 
         # Should assume audio exists on error
         assert result is True
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_calls_ffprobe_with_correct_args(self, mock_run, converter, temp_working_dir):
         """Test that ffprobe is called with correct arguments."""
         mock_run.return_value = MagicMock(returncode=0, stdout="audio", stderr="")
@@ -146,16 +138,16 @@ class TestAudioConverterHasAudioStream:
         dummy_video = temp_working_dir / "test.mp4"
         dummy_video.write_bytes(b"dummy")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             converter._has_audio_stream(dummy_video)
 
         # Verify ffprobe was called with expected arguments
         call_args = mock_run.call_args
         cmd = call_args[0][0]
 
-        assert cmd[0] == 'ffprobe'
-        assert '-v' in cmd and 'quiet' in cmd
-        assert '-select_streams' in cmd and 'a' in cmd
+        assert cmd[0] == "ffprobe"
+        assert "-v" in cmd and "quiet" in cmd
+        assert "-select_streams" in cmd and "a" in cmd
         assert str(dummy_video) in cmd
 
 
@@ -168,7 +160,7 @@ class TestExtractAudioFromVideoIntegration:
         logger = MagicMock()
         return AudioConverter(logger=logger)
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_skips_extraction_when_no_audio(self, mock_run, converter, temp_working_dir):
         """Test that extraction is skipped when video has no audio stream."""
         # Both _get_video_info and _has_audio_stream call ffprobe
@@ -177,7 +169,7 @@ class TestExtractAudioFromVideoIntegration:
         dummy_video = temp_working_dir / "VID-20231207-WA0000.mp4"
         dummy_video.write_bytes(b"dummy video content")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter.extract_audio_from_video(dummy_video)
 
         # Should return None because no audio stream
@@ -252,7 +244,7 @@ class TestExtractAudioFromVideoDetailed:
         logger = MagicMock()
         return AudioConverter(logger=logger)
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_returns_extraction_result_on_no_audio(self, mock_run, converter, temp_working_dir):
         """Test that detailed method returns ExtractionResult with proper error code."""
         # Mock ffprobe to return no audio stream
@@ -261,7 +253,7 @@ class TestExtractAudioFromVideoDetailed:
         dummy_video = temp_working_dir / "VID-20231207-WA0000.mp4"
         dummy_video.write_bytes(b"dummy video content")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter.extract_audio_from_video_detailed(dummy_video)
 
         assert isinstance(result, ExtractionResult)
@@ -269,25 +261,25 @@ class TestExtractAudioFromVideoDetailed:
         assert result.error_code == ExtractionErrorCode.NO_AUDIO_STREAM
         assert "silent video" in result.user_friendly_message.lower()
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_returns_ffmpeg_not_available_error(self, mock_run, converter, temp_working_dir):
         """Test error when FFmpeg is not available."""
         dummy_video = temp_working_dir / "VID-20231207-WA0000.mp4"
         dummy_video.write_bytes(b"dummy video content")
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=False):
+        with patch.object(converter, "is_ffmpeg_available", return_value=False):
             result = converter.extract_audio_from_video_detailed(dummy_video)
 
         assert isinstance(result, ExtractionResult)
         assert result.success is False
         assert result.error_code == ExtractionErrorCode.FFMPEG_NOT_AVAILABLE
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_returns_file_not_found_error(self, mock_run, converter, temp_working_dir):
         """Test error when video file doesn't exist."""
         nonexistent_video = temp_working_dir / "VID-20231207-WA0000.mp4"
 
-        with patch.object(converter, 'is_ffmpeg_available', return_value=True):
+        with patch.object(converter, "is_ffmpeg_available", return_value=True):
             result = converter.extract_audio_from_video_detailed(nonexistent_video)
 
         assert isinstance(result, ExtractionResult)

@@ -10,9 +10,9 @@ import pytest
 
 from whatsapp_chat_autoexport.transcription import (
     BaseTranscriber,
+    TranscriptionManager,
     TranscriptionResult,
     WhisperTranscriber,
-    TranscriptionManager,
 )
 from whatsapp_chat_autoexport.utils.logger import Logger
 
@@ -62,9 +62,7 @@ def test_import_modules():
 @pytest.mark.unit
 def test_transcription_result():
     """Test TranscriptionResult dataclass."""
-    result = TranscriptionResult(
-        success=True, text="Test transcription", duration_seconds=2.5, language="en"
-    )
+    result = TranscriptionResult(success=True, text="Test transcription", duration_seconds=2.5, language="en")
 
     assert result.success is True
     assert result.text == "Test transcription"
@@ -260,7 +258,9 @@ def test_batch_transcription(temp_working_dir):
 
     # Batch transcribe
     results = manager.batch_transcribe(
-        media_files, skip_existing=False, show_progress=False  # Disable for tests
+        media_files,
+        skip_existing=False,
+        show_progress=False,  # Disable for tests
     )
 
     assert results["total"] == 5
@@ -286,9 +286,7 @@ def test_get_transcribable_files(temp_working_dir):
     (temp_working_dir / "audio3.opus").write_text("audio")
     (temp_working_dir / "video.mp4").write_text("video")  # Not in supported formats
     (temp_working_dir / "text.txt").write_text("text")  # Not audio
-    (temp_working_dir / "audio_transcription.txt").write_text(
-        "transcription"
-    )  # Should be skipped
+    (temp_working_dir / "audio_transcription.txt").write_text("transcription")  # Should be skipped
 
     # Create subdirectory
     subdir = temp_working_dir / "subdir"
@@ -360,8 +358,8 @@ def test_mock_transcriber_failure(temp_working_dir):
 # ============================================================================
 
 from whatsapp_chat_autoexport.utils.audio_converter import (
-    is_whatsapp_video_message,
     AudioConverter,
+    is_whatsapp_video_message,
 )
 
 
@@ -390,16 +388,16 @@ def test_is_whatsapp_video_message_invalid_patterns():
         "video.mp4",
         "movie.avi",
         "VID-20251004-WA0011.avi",  # Wrong extension
-        "VID-20251004-0011.mp4",    # Missing WA
-        "VID-2025104-WA0011.mp4",   # Wrong date format (too short)
-        "VID-202510041-WA0011.mp4", # Wrong date format (too long)
+        "VID-20251004-0011.mp4",  # Missing WA
+        "VID-2025104-WA0011.mp4",  # Wrong date format (too short)
+        "VID-202510041-WA0011.mp4",  # Wrong date format (too long)
         "IMG-20251004-WA0011.jpg",  # Image, not video
-        "PTT-20251004-WA0011.opus", # Voice message, not video
-        "20251004-WA0011.mp4",      # Missing VID prefix
-        "VID-20251004-WA.mp4",      # Missing number after WA
+        "PTT-20251004-WA0011.opus",  # Voice message, not video
+        "20251004-WA0011.mp4",  # Missing VID prefix
+        "VID-20251004-WA.mp4",  # Missing number after WA
         "VID-YYYYMMDD-WA0000.mp4",  # Non-numeric date
-        "",                          # Empty string
-        "VID.mp4",                   # Too short
+        "",  # Empty string
+        "VID.mp4",  # Too short
     ]
 
     for filename in invalid_filenames:
@@ -481,8 +479,7 @@ def test_whatsapp_video_message_not_detected_for_other_videos():
     ]
 
     for filename in other_videos:
-        assert not is_whatsapp_video_message(filename), \
-            f"Non-WhatsApp video should NOT be detected: {filename}"
+        assert not is_whatsapp_video_message(filename), f"Non-WhatsApp video should NOT be detected: {filename}"
 
 
 @pytest.mark.unit

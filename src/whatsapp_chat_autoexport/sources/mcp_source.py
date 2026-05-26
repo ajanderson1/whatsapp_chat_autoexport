@@ -8,9 +8,8 @@ project's Message dataclass.
 
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
-from ..mcp.bridge_reader import BridgeReader, BridgeMessage
+from ..mcp.bridge_reader import BridgeMessage, BridgeReader
 from ..processing.transcript_parser import Message
 from ..utils.logger import Logger
 from .base import ChatInfo, MessageSource
@@ -27,11 +26,11 @@ class MCPSource(MessageSource):
 
     def __init__(
         self,
-        reader: Optional[BridgeReader] = None,
-        db_path: Optional[Path] = None,
-        store_dir: Optional[Path] = None,
+        reader: BridgeReader | None = None,
+        db_path: Path | None = None,
+        store_dir: Path | None = None,
         user_display_name: str = "Me",
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
     ):
         """
         Initialize the MCP source.
@@ -65,7 +64,7 @@ class MCPSource(MessageSource):
     # MessageSource interface
     # ------------------------------------------------------------------
 
-    def get_chats(self) -> List[ChatInfo]:
+    def get_chats(self) -> list[ChatInfo]:
         """
         List all chats available in the MCP bridge database.
 
@@ -79,7 +78,7 @@ class MCPSource(MessageSource):
             self.log_error(f"Failed to list chats from MCP bridge: {exc}")
             return []
 
-        chats: List[ChatInfo] = []
+        chats: list[ChatInfo] = []
         for bc in bridge_chats:
             chats.append(
                 ChatInfo(
@@ -97,9 +96,9 @@ class MCPSource(MessageSource):
     def get_messages(
         self,
         chat_id: str,
-        after: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> List[Message]:
+        after: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[Message]:
         """
         Retrieve messages for a chat from the MCP bridge.
 
@@ -113,23 +112,19 @@ class MCPSource(MessageSource):
             ``source="mcp"`` and ``message_id`` set.
         """
         try:
-            bridge_messages = self._reader.get_messages(
-                jid=chat_id, after=after, limit=limit
-            )
+            bridge_messages = self._reader.get_messages(jid=chat_id, after=after, limit=limit)
         except Exception as exc:
-            self.log_error(
-                f"Failed to get messages for {chat_id}: {exc}"
-            )
+            self.log_error(f"Failed to get messages for {chat_id}: {exc}")
             return []
 
-        messages: List[Message] = []
+        messages: list[Message] = []
         for bm in bridge_messages:
             msg = self._translate_message(bm)
             messages.append(msg)
 
         return messages
 
-    def get_media(self, message_id: str) -> Optional[Path]:
+    def get_media(self, message_id: str) -> Path | None:
         """
         Retrieve media for a message by its ID.
 
@@ -202,7 +197,7 @@ class MCPSource(MessageSource):
         )
 
     @staticmethod
-    def _normalise_media_type(raw: Optional[str]) -> Optional[str]:
+    def _normalise_media_type(raw: str | None) -> str | None:
         """
         Normalise a media type string to the project's canonical types.
 

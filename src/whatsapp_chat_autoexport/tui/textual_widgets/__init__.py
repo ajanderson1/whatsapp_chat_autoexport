@@ -2,16 +2,16 @@
 Textual widgets for WhatsApp Chat Auto-Export TUI.
 """
 
-from .chat_list import ChatListWidget, ChatDisplayStatus
-from .settings_panel import SettingsPanel
 from .activity_log import ActivityLog
-from .queue_widget import QueueWidget
-from .progress_display import ProgressDisplay
-from .progress_pane import ProgressPane
 from .cancel_modal import CancelModal
-from .secret_settings_modal import SecretSettingsModal
+from .chat_list import ChatDisplayStatus, ChatListWidget
 from .color_scheme_modal import ColorSchemeModal
 from .preflight_panel import PreflightPanel
+from .progress_display import ProgressDisplay
+from .progress_pane import ProgressPane
+from .queue_widget import QueueWidget
+from .secret_settings_modal import SecretSettingsModal
+from .settings_panel import SettingsPanel
 
 __all__ = [
     "ChatListWidget",

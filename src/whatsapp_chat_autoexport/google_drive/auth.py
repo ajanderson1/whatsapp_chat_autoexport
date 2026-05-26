@@ -4,10 +4,8 @@ Google Drive OAuth Authentication module.
 Handles OAuth 2.0 authentication flow with local token storage.
 """
 
-import os
 import pickle
 from pathlib import Path
-from typing import Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -15,25 +13,26 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 from ..utils.logger import Logger
 
-
 # Google Drive API scopes
 # If modifying these scopes, delete the token file to re-authenticate
-SCOPES = ['https://www.googleapis.com/auth/drive']
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 # Default credential storage location
-DEFAULT_CREDENTIALS_DIR = Path.home() / '.whatsapp_export'
-DEFAULT_TOKEN_FILE = 'google_credentials.json'
-DEFAULT_CLIENT_SECRETS_FILE = 'client_secrets.json'
+DEFAULT_CREDENTIALS_DIR = Path.home() / ".whatsapp_export"
+DEFAULT_TOKEN_FILE = "google_credentials.json"
+DEFAULT_CLIENT_SECRETS_FILE = "client_secrets.json"
 
 
 class GoogleDriveAuth:
     """Manages Google Drive OAuth 2.0 authentication."""
 
-    def __init__(self,
-                 credentials_dir: Optional[Path] = None,
-                 token_filename: str = DEFAULT_TOKEN_FILE,
-                 client_secrets_filename: str = DEFAULT_CLIENT_SECRETS_FILE,
-                 logger: Optional[Logger] = None):
+    def __init__(
+        self,
+        credentials_dir: Path | None = None,
+        token_filename: str = DEFAULT_TOKEN_FILE,
+        client_secrets_filename: str = DEFAULT_CLIENT_SECRETS_FILE,
+        logger: Logger | None = None,
+    ):
         """
         Initialize Google Drive authentication manager.
 
@@ -47,7 +46,7 @@ class GoogleDriveAuth:
         self.token_file = self.credentials_dir / token_filename
         self.client_secrets_file = self.credentials_dir / client_secrets_filename
         self.logger = logger or Logger()
-        self.credentials: Optional[Credentials] = None
+        self.credentials: Credentials | None = None
 
     def setup_credentials_directory(self) -> bool:
         """
@@ -84,14 +83,14 @@ class GoogleDriveAuth:
             return False
 
         try:
-            with open(self.token_file, 'rb') as token:
+            with open(self.token_file, "rb") as token:
                 creds = pickle.load(token)
                 return creds and creds.valid
         except Exception as e:
             self.logger.debug_msg(f"Token validation failed: {e}")
             return False
 
-    def load_token(self) -> Optional[Credentials]:
+    def load_token(self) -> Credentials | None:
         """
         Load credentials from token file.
 
@@ -103,7 +102,7 @@ class GoogleDriveAuth:
             return None
 
         try:
-            with open(self.token_file, 'rb') as token:
+            with open(self.token_file, "rb") as token:
                 creds = pickle.load(token)
                 self.logger.debug_msg("Token loaded successfully")
                 return creds
@@ -123,7 +122,7 @@ class GoogleDriveAuth:
         """
         try:
             self.setup_credentials_directory()
-            with open(self.token_file, 'wb') as token:
+            with open(self.token_file, "wb") as token:
                 pickle.dump(credentials, token)
             self.logger.success(f"Token saved to: {self.token_file}")
             return True
@@ -151,7 +150,7 @@ class GoogleDriveAuth:
             self.logger.error(f"Failed to refresh token: {e}")
             return False
 
-    def run_oauth_flow(self) -> Optional[Credentials]:
+    def run_oauth_flow(self) -> Credentials | None:
         """
         Run the OAuth 2.0 authorization flow in the browser.
 
@@ -182,10 +181,7 @@ class GoogleDriveAuth:
             self.logger.info("Please log in and authorize the application.")
             self.logger.info("")
 
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(self.client_secrets_file),
-                SCOPES
-            )
+            flow = InstalledAppFlow.from_client_secrets_file(str(self.client_secrets_file), SCOPES)
 
             # Run local server for OAuth callback
             creds = flow.run_local_server(port=0)
@@ -199,7 +195,7 @@ class GoogleDriveAuth:
             self.logger.error(f"OAuth flow failed: {e}")
             return None
 
-    def authenticate(self, force_reauth: bool = False) -> Optional[Credentials]:
+    def authenticate(self, force_reauth: bool = False) -> Credentials | None:
         """
         Authenticate with Google Drive API.
 
@@ -267,7 +263,7 @@ class GoogleDriveAuth:
         self.credentials = creds
         return creds
 
-    def get_credentials(self) -> Optional[Credentials]:
+    def get_credentials(self) -> Credentials | None:
         """
         Get current credentials (authenticate if needed).
 

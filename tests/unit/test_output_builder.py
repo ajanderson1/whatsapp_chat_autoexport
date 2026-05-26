@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from whatsapp_chat_autoexport.output import OutputBuilder, SpecFormatter, IndexBuilder
+from whatsapp_chat_autoexport.output import OutputBuilder
 from whatsapp_chat_autoexport.utils.logger import Logger
 
 
@@ -144,9 +144,7 @@ def test_verify_output(temp_working_dir):
     assert results["media_dir_exists"] is True, "Media directory not detected"
     assert results["media_count"] == 1, f"Expected 1 media file, found {results['media_count']}"
     assert results["transcriptions_dir_exists"] is True, "Transcriptions directory not detected"
-    assert (
-        results["transcriptions_count"] == 1
-    ), f"Expected 1 transcription, found {results['transcriptions_count']}"
+    assert results["transcriptions_count"] == 1, f"Expected 1 transcription, found {results['transcriptions_count']}"
 
 
 @pytest.mark.unit
@@ -159,7 +157,7 @@ def test_batch_build(temp_working_dir, temp_output_dir):
     transcripts = []
     for i, name in enumerate(["Alice", "Bob", "Charlie"], 1):
         transcript = temp_working_dir / f"chat_{name}.txt"
-        transcript.write_text(f"1/15/24, 10:{30+i:02d} AM - {name}: Hello!\n")
+        transcript.write_text(f"1/15/24, 10:{30 + i:02d} AM - {name}: Hello!\n")
 
         media_dir = temp_working_dir / f"media_{name}"
         media_dir.mkdir()
@@ -224,17 +222,13 @@ def test_merged_transcript_format(temp_working_dir, temp_output_dir):
     media_dir.mkdir()
 
     # Build output
-    summary = builder.build_output(
-        transcript_path, media_dir, temp_output_dir, contact_name="Alice", copy_media=False
-    )
+    summary = builder.build_output(transcript_path, media_dir, temp_output_dir, contact_name="Alice", copy_media=False)
 
     # Read merged transcript
     transcript_content = summary["transcript_path"].read_text()
 
     # Check header
-    assert (
-        "# WhatsApp Chat with Alice" in transcript_content
-    ), "Header missing in merged transcript"
+    assert "# WhatsApp Chat with Alice" in transcript_content, "Header missing in merged transcript"
     assert "# Total messages:" in transcript_content, "Message count missing in header"
 
     # Check messages are present
@@ -349,10 +343,7 @@ def test_v2_produces_transcript_md(temp_working_dir, temp_output_dir):
     builder = OutputBuilder(logger=logger, format_version="v2")
 
     transcript_path = temp_working_dir / "chat.txt"
-    transcript_path.write_text(
-        "1/15/24, 10:30 AM - Alice: Hello!\n"
-        "1/15/24, 10:31 AM - Bob: Hi there!\n"
-    )
+    transcript_path.write_text("1/15/24, 10:30 AM - Alice: Hello!\n1/15/24, 10:31 AM - Bob: Hi there!\n")
 
     media_dir = temp_working_dir / "media"
     media_dir.mkdir()
@@ -450,10 +441,7 @@ def test_v2_index_has_correct_frontmatter(temp_working_dir, temp_output_dir):
     builder = OutputBuilder(logger=logger, format_version="v2")
 
     transcript_path = temp_working_dir / "chat.txt"
-    transcript_path.write_text(
-        "1/15/24, 10:30 AM - Alice: Hello!\n"
-        "1/15/24, 10:31 AM - Bob: Hi there!\n"
-    )
+    transcript_path.write_text("1/15/24, 10:30 AM - Alice: Hello!\n1/15/24, 10:31 AM - Bob: Hi there!\n")
 
     media_dir = temp_working_dir / "media"
     media_dir.mkdir()
@@ -485,10 +473,7 @@ def test_legacy_format_unchanged_regression(temp_working_dir, temp_output_dir):
     builder = OutputBuilder(logger=logger, format_version="legacy")
 
     transcript_path = temp_working_dir / "chat.txt"
-    transcript_path.write_text(
-        "1/15/24, 10:30 AM - Alice: Hello!\n"
-        "1/15/24, 10:31 AM - Bob: Hi there!\n"
-    )
+    transcript_path.write_text("1/15/24, 10:30 AM - Alice: Hello!\n1/15/24, 10:31 AM - Bob: Hi there!\n")
 
     media_dir = temp_working_dir / "media"
     media_dir.mkdir()
@@ -549,7 +534,7 @@ def test_batch_build_outputs_with_v2(temp_working_dir, temp_output_dir):
     transcripts = []
     for i, name in enumerate(["Alice", "Bob"], 1):
         transcript = temp_working_dir / f"chat_{name}.txt"
-        transcript.write_text(f"1/15/24, 10:{30+i:02d} AM - {name}: Hello!\n")
+        transcript.write_text(f"1/15/24, 10:{30 + i:02d} AM - {name}: Hello!\n")
 
         media_dir = temp_working_dir / f"media_{name}"
         media_dir.mkdir()

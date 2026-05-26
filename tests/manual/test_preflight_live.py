@@ -110,10 +110,7 @@ def test_run_preflight_live():
     has_drive = GoogleDriveAuth().has_credentials()
 
     if not any([has_openai, has_elevenlabs, has_drive]):
-        pytest.skip(
-            "No credentials available — set OPENAI_API_KEY, ELEVENLABS_API_KEY, "
-            "or provide a Drive token file"
-        )
+        pytest.skip("No credentials available — set OPENAI_API_KEY, ELEVENLABS_API_KEY, or provide a Drive token file")
 
     from whatsapp_chat_autoexport.preflight.runner import (
         format_report_for_stderr,
@@ -124,7 +121,7 @@ def test_run_preflight_live():
 
     formatted = format_report_for_stderr(report)
     print(f"\n{formatted}")
-    print(f"\nRaw report:")
+    print("\nRaw report:")
     print(f"  started_at   : {report.started_at}")
     print(f"  duration_ms  : {report.duration_ms}")
     print(f"  has_hard_fail: {report.has_hard_fail}")

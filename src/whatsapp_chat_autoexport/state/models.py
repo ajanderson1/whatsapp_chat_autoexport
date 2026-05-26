@@ -6,8 +6,9 @@ for checkpointing and resumed later.
 """
 
 from datetime import datetime
-from enum import Enum, auto
-from typing import Optional, List, Dict, Any
+from enum import Enum
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -35,16 +36,16 @@ class ChatState(BaseModel):
 
     # Status
     status: ChatStatus = ChatStatus.PENDING
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     # Progress
     current_step: int = 0
     total_steps: int = 6
-    steps_completed: List[str] = Field(default_factory=list)
+    steps_completed: list[str] = Field(default_factory=list)
 
     # Timing
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     duration_seconds: float = 0.0
 
     # Retry tracking
@@ -53,7 +54,7 @@ class ChatState(BaseModel):
 
     # Additional data
     include_media: bool = True
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @property
     def is_complete(self) -> bool:
@@ -81,9 +82,7 @@ class ChatState(BaseModel):
         self.status = ChatStatus.COMPLETED
         self.completed_at = datetime.now()
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
     def fail(self, error_message: str) -> None:
         """Mark export as failed."""
@@ -91,9 +90,7 @@ class ChatState(BaseModel):
         self.error_message = error_message
         self.completed_at = datetime.now()
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
     def skip(self, reason: str) -> None:
         """Mark export as skipped."""
@@ -142,11 +139,11 @@ class SessionState(BaseModel):
 
     # Status
     status: SessionStatus = SessionStatus.INITIALIZING
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     # Chat tracking
-    chats: Dict[str, ChatState] = Field(default_factory=dict)
-    chat_order: List[str] = Field(default_factory=list)
+    chats: dict[str, ChatState] = Field(default_factory=dict)
+    chat_order: list[str] = Field(default_factory=list)
 
     # Progress
     total_chats: int = 0
@@ -156,15 +153,15 @@ class SessionState(BaseModel):
 
     # Configuration
     include_media: bool = True
-    limit: Optional[int] = None
+    limit: int | None = None
 
     # Timing
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Device info
-    device_id: Optional[str] = None
-    device_name: Optional[str] = None
+    device_id: str | None = None
+    device_name: str | None = None
 
     @property
     def pending_chats(self) -> int:
@@ -180,7 +177,7 @@ class SessionState(BaseModel):
         return (processed / self.total_chats) * 100
 
     @property
-    def current_chat(self) -> Optional[ChatState]:
+    def current_chat(self) -> ChatState | None:
         """Get the currently active chat."""
         for chat in self.chats.values():
             if chat.status == ChatStatus.IN_PROGRESS:
@@ -202,21 +199,15 @@ class SessionState(BaseModel):
         self.total_chats = len(self.chats)
         return chat
 
-    def get_chat(self, chat_name: str) -> Optional[ChatState]:
+    def get_chat(self, chat_name: str) -> ChatState | None:
         """Get a chat by name."""
         return self.chats.get(chat_name)
 
     def update_counts(self) -> None:
         """Update progress counts from chat states."""
-        self.completed_chats = sum(
-            1 for c in self.chats.values() if c.status == ChatStatus.COMPLETED
-        )
-        self.failed_chats = sum(
-            1 for c in self.chats.values() if c.status == ChatStatus.FAILED
-        )
-        self.skipped_chats = sum(
-            1 for c in self.chats.values() if c.status == ChatStatus.SKIPPED
-        )
+        self.completed_chats = sum(1 for c in self.chats.values() if c.status == ChatStatus.COMPLETED)
+        self.failed_chats = sum(1 for c in self.chats.values() if c.status == ChatStatus.FAILED)
+        self.skipped_chats = sum(1 for c in self.chats.values() if c.status == ChatStatus.SKIPPED)
 
     def start(self) -> None:
         """Mark session as started."""
@@ -247,7 +238,7 @@ class ExportProgress(BaseModel):
     """Progress snapshot for export operations."""
 
     # Current chat
-    current_chat: Optional[str] = None
+    current_chat: str | None = None
     current_step: str = ""
     step_index: int = 0
     total_steps: int = 6
@@ -264,7 +255,7 @@ class ExportProgress(BaseModel):
 
     # Timing
     elapsed_seconds: float = 0.0
-    estimated_remaining_seconds: Optional[float] = None
+    estimated_remaining_seconds: float | None = None
 
     @property
     def percent_complete(self) -> float:
@@ -286,7 +277,7 @@ class PipelineProgress(BaseModel):
     # Items in current phase
     items_processed: int = 0
     items_total: int = 0
-    current_item: Optional[str] = None
+    current_item: str | None = None
 
     # Status
     status: str = "idle"
@@ -302,8 +293,6 @@ class PipelineProgress(BaseModel):
             return 0.0
         phase_progress = (self.phase_index / self.total_phases) * 100
         if self.items_total > 0:
-            item_progress = (self.items_processed / self.items_total) * (
-                100 / self.total_phases
-            )
+            item_progress = (self.items_processed / self.items_total) * (100 / self.total_phases)
             return phase_progress + item_progress
         return phase_progress

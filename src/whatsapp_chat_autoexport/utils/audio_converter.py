@@ -7,21 +7,21 @@ Handles conversion of audio formats not supported by transcription APIs
 Also handles extraction of audio from WhatsApp video messages for transcription.
 """
 
-import subprocess
-import shutil
-import re
 import json
+import re
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from .logger import Logger
 
 
 class ExtractionErrorCode(Enum):
     """Error codes for audio extraction failures."""
+
     SUCCESS = "success"
     FFMPEG_NOT_AVAILABLE = "ffmpeg_not_available"
     FILE_NOT_FOUND = "file_not_found"
@@ -35,8 +35,9 @@ class ExtractionErrorCode(Enum):
 @dataclass
 class ExtractionResult:
     """Result of audio extraction from video."""
+
     success: bool
-    output_path: Optional[Path] = None
+    output_path: Path | None = None
     error_code: ExtractionErrorCode = ExtractionErrorCode.SUCCESS
     error_message: str = ""
     ffmpeg_stderr: str = ""
@@ -59,7 +60,7 @@ class ExtractionResult:
 
 
 # WhatsApp video message filename pattern: VID-YYYYMMDD-WA####.mp4
-WHATSAPP_VIDEO_PATTERN = re.compile(r'^VID-\d{8}-WA\d+\.mp4$', re.IGNORECASE)
+WHATSAPP_VIDEO_PATTERN = re.compile(r"^VID-\d{8}-WA\d+\.mp4$", re.IGNORECASE)
 
 
 def is_whatsapp_video_message(filename: str) -> bool:
@@ -95,7 +96,7 @@ class AudioConverter:
     for compatibility with OpenAI Whisper API and ElevenLabs Speech-to-Text.
     """
 
-    def __init__(self, logger: Optional[Logger] = None, debug_dir: Optional[Path] = None):
+    def __init__(self, logger: Logger | None = None, debug_dir: Path | None = None):
         """
         Initialize the audio converter.
 
@@ -117,7 +118,7 @@ class AudioConverter:
         if self._ffmpeg_available is not None:
             return self._ffmpeg_available
 
-        self._ffmpeg_available = shutil.which('ffmpeg') is not None
+        self._ffmpeg_available = shutil.which("ffmpeg") is not None
 
         if not self._ffmpeg_available:
             self.logger.warning("FFmpeg is not installed or not in PATH")
@@ -128,12 +129,7 @@ class AudioConverter:
 
         return self._ffmpeg_available
 
-    def convert_to_m4a(
-        self,
-        input_path: Path,
-        output_path: Optional[Path] = None,
-        overwrite: bool = False
-    ) -> Optional[Path]:
+    def convert_to_m4a(self, input_path: Path, output_path: Path | None = None, overwrite: bool = False) -> Path | None:
         """
         Convert audio file to M4A/AAC format.
 
@@ -155,7 +151,7 @@ class AudioConverter:
 
         # Default output path
         if output_path is None:
-            output_path = input_path.with_suffix('.m4a')
+            output_path = input_path.with_suffix(".m4a")
 
         # Check if output already exists
         if output_path.exists() and not overwrite:
@@ -173,16 +169,20 @@ class AudioConverter:
             # -y: overwrite output file if exists
             # -loglevel error: only show errors
             cmd = [
-                'ffmpeg',
-                '-i', str(input_path),
-                '-vn',  # No video
-                '-c:a', 'aac',  # AAC codec for M4A
-                '-b:a', '128k',  # 128 kbps bitrate (good quality)
-                '-loglevel', 'error',  # Only show errors
+                "ffmpeg",
+                "-i",
+                str(input_path),
+                "-vn",  # No video
+                "-c:a",
+                "aac",  # AAC codec for M4A
+                "-b:a",
+                "128k",  # 128 kbps bitrate (good quality)
+                "-loglevel",
+                "error",  # Only show errors
             ]
 
             if overwrite:
-                cmd.append('-y')
+                cmd.append("-y")
 
             cmd.append(str(output_path))
 
@@ -192,7 +192,7 @@ class AudioConverter:
                 capture_output=True,
                 text=True,
                 timeout=60,  # 60 second timeout
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode != 0:
@@ -207,24 +207,19 @@ class AudioConverter:
             input_size_mb = input_path.stat().st_size / (1024 * 1024)
             output_size_mb = output_path.stat().st_size / (1024 * 1024)
             self.logger.debug_msg(
-                f"Converted {input_path.name} ({input_size_mb:.2f} MB) "
-                f"to {output_path.name} ({output_size_mb:.2f} MB)"
+                f"Converted {input_path.name} ({input_size_mb:.2f} MB) to {output_path.name} ({output_size_mb:.2f} MB)"
             )
 
             return output_path
 
         except subprocess.TimeoutExpired:
-            self.logger.error(f"FFmpeg conversion timed out after 60s")
+            self.logger.error("FFmpeg conversion timed out after 60s")
             return None
         except Exception as e:
             self.logger.error(f"Error during audio conversion: {e}")
             return None
 
-    def convert_opus_to_m4a(
-        self,
-        opus_file: Path,
-        temp_dir: Optional[Path] = None
-    ) -> Optional[Path]:
+    def convert_opus_to_m4a(self, opus_file: Path, temp_dir: Path | None = None) -> Path | None:
         """
         Convert Opus file to M4A (convenience method).
 
@@ -238,7 +233,7 @@ class AudioConverter:
         Returns:
             Path to temporary M4A file if successful, None otherwise
         """
-        if opus_file.suffix.lower() != '.opus':
+        if opus_file.suffix.lower() != ".opus":
             self.logger.warning(f"File is not Opus format: {opus_file}")
             return None
 
@@ -248,7 +243,7 @@ class AudioConverter:
             temp_dir.mkdir(parents=True, exist_ok=True)
             output_path = temp_dir / f"{opus_file.stem}.m4a"
         else:
-            output_path = opus_file.with_suffix('.m4a')
+            output_path = opus_file.with_suffix(".m4a")
 
         return self.convert_to_m4a(opus_file, output_path, overwrite=True)
 
@@ -275,12 +270,16 @@ class AudioConverter:
             # -show_entries stream=codec_type: show codec type
             # -of csv=p=0: output in CSV format without headers
             cmd = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-select_streams', 'a',
-                '-show_entries', 'stream=codec_type',
-                '-of', 'csv=p=0',
-                str(video_file)
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "csv=p=0",
+                str(video_file),
             ]
 
             result = subprocess.run(
@@ -288,11 +287,11 @@ class AudioConverter:
                 capture_output=True,
                 text=True,
                 timeout=10,  # 10 second timeout
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
 
             # If ffprobe returns "audio" for any stream, the video has audio
-            return 'audio' in result.stdout.lower()
+            return "audio" in result.stdout.lower()
 
         except subprocess.TimeoutExpired:
             self.logger.debug_msg(f"Timeout checking audio stream in {video_file.name}")
@@ -317,21 +316,14 @@ class AudioConverter:
             return {}
 
         try:
-            cmd = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-print_format', 'json',
-                '-show_format',
-                '-show_streams',
-                str(video_file)
-            ]
+            cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", str(video_file)]
 
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=30,
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode != 0:
@@ -347,11 +339,8 @@ class AudioConverter:
             return {"error": str(e)}
 
     def _save_debug_file(
-        self,
-        video_file: Path,
-        result: 'ExtractionResult',
-        contact_name: Optional[str] = None
-    ) -> Optional[Path]:
+        self, video_file: Path, result: "ExtractionResult", contact_name: str | None = None
+    ) -> Path | None:
         """
         Save a failed video file to the debug directory for inspection.
 
@@ -400,7 +389,7 @@ class AudioConverter:
             }
 
             metadata_file = target_dir / f"{video_file.stem}_debug_info.json"
-            with open(metadata_file, 'w', encoding='utf-8') as f:
+            with open(metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2, default=str)
 
             self.logger.debug_msg(f"Saved debug metadata: {metadata_file}")
@@ -412,10 +401,7 @@ class AudioConverter:
             return None
 
     def extract_audio_from_video_detailed(
-        self,
-        video_file: Path,
-        temp_dir: Optional[Path] = None,
-        contact_name: Optional[str] = None
+        self, video_file: Path, temp_dir: Path | None = None, contact_name: str | None = None
     ) -> ExtractionResult:
         """
         Extract audio track from a video file to M4A format with detailed error reporting.
@@ -435,9 +421,7 @@ class AudioConverter:
         # Check FFmpeg availability
         if not self.is_ffmpeg_available():
             result = ExtractionResult(
-                success=False,
-                error_code=ExtractionErrorCode.FFMPEG_NOT_AVAILABLE,
-                error_message="FFmpeg not installed"
+                success=False, error_code=ExtractionErrorCode.FFMPEG_NOT_AVAILABLE, error_message="FFmpeg not installed"
             )
             self.logger.error(result.user_friendly_message)
             return result
@@ -445,9 +429,7 @@ class AudioConverter:
         # Check file exists
         if not video_file.exists():
             result = ExtractionResult(
-                success=False,
-                error_code=ExtractionErrorCode.FILE_NOT_FOUND,
-                error_message=str(video_file)
+                success=False, error_code=ExtractionErrorCode.FILE_NOT_FOUND, error_message=str(video_file)
             )
             self.logger.error(result.user_friendly_message)
             return result
@@ -461,7 +443,7 @@ class AudioConverter:
                 success=False,
                 error_code=ExtractionErrorCode.NO_AUDIO_STREAM,
                 error_message=video_file.name,
-                video_info=video_info
+                video_info=video_info,
             )
             self.logger.warning(f"🔇 {video_file.name}: {result.user_friendly_message}")
             # Save debug file if debug_dir is set
@@ -481,14 +463,18 @@ class AudioConverter:
 
             # FFmpeg command to extract audio
             cmd = [
-                'ffmpeg',
-                '-i', str(video_file),
-                '-vn',  # No video
-                '-c:a', 'aac',  # AAC codec for M4A
-                '-b:a', '128k',  # 128 kbps bitrate
-                '-loglevel', 'error',  # Only show errors
-                '-y',  # Overwrite
-                str(output_path)
+                "ffmpeg",
+                "-i",
+                str(video_file),
+                "-vn",  # No video
+                "-c:a",
+                "aac",  # AAC codec for M4A
+                "-b:a",
+                "128k",  # 128 kbps bitrate
+                "-loglevel",
+                "error",  # Only show errors
+                "-y",  # Overwrite
+                str(output_path),
             ]
 
             # Run FFmpeg
@@ -497,7 +483,7 @@ class AudioConverter:
                 capture_output=True,
                 text=True,
                 timeout=120,  # 2 minute timeout for video processing
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
 
             if proc_result.returncode != 0:
@@ -506,7 +492,7 @@ class AudioConverter:
                     error_code=ExtractionErrorCode.FFMPEG_EXTRACTION_FAILED,
                     error_message=proc_result.stderr.strip() if proc_result.stderr else "Unknown FFmpeg error",
                     ffmpeg_stderr=proc_result.stderr,
-                    video_info=video_info
+                    video_info=video_info,
                 )
                 self.logger.error(f"FFmpeg audio extraction failed: {proc_result.stderr}")
                 self._save_debug_file(video_file, result, contact_name)
@@ -517,7 +503,7 @@ class AudioConverter:
                     success=False,
                     error_code=ExtractionErrorCode.OUTPUT_FILE_MISSING,
                     error_message="Output file not created",
-                    video_info=video_info
+                    video_info=video_info,
                 )
                 self.logger.error(result.user_friendly_message)
                 self._save_debug_file(video_file, result, contact_name)
@@ -531,39 +517,29 @@ class AudioConverter:
                 f"to {output_path.name} ({audio_size_mb:.2f} MB)"
             )
 
-            return ExtractionResult(
-                success=True,
-                output_path=output_path,
-                video_info=video_info
-            )
+            return ExtractionResult(success=True, output_path=output_path, video_info=video_info)
 
         except subprocess.TimeoutExpired:
             result = ExtractionResult(
                 success=False,
                 error_code=ExtractionErrorCode.TIMEOUT,
                 error_message="120 seconds",
-                video_info=video_info
+                video_info=video_info,
             )
             self.logger.error(result.user_friendly_message)
             self._save_debug_file(video_file, result, contact_name)
             return result
         except Exception as e:
             result = ExtractionResult(
-                success=False,
-                error_code=ExtractionErrorCode.UNKNOWN_ERROR,
-                error_message=str(e),
-                video_info=video_info
+                success=False, error_code=ExtractionErrorCode.UNKNOWN_ERROR, error_message=str(e), video_info=video_info
             )
             self.logger.error(f"Error during audio extraction: {e}")
             self._save_debug_file(video_file, result, contact_name)
             return result
 
     def extract_audio_from_video(
-        self,
-        video_file: Path,
-        temp_dir: Optional[Path] = None,
-        contact_name: Optional[str] = None
-    ) -> Optional[Path]:
+        self, video_file: Path, temp_dir: Path | None = None, contact_name: str | None = None
+    ) -> Path | None:
         """
         Extract audio track from a video file to M4A format.
 
@@ -581,7 +557,7 @@ class AudioConverter:
         result = self.extract_audio_from_video_detailed(video_file, temp_dir, contact_name)
         return result.output_path if result.success else None
 
-    def get_audio_info(self, audio_file: Path) -> Optional[dict]:
+    def get_audio_info(self, audio_file: Path) -> dict | None:
         """
         Get information about an audio file using ffprobe.
 
@@ -599,27 +575,21 @@ class AudioConverter:
             return None
 
         try:
-            cmd = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-print_format', 'json',
-                '-show_format',
-                '-show_streams',
-                str(audio_file)
-            ]
+            cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", str(audio_file)]
 
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=10,
-                close_fds=True  # Prevent fd inheritance issues in threaded contexts
+                close_fds=True,  # Prevent fd inheritance issues in threaded contexts
             )
 
             if result.returncode != 0:
                 return None
 
             import json
+
             return json.loads(result.stdout)
 
         except Exception as e:

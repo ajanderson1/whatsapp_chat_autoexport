@@ -6,16 +6,16 @@ The selected theme is applied immediately and persisted to disk.
 """
 
 from textual.app import ComposeResult
-from textual.screen import ModalScreen
-from textual.widgets import Static, ListItem, ListView, Label
-from textual.containers import Vertical
 from textual.binding import Binding
+from textual.containers import Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Label, ListItem, ListView, Static
 
+from ...config.theme_manager import get_theme_manager
 from ...config.themes import (
     get_all_theme_names,
     get_theme_display_name,
 )
-from ...config.theme_manager import get_theme_manager
 
 
 class ColorSchemeModal(ModalScreen[str | None]):

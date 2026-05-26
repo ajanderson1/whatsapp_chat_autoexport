@@ -7,9 +7,8 @@ through the MessageSource interface.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-from ..processing.transcript_parser import Message, MediaReference, TranscriptParser
+from ..processing.transcript_parser import MediaReference, Message, TranscriptParser
 from ..utils.logger import Logger
 from .base import ChatInfo, MessageSource
 
@@ -34,7 +33,7 @@ class AppiumSource(MessageSource):
     def __init__(
         self,
         export_dir: Path,
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
         user_display_name: str = "AJ Anderson",
     ):
         """
@@ -50,16 +49,16 @@ class AppiumSource(MessageSource):
         self.user_display_name = user_display_name
         self._parser = TranscriptParser(logger=self.logger)
         # Cache: chat_name -> (messages, media_refs)
-        self._cache: Dict[str, Tuple[List[Message], List[MediaReference]]] = {}
+        self._cache: dict[str, tuple[list[Message], list[MediaReference]]] = {}
 
-    def get_chats(self) -> List[ChatInfo]:
+    def get_chats(self) -> list[ChatInfo]:
         """
         List all chats found in the Appium export directory.
 
         Each sub-directory that contains a ``.txt`` transcript file is
         treated as a chat.
         """
-        chats: List[ChatInfo] = []
+        chats: list[ChatInfo] = []
 
         if not self.export_dir.is_dir():
             self.log_error(f"Export directory not found: {self.export_dir}")
@@ -92,9 +91,9 @@ class AppiumSource(MessageSource):
     def get_messages(
         self,
         chat_id: str,
-        after: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> List[Message]:
+        after: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[Message]:
         """
         Retrieve messages for a chat, optionally filtered by time.
 
@@ -119,7 +118,7 @@ class AppiumSource(MessageSource):
 
         return messages
 
-    def get_media(self, message_id: str) -> Optional[Path]:
+    def get_media(self, message_id: str) -> Path | None:
         """
         Media lookup is not supported for Appium exports by message ID.
 
@@ -133,16 +132,14 @@ class AppiumSource(MessageSource):
 
     # ----- internal helpers -----
 
-    def _find_transcript(self, chat_dir: Path) -> Optional[Path]:
+    def _find_transcript(self, chat_dir: Path) -> Path | None:
         """Return the first .txt transcript file in *chat_dir*, or None."""
         for candidate in sorted(chat_dir.glob("*.txt")):
             if candidate.is_file():
                 return candidate
         return None
 
-    def _parse_chat(
-        self, chat_name: str
-    ) -> Tuple[List[Message], List[MediaReference]]:
+    def _parse_chat(self, chat_name: str) -> tuple[list[Message], list[MediaReference]]:
         """Parse a chat directory, returning cached results when available."""
         if chat_name in self._cache:
             return self._cache[chat_name]

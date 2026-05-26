@@ -7,7 +7,7 @@ Provides a unified command-line interface with:
 - wizard: Interactive step-by-step mode
 """
 
-from .main import main, app
+from .main import app, main
 
 __all__ = [
     "main",

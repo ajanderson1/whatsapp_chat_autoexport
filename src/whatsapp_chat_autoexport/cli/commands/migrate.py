@@ -15,26 +15,26 @@ import json
 import os
 import shutil
 import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from ...output.index_builder import IndexBuilder
 from ...output.spec_formatter import SpecFormatter
-from ...processing.transcript_parser import Message
 from ...sources.transcript_source import TranscriptSource
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _progress(msg: str) -> None:
     """Print a progress line to stderr."""
     print(msg, file=sys.stderr, flush=True)
 
 
-def _json_summary(data: Dict[str, Any]) -> None:
+def _json_summary(data: dict[str, Any]) -> None:
     """Print a JSON summary to stdout."""
     print(json.dumps(data, indent=2, default=str))
 
@@ -55,7 +55,8 @@ def _atomic_write(target: Path, content: str) -> None:
 # Per-chat migration
 # ---------------------------------------------------------------------------
 
-def _find_legacy_transcripts(input_dir: Path) -> List[Path]:
+
+def _find_legacy_transcripts(input_dir: Path) -> list[Path]:
     """
     Find all legacy transcript.txt files under the input directory.
 
@@ -63,7 +64,7 @@ def _find_legacy_transcripts(input_dir: Path) -> List[Path]:
     (``input_dir/<chat>/transcript.txt`` or ``input_dir/<chat>/*.txt``).
     Returns only ``.txt`` files (not already-migrated ``.md`` files).
     """
-    transcripts: List[Path] = []
+    transcripts: list[Path] = []
 
     for child in sorted(input_dir.iterdir()):
         if not child.is_dir():
@@ -94,7 +95,7 @@ def _migrate_chat(
     index_builder: IndexBuilder,
     no_backup: bool,
     dry_run: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Migrate a single legacy transcript to v2 format.
 
@@ -110,7 +111,7 @@ def _migrate_chat(
         chat_name = transcript_path.parent.name
         chat_dir = transcript_path.parent
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "name": chat_name,
         "folder": chat_name,
         "source_file": str(transcript_path),
@@ -175,10 +176,7 @@ def _migrate_chat(
 
     if not result["counts_match"]:
         result["status"] = "count_mismatch"
-        _progress(
-            f"  WARNING: message count mismatch for {chat_name}: "
-            f"old={len(messages)}, new={len(new_messages)}"
-        )
+        _progress(f"  WARNING: message count mismatch for {chat_name}: old={len(messages)}, new={len(new_messages)}")
 
     # Backup original transcript.txt
     if not no_backup and transcript_path.exists():
@@ -192,12 +190,13 @@ def _migrate_chat(
 # Main migration orchestration
 # ---------------------------------------------------------------------------
 
+
 def run_migrate(
     input_dir: Path,
     user_display_name: str = "AJ Anderson",
     dry_run: bool = False,
     no_backup: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run the legacy transcript migration pipeline.
 
@@ -213,7 +212,7 @@ def run_migrate(
     Returns:
         JSON-serialisable summary dict.
     """
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "success": False,
         "timestamp": datetime.now().isoformat(),
         "dry_run": dry_run,
@@ -252,11 +251,7 @@ def run_migrate(
 
     # ---- 4. Per-chat migration loop ----
     for transcript_path in transcripts:
-        chat_name = (
-            transcript_path.stem
-            if transcript_path.parent == input_dir
-            else transcript_path.parent.name
-        )
+        chat_name = transcript_path.stem if transcript_path.parent == input_dir else transcript_path.parent.name
         _progress(f"Migrating: {chat_name}")
 
         try:
@@ -282,11 +277,13 @@ def run_migrate(
         except Exception as exc:
             _progress(f"  ERROR migrating {chat_name}: {exc}")
             summary["chats_errored"] += 1
-            summary["chat_results"].append({
-                "name": chat_name,
-                "status": "error",
-                "error": str(exc),
-            })
+            summary["chat_results"].append(
+                {
+                    "name": chat_name,
+                    "status": "error",
+                    "error": str(exc),
+                }
+            )
 
     summary["success"] = summary["chats_errored"] == 0 and summary["error"] is None
     _json_summary(summary)
@@ -296,6 +293,7 @@ def run_migrate(
 # ---------------------------------------------------------------------------
 # CLI argument parser
 # ---------------------------------------------------------------------------
+
 
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the migrate command."""
@@ -339,7 +337,7 @@ Examples:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point for the migrate command."""
     parser = create_parser()
     args = parser.parse_args(argv)

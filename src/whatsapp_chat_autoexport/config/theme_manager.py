@@ -7,10 +7,8 @@ Handles saving and loading theme preferences to disk at:
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from .themes import DEFAULT_THEME, get_all_theme_names
-
 
 # =============================================================================
 # Configuration
@@ -24,6 +22,7 @@ UI_CONFIG_FILE = CONFIG_DIR / "ui.json"
 # Theme Manager Class
 # =============================================================================
 
+
 class ThemeManager:
     """
     Manages theme persistence to disk.
@@ -32,7 +31,7 @@ class ThemeManager:
     and retrieves it on startup.
     """
 
-    def __init__(self, config_file: Optional[Path] = None):
+    def __init__(self, config_file: Path | None = None):
         """
         Initialize the theme manager.
 
@@ -56,9 +55,9 @@ class ThemeManager:
             return {}
 
         try:
-            with open(self._config_file, "r") as f:
+            with open(self._config_file) as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return {}
 
     def _save_config(self, config: dict) -> bool:
@@ -76,7 +75,7 @@ class ThemeManager:
             with open(self._config_file, "w") as f:
                 json.dump(config, f, indent=2)
             return True
-        except IOError:
+        except OSError:
             return False
 
     def get_saved_theme(self) -> str:
@@ -131,7 +130,7 @@ class ThemeManager:
 # Singleton instance for convenience
 # =============================================================================
 
-_theme_manager: Optional[ThemeManager] = None
+_theme_manager: ThemeManager | None = None
 
 
 def get_theme_manager() -> ThemeManager:

@@ -11,8 +11,8 @@ All R7 flags are parsed here and forwarded to the selected mode.
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -120,8 +120,7 @@ Examples:
         "--keep-drive-duplicates",
         action="store_true",
         default=False,
-        help="Skip deleting Drive root duplicates after each per-chat download "
-             "(default: duplicates are removed).",
+        help="Skip deleting Drive root duplicates after each per-chat download (default: duplicates are removed).",
     )
     output_group.add_argument(
         "--format",
@@ -202,7 +201,7 @@ def detect_mode(args: argparse.Namespace) -> str:
     return "tui"
 
 
-def validate_args(args: argparse.Namespace, mode: str) -> Optional[str]:
+def validate_args(args: argparse.Namespace, mode: str) -> str | None:
     """
     Validate argument combinations for the selected mode.
 
@@ -258,7 +257,7 @@ def run_pipeline_only(args: argparse.Namespace) -> int:
     return _run_pipeline_only(args)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Main entry point for the unified CLI."""
     parser = create_parser()
     args = parser.parse_args(argv)

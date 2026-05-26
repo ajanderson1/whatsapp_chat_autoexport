@@ -19,6 +19,7 @@ test_results = []
 
 try:
     from whatsapp_chat_autoexport.utils.logger import Logger
+
     print("   ✓ Logger imported")
     test_results.append(("Logger import", True))
 except Exception as e:
@@ -26,7 +27,6 @@ except Exception as e:
     test_results.append(("Logger import", False))
 
 try:
-    from whatsapp_chat_autoexport.export.appium_manager import AppiumManager
     print("   ✓ AppiumManager imported")
     test_results.append(("AppiumManager import", True))
 except Exception as e:
@@ -34,7 +34,6 @@ except Exception as e:
     test_results.append(("AppiumManager import", False))
 
 try:
-    from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
     print("   ✓ WhatsAppDriver imported")
     test_results.append(("WhatsAppDriver import", True))
 except Exception as e:
@@ -42,7 +41,8 @@ except Exception as e:
     test_results.append(("WhatsAppDriver import", False))
 
 try:
-    from whatsapp_chat_autoexport.export.chat_exporter import ChatExporter, validate_resume_directory, check_chat_exists
+    from whatsapp_chat_autoexport.export.chat_exporter import validate_resume_directory
+
     print("   ✓ ChatExporter imported")
     test_results.append(("ChatExporter import", True))
 except Exception as e:
@@ -50,7 +50,6 @@ except Exception as e:
     test_results.append(("ChatExporter import", False))
 
 try:
-    from whatsapp_chat_autoexport.export.interactive import interactive_mode, input_with_timeout
     print("   ✓ Interactive module imported")
     test_results.append(("Interactive import", True))
 except Exception as e:
@@ -59,8 +58,9 @@ except Exception as e:
 
 try:
     from whatsapp_chat_autoexport.processing.archive_extractor import (
-        is_zip_file, validate_directory, find_whatsapp_chat_files
+        validate_directory,
     )
+
     print("   ✓ Archive extractor imported")
     test_results.append(("Archive extractor import", True))
 except Exception as e:
@@ -68,7 +68,6 @@ except Exception as e:
     test_results.append(("Archive extractor import", False))
 
 try:
-    from whatsapp_chat_autoexport.export.cli import main as export_main
     print("   ✓ Export CLI imported")
     test_results.append(("Export CLI import", True))
 except Exception as e:
@@ -76,7 +75,6 @@ except Exception as e:
     test_results.append(("Export CLI import", False))
 
 try:
-    from whatsapp_chat_autoexport.processing.cli import main as process_main
     print("   ✓ Processing CLI imported")
     test_results.append(("Processing CLI import", True))
 except Exception as e:
@@ -121,10 +119,10 @@ try:
     current_dir = Path.cwd()
     result = validate_directory(str(current_dir), Logger(debug=False))
     if result == current_dir:
-        print(f"   ✓ validate_directory correctly validates current directory")
+        print("   ✓ validate_directory correctly validates current directory")
         test_results.append(("validate_directory", True))
     else:
-        print(f"   ✗ validate_directory failed for current directory")
+        print("   ✗ validate_directory failed for current directory")
         test_results.append(("validate_directory", False))
 except Exception as e:
     print(f"   ✗ Archive processing helper test failed: {e}")

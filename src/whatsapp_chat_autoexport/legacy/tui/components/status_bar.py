@@ -4,10 +4,9 @@ Status bar component for TUI.
 Displays keyboard shortcuts and current application status.
 """
 
-from typing import Optional, List
 from dataclasses import dataclass
 
-from rich.console import Console, RenderableType
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -40,7 +39,7 @@ class StatusBar:
         KeyBinding("↑/↓", "Scroll Queue"),
     ]
 
-    def __init__(self, bindings: Optional[List[KeyBinding]] = None):
+    def __init__(self, bindings: list[KeyBinding] | None = None):
         """
         Initialize the status bar.
 

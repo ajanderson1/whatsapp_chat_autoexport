@@ -6,7 +6,7 @@ Uses mock BridgeReader instances to avoid needing a real SQLite database.
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,11 +16,10 @@ from whatsapp_chat_autoexport.mcp.bridge_reader import (
     BridgeReaderError,
     DatabaseNotFoundError,
 )
-from whatsapp_chat_autoexport.sources.mcp_source import MCPSource
-from whatsapp_chat_autoexport.sources.base import ChatInfo
 from whatsapp_chat_autoexport.processing.transcript_parser import Message
+from whatsapp_chat_autoexport.sources.base import ChatInfo
+from whatsapp_chat_autoexport.sources.mcp_source import MCPSource
 from whatsapp_chat_autoexport.utils.logger import Logger
-
 
 # =========================================================================
 # Fixtures
@@ -207,16 +206,12 @@ class TestMCPSourceGetMessages:
     def test_after_filter_passthrough(self, mcp_source, mock_reader):
         """after parameter is passed through to BridgeReader."""
         cutoff = datetime(2026, 3, 25, 10, 1, 0)
-        msgs = mcp_source.get_messages(
-            "447837370336@s.whatsapp.net", after=cutoff
-        )
+        msgs = mcp_source.get_messages("447837370336@s.whatsapp.net", after=cutoff)
         assert len(msgs) == 2
 
     def test_limit_passthrough(self, mcp_source, mock_reader):
         """limit parameter is passed through to BridgeReader."""
-        msgs = mcp_source.get_messages(
-            "447837370336@s.whatsapp.net", limit=1
-        )
+        msgs = mcp_source.get_messages("447837370336@s.whatsapp.net", limit=1)
         assert len(msgs) == 1
 
     def test_empty_chat(self, mcp_source):
