@@ -1,0 +1,32 @@
+# Pre-commit cascade — order matches ~/.conventions/conventions/ci.md
+# 1. Formatter (auto-fix, doesn't block)
+# 2. Linter (blocks)
+# 3. Type check (blocks)
+# 4. Secret scan (blocks if gitleaks installed; skips gracefully if not)
+
+pre-commit:
+  parallel: false  # cascade order matters; run sequentially
+  commands:
+    1-format:
+      glob: "*.{py}"
+      run: uv run ruff format {staged_files}
+      stage_fixed: true
+
+    2-lint:
+      glob: "*.{py}"
+      run: uv run ruff check --fix {staged_files}
+      stage_fixed: true
+
+    3-typecheck:
+      glob: "*.{py}"
+      # mypy needs the full module graph, not staged files — operate on the package.
+      run: uv run mypy src/whatsapp_chat_autoexport
+
+    4-secret-scan:
+      # If gitleaks isn't installed the command exits 0 with a notice.
+      run: >
+        if command -v gitleaks > /dev/null 2>&1; then
+          gitleaks protect --staged --no-banner --redact;
+        else
+          echo "gitleaks not installed — skipping secret scan (install via 'brew install gitleaks')";
+        fi
