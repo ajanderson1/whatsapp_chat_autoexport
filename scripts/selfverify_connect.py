@@ -12,9 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import logging
 import sys
-from logging import Logger
 from typing import Protocol
 
 
@@ -54,9 +52,16 @@ def _wireless_adb_arg(value) -> list[str] | None:
     return [value]
 
 
-def _build_driver(args: argparse.Namespace, logger: Logger):
+def _build_driver(args: argparse.Namespace):
+    # Use the project's own Logger (not stdlib logging): WhatsAppDriver is
+    # written against its interface (debug_msg, step, success, ...), exactly as
+    # headless.py constructs it. A stdlib logging.Logger lacks debug_msg and the
+    # driver crashes on the first connection check. log_file_enabled=False keeps
+    # this transient dev harness from writing log files.
     from whatsapp_chat_autoexport.export.whatsapp_driver import WhatsAppDriver
+    from whatsapp_chat_autoexport.utils.logger import Logger
 
+    logger = Logger(debug=True, log_file_enabled=False)
     return WhatsAppDriver(logger=logger, wireless_adb=_wireless_adb_arg(args.wireless_adb))
 
 
@@ -72,10 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    logger = logging.getLogger("selfverify_connect")
-
-    driver = _build_driver(args, logger)
+    driver = _build_driver(args)
     try:
         return connect_and_verify(driver)
     finally:
