@@ -54,7 +54,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["whatsapp_chat_autoexport"]
+packages = ["src/whatsapp_chat_autoexport"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -86,7 +86,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["whatsapp_chat_autoexport"]
+source = ["src/whatsapp_chat_autoexport"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
