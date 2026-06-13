@@ -1,6 +1,6 @@
 [project]
 name = "whatsapp-chat-autoexport"
-version = "0.2.0"
+version = "0.3.0"
 description = "WhatsApp chat export automation for Android (Appium-driven, Google Drive, optional transcription)."
 readme = "README.md"
 requires-python = ">=3.13,<4.0"
